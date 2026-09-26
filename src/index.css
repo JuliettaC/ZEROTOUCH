@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Colores oficiales de ZeroTouch */
+  --fondo: rgb(240 238 237 / 43%);
+  --boton: #5F4D47;
+  --activo: #69564F;
+  --inactivo: #BDB3AA;
+  --blanco: #FFFFFF;
+
+  /* Color para textos */
+  --texto: #5F4D47;
+  --background: rgb(240 238 237 / 43%);
+  --brown: #5F4D47;
+  --active: #69564F;
+  --muted: #BDB3AA;
+  --soft: rgb(105 86 79 / 20%);
+  --green: #436850;
+  background: white;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+
+  font-family: 'Outfit', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background-color: white;
+  color: var(--texto);
+  font-family: 'Outfit', sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button, a, input { -webkit-tap-highlight-color: transparent; }
+button, a { touch-action: manipulation; }
+button { cursor: pointer; border: 0; background: none; padding: 0; }
+button:disabled { cursor: default; }
+a { color: inherit; text-decoration: none; }
+h1, h2, h3, p { margin: 0; }
+img { display: block; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #937965; outline-offset: 4px; }
+button, a { transition: background-color .15s, box-shadow .15s; }
+button:hover:not(:disabled), a.button:hover { filter: brightness(.96); }
+::selection { background: #bdb3aa; color: #332822; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
