@@ -10,6 +10,11 @@ import './App.css'
 
 export default function App() {
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+  const redirect = sessionStorage.getItem('redirect')
+  if (redirect) {
+    sessionStorage.removeItem('redirect')
+    window.history.replaceState({}, '', redirect)
+  }
   const getPath = () => {
   const pathname = window.location.pathname
   const relativePath = pathname.startsWith(BASE)

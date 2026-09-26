@@ -159,8 +159,7 @@
 .suggestions { position: absolute; bottom: 289px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; }
 .suggestions button { padding: 12px 24px; border: 1px solid white; border-radius: 999px; color: white; font-size: 16px; }
 .suggestions button.selected { background: var(--brown); border-color: var(--brown); font-weight: 700; }
-.air-path { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.air-path .icon { position: absolute; top: 0; left: 0; }
+.air-path { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }.air-path .icon { position: absolute; top: 0; left: 0; }
 .paused-label { position: absolute; right: 16px; top: 16px; color: white; border-radius: 20px; padding: 8px 12px; background: var(--brown); }
 .keyboard-aside { display: flex; flex-direction: column; gap: 24px; }
 .keyboard-aside > section { padding: 24px; border-radius: 32px; }
