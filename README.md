@@ -7,8 +7,12 @@ Para personas con manos ocupadas, secretarias o administrativos expuestos a fati
 * Adan Mendoza (@Adammm14)
 * Anais Perez (@Youpuipui)
 
-## Prototipo
-https://www.figma.com/proto/bGRVznOtXKzQNOYC7Mz6XC/ZEROTOUCH?node-id=72-7285&t=Kh36kEKsnlZleHnc-1&scaling=min-zoom&content-scaling=fixed&page-id=0%3A1&starting-point-node-id=72%3A7285&show-proto-sidebar=1
+## Prototipo funcional
+[Prototipo](https://juliettac.github.io/ZEROTOUCH/)
+
+## Diseño en Figma
+ [Diseño en Figma](https://www.figma.com/proto/bGRVznOtXKzQNOYC7Mz6XC/ZEROTOUCH?node-id=72-7285&t=Kh36kEKsnlZleHnc-1&scaling=min-zoom&content-scaling=fixed&page-id=0%3A1&starting-point-node-id=72%3A7285&show-proto-sidebar=1)
+
 ## Documentos
 ### Hito 1
 [Informe](docs/Informe%20Hito%201.pdf)
