@@ -9,12 +9,20 @@ import { loadPreferences, savePreferences } from './data/preferences'
 import './App.css'
 
 export default function App() {
-  const [path, setPath] = useState(window.location.pathname)
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+  const getPath = () => {
+  const pathname = window.location.pathname
+  const relativePath = pathname.startsWith(BASE)
+    ? pathname.slice(BASE.length)
+    : pathname
+    return relativePath || '/'
+  }
+  const [path, setPath] = useState(getPath)
   const [preferences, setPreferences] = useState(loadPreferences)
   const [modal, setModal] = useState(null)
   const [notice, setNotice] = useState('')
   useEffect(() => {
-    const onPopState = () => { setPath(window.location.pathname); setModal(null) }
+    const onPopState = () => { setPath(getPath()); setModal(null) }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
@@ -25,8 +33,14 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [notice])
   function navigate(to) {
-    if (to !== window.location.pathname) window.history.pushState({}, '', to)
-    setPath(to); setModal(null); window.scrollTo({ top: 0, behavior: 'instant' })
+    const url = `${BASE}${to}`
+    if (url !== window.location.pathname) {
+    window.history.pushState({}, '', url)
+    }
+
+    setPath(to)
+    setModal(null)
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
   function update(patch) { setPreferences(current => ({ ...current, ...patch })) }
   function addContext(context) {
