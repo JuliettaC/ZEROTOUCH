@@ -130,6 +130,7 @@
 .dialog header p { font-size: 13px; line-height: 20px; margin-top: 2px; }
 .context-dialog { width: 828px; }
 .context-dialog form { display: flex; flex-direction: column; gap: 20px; }
+.context-dialog-content { display: contents; }
 .name-field { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 .name-field input { padding: 13px 16px; border-radius: 12px; border: 1px solid var(--brown); background: var(--soft); outline-offset: 2px; }
 .context-ranges { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -155,7 +156,7 @@
 .document-panel::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--brown); }
 .document-panel .section-line strong { text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }
 .document-panel .section-line span { font-size: 10px; background: var(--soft); padding: 4px 8px; border-radius: 999px; }
-.document-panel textarea { display: block; border: 0; padding: 0; margin-top: 16px; width: 100%; height: 58px; font-size: 30px; line-height: 48px; font-weight: 300; background: transparent; resize: none; }
+.document-panel textarea { display: block; border: 0; padding: 0; margin-top: 16px; width: 100%; min-height: 58px; overflow-y: hidden; font-size: 30px; line-height: 48px; font-weight: 300; background: transparent; resize: none; }
 .air-keyboard { margin-top: 79px; height: 445px; border: 8px solid white; border-radius: 40px; position: relative; overflow: hidden; box-shadow: 0 25px 50px -12px #0004; background: var(--brown); }
 .air-photo { position: absolute; width: 100%; height: 157.56%; top: -28.78%; object-fit: cover; }
 .key-layout { position: absolute; bottom: 48px; left: 32px; right: 32px; padding: 24px; display: flex; flex-direction: column; gap: 12px; border-radius: 32px; border: 1px solid #ffffff99; background: #ffffffb3; backdrop-filter: blur(10px); }
@@ -286,16 +287,21 @@
   .mobile-gestures > button > .icon:last-child { margin-left: auto; }
   .mobile-calibration > .mobile-action { margin: 22px -10px 0; }
   .dialog { max-width: calc(100vw - 24px); padding: 24px; }
-  .context-dialog { max-width: 100%; width: 390px; max-height: calc(100dvh - 16px); margin: auto auto 0; border-radius: 20px 20px 0 0; padding: 12px 24px 32px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scroll-padding-block: 16px 96px; }
+  .context-dialog { max-width: 100%; width: 390px; max-height: calc(var(--context-height, 100dvh) - 16px); inset: auto 0 var(--context-bottom, 0px); margin: 0 auto; border-radius: 20px 20px 0 0; padding: 12px 24px 32px; overflow: hidden; }
+  .context-dialog[open] { display: flex; flex-direction: column; }
+  .context-dialog .sheet-handle { flex-shrink: 0; }
+  .context-dialog-content { display: flex; flex-direction: column; gap: 24px; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; scroll-padding-block: 8px; }
+  .context-dialog-content > * { flex-shrink: 0; }
+  .context-dialog input[type="range"] { touch-action: pan-y; }
   .sheet-handle { height: 4px; width: 40px; border-radius: 99px; background: var(--muted); margin: 0 auto 20px; }
   .context-dialog h2 { font-size: 20px; line-height: 25px; }
-  .context-dialog form { gap: 24px; }
+  .context-dialog form { gap: 24px; min-height: 0; overflow: hidden; }
   .name-field input { min-height: 49px; }
   .context-ranges { display: flex; flex-direction: column; gap: 18px; padding: 4px 0 0; }
   .context-switches { border-top: 1px solid var(--muted); border-bottom: 1px solid var(--muted); gap: 0; }
   .context-switches > div { padding: 20px 0; font-size: 14px; }
   .context-switches > div + div { border-top: 1px solid var(--muted); }
-  .context-dialog .dialog-actions { justify-content: space-between; margin-top: 0; position: sticky; bottom: -32px; background: white; padding: 12px 0 32px; margin-bottom: -32px; }
+  .context-dialog .dialog-actions { justify-content: space-between; margin-top: 0; flex-shrink: 0; background: white; padding: 12px 0 0; }
   .context-dialog .text-button { padding-left: 0; }
   .dialog-actions .button { padding: 14px 20px; }
   .dialog h2 { font-size: 18px; }
@@ -333,3 +339,13 @@
   .context-tabs button { font-size: 10px; padding: 5px 7px; }
   .mobile-calibration, .mobile-playground { padding-left: 21px; padding-right: 21px; }
 }
+
+/* Hito 1: labels for simulation and per-context preferences. */
+.demo-notice { padding: 8px 20px; text-align: center; font-size: 12px; line-height: 18px; background: var(--soft); color: var(--brown); }
+.context-gesture-settings { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; font-size: 12px; }
+.context-gesture-settings small { grid-column: 1 / -1; }
+.suggestion-demo-label { position: absolute; bottom: 100%; margin-bottom: 8px; font-size: 11px; color: white; text-align: center; }
+.keyboard-mode-note { font-size: 11px; line-height: 16px; margin-bottom: 12px; }
+.dialog .button:disabled { opacity: .5; }
+.brand > span:last-child { min-width: 0; }
+.brand small { overflow-wrap: anywhere; }

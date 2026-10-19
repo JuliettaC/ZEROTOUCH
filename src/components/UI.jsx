@@ -8,26 +8,26 @@ export function Icon({ name, className = '' }) {
 }
 
 export function NavLink({ to, navigate, children, className = '', ...props }) {
-  return <a href={to} className={className} {...props} onClick={event => {
+  return <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}${to}`} className={className} {...props} onClick={event => {
     if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); navigate(to) }
   }}>{children}</a>
 }
 
-export function Header({ path, navigate, hasContexts }) {
+export function Header({ path, navigate, hasContexts, activeContext }) {
   const calibration = path === '/calibracion', keyboard = path === '/teclado', playground = path === '/prueba'
   const title = calibration ? 'Atajos y Calibración' : keyboard ? 'Air-Swipe' : playground ? 'Entorno de prueba' : 'ZEROTOUCH'
   return <header className={`app-header ${path === '/' ? 'dashboard-header' : ''}`}>
     <NavLink to={playground ? '/calibracion' : '/'} navigate={navigate} className="brand" aria-label={path === '/' ? 'ZeroTouch, panel principal' : 'Volver'}>
       <span className="brand-logo desktop-only"><Icon name="logo" /></span><span className={`brand-logo mobile-only ${path !== '/' ? 'round' : ''}`}><Icon name={path === '/' ? 'mobile-imgSvg' : 'mobileBack'} /></span>
-      <span><strong>{title}</strong><small className="desktop-only">{calibration ? 'Ajuste milimétrico de sensibilidad para no forzar articulaciones' : keyboard ? 'Modo Cocina y Taller' : hasContexts ? 'AIRTOUCH CONTROL' : 'PANEL PRINCIPAL'}</small><small className="mobile-only">{path === '/' && !hasContexts ? 'PANEL DE CONTROL' : 'Mobile Hub'}</small></span>
+      <span><strong>{title}</strong><small className="desktop-only">{calibration || keyboard || playground ? activeContext : hasContexts ? 'AIRTOUCH CONTROL' : 'PANEL PRINCIPAL'}</small><small className="mobile-only">{path === '/' ? 'PANEL DE CONTROL' : activeContext}</small></span>
     </NavLink>
-    <div className="header-status desktop-only"><span className="status-pill"><i />{keyboard ? '32 PPM (Palabras por minuto) · Precisión 96%' : 'Cámara Activa · 60 FPS (1080p)'}</span>{!keyboard && <span className="profile"><img src={`${ASSETS}home-imgLucia.png`} alt="" />Lucía S. - Oficina & Cocina</span>}</div>
+    <div className="header-status desktop-only"><span className="status-pill"><i />{keyboard ? 'Ejemplo: 32 PPM · Precisión 96%' : 'Cámara simulada · 60 FPS de ejemplo'}</span>{!keyboard && <span className="profile"><img src={`${ASSETS}home-imgLucia.png`} alt="" />Lucía S. - Oficina & Cocina</span>}</div>
     <div className="header-status mobile-only"><span className="android-pill"><i />Android Hub</span><img className="avatar" src={`${ASSETS}mobile-imgContainer.png`} alt="Perfil de Lucía" /></div>
   </header>
 }
 
 export function DeviceStatus({ mobile = false }) {
-  return <section className="device-status panel"><div className="section-line"><span>Dispositivo Sincronizado</span><strong className="connected">Conectado</strong></div><div className="device"><span className="device-icon"><Icon name={mobile ? 'laptop' : 'phone'} /></span><span><strong>{mobile ? 'PC Principal' : 'Android Hub'}</strong><small>{mobile ? 'Receptor Activo / Wi-Fi Local' : 'Proximidad / Giroscopio'}</small></span></div></section>
+  return <section className="device-status panel"><div className="section-line"><span>Dispositivo de ejemplo</span><strong className="connected">Simulado</strong></div><div className="device"><span className="device-icon"><Icon name={mobile ? 'laptop' : 'phone'} /></span><span><strong>{mobile ? 'PC Principal' : 'Android Hub'}</strong><small>{mobile ? 'Receptor propuesto / Wi-Fi Local' : 'Proximidad / Giroscopio'}</small></span></div></section>
 }
 
 export function Switch({ checked, onChange, label }) {
@@ -40,7 +40,7 @@ export function RangeControl({ label, value, onChange, description }) {
 }
 
 export function ErgonomicControls({ settings, onChange, detailed = false }) {
-  return <div className="ergonomic-controls"><RangeControl label={detailed ? 'Sensibilidad del puntero' : 'Sensibilidad Puntero'} value={settings.sensitivity} onChange={sensitivity => onChange({ ...settings, sensitivity })} description={detailed && 'Reduce el recorrido del brazo moviendo el cursor con giros leves de muñeca.'} /><RangeControl label="Filtro Antitemblor" value={settings.stability} onChange={stability => onChange({ ...settings, stability })} description={detailed && 'Suaviza el movimiento ignorando pequeños espasmos involuntarios.'} />{detailed && <div className="desk-rest"><span className="device-icon"><Icon name="rest" /></span><span><strong>Modo Desk-Rest</strong><small>Antebrazo apoyado en mesa</small></span><Switch checked={settings.deskRest} onChange={deskRest => onChange({ ...settings, deskRest })} label="Modo Desk-Rest" /></div>}</div>
+  return <div className="ergonomic-controls"><RangeControl label={detailed ? 'Sensibilidad del puntero' : 'Sensibilidad Puntero'} value={settings.sensitivity} onChange={sensitivity => onChange({ ...settings, sensitivity })} description={detailed && 'Ajuste del contexto activo. El movimiento del puntero aún no se simula.'} /><RangeControl label="Filtro Antitemblor" value={settings.stability} onChange={stability => onChange({ ...settings, stability })} description={detailed && 'Valor de demostración; no se procesa movimiento real.'} />{detailed && <div className="desk-rest"><span className="device-icon"><Icon name="rest" /></span><span><strong>Modo Desk-Rest</strong><small>Antebrazo apoyado en mesa</small></span><Switch checked={settings.deskRest} onChange={deskRest => onChange({ ...settings, deskRest })} label="Modo Desk-Rest" /></div>}<div className="context-gesture-settings"><span>Clic con micro-pinza</span><Switch checked={settings.pinch} onChange={pinch => onChange({ ...settings, pinch })} label="Clic con micro-pinza" /><span>Desplazamiento con dos dedos</span><Switch checked={settings.scroll} onChange={scroll => onChange({ ...settings, scroll })} label="Desplazamiento con dos dedos" /><small>Preferencias del contexto; reconocimiento gestual pendiente.</small></div></div>
 }
 
 function toggleFullscreen(event) {
@@ -50,10 +50,10 @@ function toggleFullscreen(event) {
 
 export function SensorPreview({ variant }) {
   return <div className={`sensor sensor-${variant}`} aria-label="Vista de sensor simulada con imagen de referencia">
-    {variant === 'desktop' && <><img className="sensor-photo" src={`${ASSETS}calibration-imgFirstPersonViewOfAHandReachingOutInFrontOfAModernWorkspaceDeskSoftLighting4KDigi.png`} alt="Mano frente a un escritorio" /><div className="tracking-overlay"><img src={`${ASSETS}tracking-overlay.svg`} alt="Puntos de seguimiento de mano simulados" /></div><span className="live-label">● REC LIVE</span><div className="sensor-bottom"><span><Icon name="hand" />MANO DETECTADA: IZQUIERDA</span><span><Icon name="stable" />PUNTERO: ESTABLE</span></div></>}
-    {variant === 'home' && <><div className="home-sensor-images"><div className="kitchen-image"><img src={`${ASSETS}mobile-imgWarmTonedKitchenWorkspacePrepCounterWoodCuttingBoardSoftDaylightCulinarySceneOverhe.png`} alt="Cocina" /></div><img className="home-hand" src={`${ASSETS}mobile-imgImage6.png`} alt="Palma abierta frente a la cámara" /></div><div className="detected"><Icon name="mobile-imgImg2" />Gesto detectado: Palma Abierta</div></>}
-    {variant === 'calibration' && <><img className="mobile-calibration-photo" src={`${ASSETS}mobile-calibration-imgImage7.png`} alt="Mano abierta para calibración" /><div className="mobile-tracking"><Icon name="mobile-calibration-imgSvg" /></div><span className="distance">Distancia: 38 px</span><span className="live-label">● LIVE</span><button className="fullscreen" aria-label="Ampliar vista del sensor" onClick={toggleFullscreen}><Icon name="fullscreen" /></button></>}
-    {variant === 'playground' && <><img className="recipe-photo" src={`${ASSETS}playground-imgPovOfHandsMixingCookieDoughInAGlassBowlKitchenBackgroundSoftFocusCinematicLighting.png`} alt="Manos preparando masa de galletas" /><span className="live-label">● LIVE 60 FPS · 1.2ms</span><button className="fullscreen" aria-label="Ampliar vista de cámara" onClick={toggleFullscreen}><Icon name="fullscreen" /></button></>}
+    {variant === 'desktop' && <><img className="sensor-photo" src={`${ASSETS}calibration-imgFirstPersonViewOfAHandReachingOutInFrontOfAModernWorkspaceDeskSoftLighting4KDigi.png`} alt="Mano frente a un escritorio" /><div className="tracking-overlay"><img src={`${ASSETS}tracking-overlay.svg`} alt="Puntos de seguimiento de mano simulados" /></div><span className="live-label">● DEMO</span><div className="sensor-bottom"><span><Icon name="hand" />MANO DETECTADA: IZQUIERDA</span><span><Icon name="stable" />PUNTERO: ESTABLE</span></div></>}
+    {variant === 'home' && <><div className="home-sensor-images"><div className="kitchen-image"><img src={`${ASSETS}mobile-imgWarmTonedKitchenWorkspacePrepCounterWoodCuttingBoardSoftDaylightCulinarySceneOverhe.png`} alt="Cocina" /></div><img className="home-hand" src={`${ASSETS}mobile-imgImage6.png`} alt="Palma abierta frente a la cámara" /></div><div className="detected"><Icon name="mobile-imgImg2" />Ejemplo: Mano abierta</div></>}
+    {variant === 'calibration' && <><img className="mobile-calibration-photo" src={`${ASSETS}mobile-calibration-imgImage7.png`} alt="Mano abierta para calibración" /><div className="mobile-tracking"><Icon name="mobile-calibration-imgSvg" /></div><span className="distance">Distancia: 38 px</span><span className="live-label">● DEMO</span><button className="fullscreen" aria-label="Ampliar vista del sensor" onClick={toggleFullscreen}><Icon name="fullscreen" /></button></>}
+    {variant === 'playground' && <><img className="recipe-photo" src={`${ASSETS}playground-imgPovOfHandsMixingCookieDoughInAGlassBowlKitchenBackgroundSoftFocusCinematicLighting.png`} alt="Manos preparando masa de galletas" /><span className="live-label">● DEMO · 60 FPS · 1.2 ms</span><button className="fullscreen" aria-label="Ampliar vista de cámara" onClick={toggleFullscreen}><Icon name="fullscreen" /></button></>}
   </div>
 }
 
