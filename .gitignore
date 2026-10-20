@@ -27,3 +27,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Active databases never belong in the repository (including SQLite sidecars).
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# Local working artifacts, never published.
+/tmp/
+/output/
