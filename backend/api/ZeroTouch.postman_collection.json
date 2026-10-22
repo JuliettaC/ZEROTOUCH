@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "ZeroTouch Hito 2 - CRUD y errores",
-    "description": "Ejecutar en orden contra una base local de demostración. Crea sus propios registros y elimina solo esos IDs. Para persistencia, pausar después del paso 11, reiniciar el servidor y repetir 09/11 antes de continuar.",
+    "name": "ZeroTouch v2 - autenticación, CRUD y errores",
+    "description": "Solo demostración local. Define username y password de prueba; ejecutar en orden. Login obtiene cookie y CSRF. No usar credenciales reales en archivos compartidos. La cuenta demo permanece, los perfiles creados se eliminan.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -16,14 +16,97 @@
     {
       "key": "contextId",
       "value": ""
+    },
+    {
+      "key": "username",
+      "value": "postman_demo"
+    },
+    {
+      "key": "password",
+      "value": "Frase exclusivamente demo 2026!"
+    },
+    {
+      "key": "cookie",
+      "value": ""
+    },
+    {
+      "key": "csrfToken",
+      "value": ""
     }
   ],
   "item": [
     {
+      "name": "A Registro genérico",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 202', function () { pm.response.to.have.status(202); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "B Iniciar sesión",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.collectionVariables.set('cookie', pm.response.headers.get('set-cookie').split(';')[0]);",
+              "pm.collectionVariables.set('csrfToken', pm.response.json().csrfToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "01 Salud",
       "request": {
         "method": "GET",
-        "header": [],
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
         "url": "{{baseUrl}}/api/health"
       },
       "event": [
@@ -46,9 +129,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/profiles",
+        "url": "{{baseUrl}}/api/v2/profiles",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"name\": \"Demo ZeroTouch\",\n  \"gaze\": false\n}",
@@ -76,8 +167,17 @@
       "name": "03 Listar perfiles",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/profiles?limit=20&offset=0"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/profiles?limit=20&offset=0"
       },
       "event": [
         {
@@ -95,8 +195,17 @@
       "name": "04 Consultar perfil",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/profiles/{{profileId}}"
       },
       "event": [
         {
@@ -118,9 +227,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}",
+        "url": "{{baseUrl}}/api/v2/profiles/{{profileId}}",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"description\": \"Demostración API\"\n}",
@@ -147,8 +264,17 @@
       "name": "06 Verificar perfil actualizado",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/profiles/{{profileId}}"
       },
       "event": [
         {
@@ -171,9 +297,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/contexts",
+        "url": "{{baseUrl}}/api/v2/contexts",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"profileId\": \"{{profileId}}\",\n  \"name\": \"Cocina\",\n  \"sensitivity\": 65,\n  \"stability\": 40,\n  \"deskRest\": true,\n  \"pinch\": true,\n  \"scroll\": true\n}",
@@ -201,8 +335,17 @@
       "name": "08 Listar contextos del perfil",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/contexts?profileId={{profileId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/contexts?profileId={{profileId}}"
       },
       "event": [
         {
@@ -220,8 +363,17 @@
       "name": "09 Consultar contexto",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/contexts/{{contextId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/contexts/{{contextId}}"
       },
       "event": [
         {
@@ -243,9 +395,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/contexts/{{contextId}}",
+        "url": "{{baseUrl}}/api/v2/contexts/{{contextId}}",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"sensitivity\": 80,\n  \"pinch\": false\n}",
@@ -272,8 +432,17 @@
       "name": "11 Verificar contexto actualizado",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/contexts/{{contextId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/contexts/{{contextId}}"
       },
       "event": [
         {
@@ -297,9 +466,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/contexts",
+        "url": "{{baseUrl}}/api/v2/contexts",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"profileId\": \"{{profileId}}\",\n  \"name\": \" COCINA \"\n}",
@@ -326,8 +503,17 @@
       "name": "13 Perfil con dependencias",
       "request": {
         "method": "DELETE",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/profiles/{{profileId}}"
       },
       "event": [
         {
@@ -345,8 +531,17 @@
       "name": "14 ID inválido",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/contexts/invalido"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/contexts/invalido"
       },
       "event": [
         {
@@ -364,8 +559,17 @@
       "name": "15 Recurso inexistente",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/profiles/11111111-1111-4111-8111-111111111111"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/profiles/11111111-1111-4111-8111-111111111111"
       },
       "event": [
         {
@@ -387,9 +591,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/contexts",
+        "url": "{{baseUrl}}/api/v2/contexts",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"profileId\": \"11111111-1111-4111-8111-111111111111\",\n  \"name\": \"Huérfano\"\n}",
@@ -420,9 +632,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/profiles",
+        "url": "{{baseUrl}}/api/v2/profiles",
         "body": {
           "mode": "raw",
           "raw": "{}",
@@ -453,9 +673,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/contexts/{{contextId}}",
+        "url": "{{baseUrl}}/api/v2/contexts/{{contextId}}",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"sensitivity\": \"alta\"\n}",
@@ -486,9 +714,17 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
           }
         ],
-        "url": "{{baseUrl}}/api/v1/profiles",
+        "url": "{{baseUrl}}/api/v2/profiles",
         "body": {
           "mode": "raw",
           "raw": "{invalid",
@@ -515,8 +751,17 @@
       "name": "20 Borrar contexto",
       "request": {
         "method": "DELETE",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/contexts/{{contextId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/contexts/{{contextId}}"
       },
       "event": [
         {
@@ -534,8 +779,17 @@
       "name": "21 Verificar contexto eliminado",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/contexts/{{contextId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/contexts/{{contextId}}"
       },
       "event": [
         {
@@ -553,8 +807,17 @@
       "name": "22 Borrar perfil",
       "request": {
         "method": "DELETE",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/profiles/{{profileId}}"
       },
       "event": [
         {
@@ -572,8 +835,17 @@
       "name": "23 Verificar perfil eliminado",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}"
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{cookie}}"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v2/profiles/{{profileId}}"
       },
       "event": [
         {

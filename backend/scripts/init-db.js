@@ -4,7 +4,7 @@ try {
   const config = loadConfig();
   const db = openDatabase(config.databasePath, { initialize: true });
   console.log(
-    `SQLite ${db.prepare("SELECT sqlite_version() AS version").get().version}; esquema 1 en ${validateDatabasePath(config.databasePath)}`,
+    `SQLite ${db.prepare("SELECT sqlite_version() AS version").get().version}; esquema 2 en ${validateDatabasePath(config.databasePath)}`,
   );
   db.close();
 } catch (error) {

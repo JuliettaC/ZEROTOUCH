@@ -35,7 +35,7 @@ try {
     "backend/scripts",
     "backend/test",
     "db",
-    "docs/api",
+    "backend/api",
   ]) {
     const destination = path.join(temporary, relative);
     await fs.mkdir(path.dirname(destination), { recursive: true });

@@ -1,4 +1,4 @@
-import { ApiError } from "../middleware/errors.js";
+import { DomainError } from "../domain/errors.js";
 const definitions = {
   profiles: {
     columns: [
@@ -31,8 +31,10 @@ const definitions = {
 };
 const camel = (key) =>
   key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-export function createRepository(db, kind) {
+export function createRepository(db, kind, accountId, crypto) {
+  if (!accountId || !crypto || !definitions[kind]) throw new Error('Scoped repository requires account and crypto');
   const { columns, booleans } = definitions[kind];
+  const owner = kind === 'profiles' ? 'account_id = ?' : 'profile_id IN (SELECT id FROM profiles WHERE account_id = ?)';
   const map = (row) =>
     row &&
     Object.fromEntries(
@@ -40,7 +42,8 @@ export function createRepository(db, kind) {
         .filter((key) => key !== "name_key")
         .map((key) => [
           camel(key),
-          booleans.includes(key) ? Boolean(row[key]) : row[key],
+          booleans.includes(key) ? Boolean(row[key]) :
+            kind === 'profiles' && key === 'description' ? crypto.decrypt(Buffer.from(row[key], 'base64'), `profile:${row.id}:description`).toString('utf8') : row[key],
         ]),
     );
   function write(action) {
@@ -48,9 +51,7 @@ export function createRepository(db, kind) {
       return action();
     } catch (error) {
       if (error.code === "SQLITE_CONSTRAINT_UNIQUE")
-        throw new ApiError(
-          409,
-          "DUPLICATE_CONTEXT",
+        throw new DomainError("DUPLICATE_CONTEXT",
           "Ya existe un contexto con ese nombre en el perfil.",
         );
       if (
@@ -58,43 +59,42 @@ export function createRepository(db, kind) {
           error.code,
         )
       )
-        throw new ApiError(
-          409,
-          "RELATED_RECORDS",
+        throw new DomainError("RELATED_RECORDS",
           "La operación viola una relación entre perfil y contexto.",
         );
       if (error.code === "SQLITE_BUSY")
-        throw new ApiError(
-          503,
-          "DATABASE_BUSY",
+        throw new DomainError("DATABASE_BUSY",
           "La base está ocupada. Reintenta la operación.",
         );
       throw error;
     }
   }
   // Table/column identifiers are internal constants; values are always bound parameters.
-  const getStatement = db.prepare(`SELECT * FROM ${kind} WHERE id = ?`);
+  const getStatement = db.prepare(`SELECT * FROM ${kind} WHERE id = ? AND ${owner}`);
   const values = (data, keys) =>
     keys.map((key) =>
-      booleans.includes(key) ? Number(data[camel(key)]) : data[camel(key)],
+      booleans.includes(key) ? Number(data[camel(key)]) :
+        kind === 'profiles' && key === 'description' ? crypto.encrypt(Buffer.from(data.description), `profile:${data.id}:description`).toString('base64') : data[camel(key)],
     );
   return {
-    get: (id) => map(getStatement.get(id)),
+    get: (id) => map(getStatement.get(id, accountId)),
+    count: () => db.prepare(`SELECT count(*) n FROM ${kind} WHERE ${owner}`).get(accountId).n,
     list({ limit, offset, profileId }) {
-      const where = profileId ? " WHERE profile_id = ?" : "";
+      const where = ` WHERE ${owner}` + (profileId ? ' AND profile_id = ?' : '');
       return db
         .prepare(
           `SELECT * FROM ${kind}${where} ORDER BY created_at, id LIMIT ? OFFSET ?`,
         )
-        .all(...(profileId ? [profileId] : []), limit, offset)
+        .all(accountId, ...(profileId ? [profileId] : []), limit, offset)
         .map(map);
     },
     insert(data) {
       return write(() => {
+        const insertColumns = kind === 'profiles' ? [...columns, 'account_id'] : columns;
         db.prepare(
-          `INSERT INTO ${kind} (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`,
-        ).run(...values(data, columns));
-        return map(getStatement.get(data.id));
+          `INSERT INTO ${kind} (${insertColumns.join(",")}) VALUES (${insertColumns.map(() => "?").join(",")})`,
+        ).run(...values(data, columns), ...(kind === 'profiles' ? [accountId] : []));
+        return map(getStatement.get(data.id, accountId));
       });
     },
     update(data) {
@@ -103,12 +103,12 @@ export function createRepository(db, kind) {
           (key) => !["id", "created_at", "profile_id"].includes(key),
         );
         db.prepare(
-          `UPDATE ${kind} SET ${mutable.map((key) => `${key} = ?`).join(",")} WHERE id = ?`,
-        ).run(...values(data, mutable), data.id);
-        return map(getStatement.get(data.id));
+          `UPDATE ${kind} SET ${mutable.map((key) => `${key} = ?`).join(",")} WHERE id = ? AND ${owner}`,
+        ).run(...values(data, mutable), data.id, accountId);
+        return map(getStatement.get(data.id, accountId));
       });
     },
     delete: (id) =>
-      write(() => db.prepare(`DELETE FROM ${kind} WHERE id = ?`).run(id)),
+      write(() => db.prepare(`DELETE FROM ${kind} WHERE id = ? AND ${owner}`).run(id, accountId)),
   };
 }

@@ -5,7 +5,7 @@ import { fixture, request } from "./helpers.js";
 import { openDatabase, validateDatabasePath } from "../src/config/database.js";
 import { readConfig, root } from "../src/config/env.js";
 import path from "node:path";
-const prefix = "/api/v1";
+const prefix = "/api/v2";
 
 test("CRUD real de perfiles y contextos, relaciones y reinicio del proceso", async (t) => {
   const f = await fixture(t);
@@ -252,9 +252,11 @@ test("integridad SQL e inicialización no destructiva", async (t) => {
   });
   const id = randomUUID();
   const now = new Date().toISOString();
+  const accountId=randomUUID();
+  db.prepare('INSERT INTO accounts(id,username,password_hash,created_at,updated_at) VALUES(?,?,?,?,?)').run(accountId,'sql_fixture','$argon2id$fixture-not-used-for-login',now,now);
   db.prepare(
-    "INSERT INTO profiles (id,name,created_at,updated_at) VALUES (?,?,?,?)",
-  ).run(id, "SQL", now, now);
+    "INSERT INTO profiles (id,account_id,name,description,created_at,updated_at) VALUES (?,?,?,?,?,?)",
+  ).run(id, accountId, "SQL", 'SQL constraint fixture only', now, now);
   const insert = db.prepare(
     "INSERT INTO contexts (id,profile_id,name,name_key,sensitivity,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
   );

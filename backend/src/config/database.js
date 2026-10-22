@@ -43,7 +43,8 @@ export function validateDatabasePath(filename, environment = process.env) {
 }
 export function openDatabase(filename, { initialize = false } = {}) {
   const resolved = validateDatabasePath(filename);
-  if (initialize) fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  if (initialize) fs.mkdirSync(path.dirname(resolved), { recursive: true, mode: 0o700 });
+  if (initialize && !fs.existsSync(resolved)) fs.closeSync(fs.openSync(resolved,'wx',0o600));
   const db = new Database(resolved, {
     fileMustExist: !initialize,
     timeout: 3000,
@@ -69,9 +70,9 @@ export function openDatabase(filename, { initialize = false } = {}) {
           "utf8",
         ),
       );
-    if (db.pragma("user_version", { simple: true }) !== 1)
+    if (db.pragma("user_version", { simple: true }) !== 2)
       throw new Error(
-        "Esquema incompatible; inicializa una base nueva con db:init",
+        "Esquema incompatible: v2 requiere base nueva; no se migran perfiles sin propietario",
       );
     db.pragma("journal_mode = WAL");
     db.pragma("synchronous = FULL");

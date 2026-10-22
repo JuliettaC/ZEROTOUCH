@@ -7,11 +7,15 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "db:init": "node scripts/init-db.js",
+    "security:init": "node scripts/security-init.js",
+    "admin:bootstrap": "node scripts/bootstrap-admin.js",
+    "backup": "node scripts/backup.js",
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:collection": "node --test test/collection.test.js",
     "verify:install": "node scripts/verify-install.js"
   },
   "dependencies": {
+    "argon2": "0.45.1",
     "better-sqlite3": "13.0.3",
     "dotenv": "^18.0.5",
     "express": "^5.2.1"

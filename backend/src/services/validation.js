@@ -1,6 +1,6 @@
-import { ApiError } from "../middleware/errors.js";
+import { DomainError } from "../domain/errors.js";
 const invalid = (message) => {
-  throw new ApiError(400, "INVALID_INPUT", message);
+  throw new DomainError("INVALID_INPUT", message);
 };
 export function validateId(value) {
   if (

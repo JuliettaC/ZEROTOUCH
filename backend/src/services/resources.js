@@ -1,17 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { ApiError } from "../middleware/errors.js";
+import { DomainError } from "../domain/errors.js";
 import { validateBody, validateId, validateQuery } from "./validation.js";
 export function createService(kind, repository, profiles) {
   function get(id) {
     const record = repository.get(validateId(id));
-    if (!record) throw new ApiError(404, "NOT_FOUND", "Recurso inexistente.");
+    if (!record) throw new DomainError("NOT_FOUND", "Recurso inexistente.");
     return record;
   }
   function requireProfile(id) {
     if (!profiles.get(id))
-      throw new ApiError(
-        404,
-        "PROFILE_NOT_FOUND",
+      throw new DomainError("PROFILE_NOT_FOUND",
         "El perfil relacionado no existe.",
       );
   }
@@ -31,6 +29,8 @@ export function createService(kind, repository, profiles) {
     },
     create(body) {
       const input = validateBody(kind, body);
+      if (repository.count() >= (kind === 'profiles' ? 20 : 200))
+        throw new DomainError('RESOURCE_LIMIT', 'Se alcanzó el límite de configuraciones de la cuenta.');
       if (kind === "contexts") requireProfile(input.profileId);
       const now = new Date().toISOString();
       const defaults =

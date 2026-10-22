@@ -33,7 +33,12 @@ dist-ssr
 *.sqlite-*
 *.db
 *.db-*
+*.ztbackup
+*.key
 
 # Local working artifacts, never published.
 /tmp/
 /output/
+
+# Local internal working documents; never publish to GitHub.
+/codex-interno/

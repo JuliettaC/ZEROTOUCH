@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fixture, request } from './helpers.js';
+import { fixture, request, signIn } from './helpers.js';
 import { openDatabase, validateDatabasePath } from '../src/config/database.js';
 import { createApp } from '../src/app.js';
 
@@ -13,11 +13,11 @@ test('bloqueo de escritura devuelve 503 sin crear el registro', async t => {
   const lock = openDatabase(f.filename);
   try {
     lock.exec('BEGIN IMMEDIATE');
-    const response = await request(instance.base, 'POST', '/api/v1/profiles', { name: 'Bloqueado' });
+    const response = await request(instance.base, 'POST', '/api/v2/profiles', { name: 'Bloqueado' });
     assert.equal(response.status, 503);
     assert.equal(response.body.error.code, 'DATABASE_BUSY');
     lock.exec('ROLLBACK');
-    const list = await request(instance.base, 'GET', '/api/v1/profiles');
+    const list = await request(instance.base, 'GET', '/api/v2/profiles');
     assert.equal(list.body.data.length, 0);
   } finally {
     if (lock.inTransaction) lock.exec('ROLLBACK');
@@ -28,11 +28,13 @@ test('bloqueo de escritura devuelve 503 sin crear el registro', async t => {
 test('fallo inesperado de persistencia devuelve 500 sin detalles internos', async t => {
   const f = await fixture(t);
   const db = openDatabase(f.filename);
-  const server = createApp(db).listen(0, '127.0.0.1');
+  const server = createApp(db,{key:f.key}).listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(async () => { await new Promise(resolve => server.close(resolve)); if (db.open) db.close(); });
+  const base=`http://127.0.0.1:${server.address().port}`;
+  await signIn(base);
   db.close(); // Deliberate fault injection, isolated fixture only.
-  const response = await request(`http://127.0.0.1:${server.address().port}`, 'GET', '/api/v1/profiles');
+  const response = await request(base, 'GET', '/api/v2/profiles');
   assert.equal(response.status, 500);
   assert.deepEqual(response.body, { error: { code: 'INTERNAL_ERROR', message: 'No se pudo completar la operación.' } });
 });

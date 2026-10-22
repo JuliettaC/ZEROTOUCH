@@ -1,11 +1,17 @@
 import { createApp } from "./app.js";
 import { loadConfig } from "./config/env.js";
 import { openDatabase } from "./config/database.js";
+import { loadKey } from './security/crypto.js';
+import { accountRepository } from './repositories/accounts.js';
 let db;
 try {
   const config = loadConfig();
+  const key = loadKey(config.keyPath);
   db = openDatabase(config.databasePath);
-  const server = createApp(db).listen(config.port, config.host, () => {
+  accountRepository(db).prune();
+  const pruneTimer = setInterval(() => { try { accountRepository(db).prune(); } catch { console.error('No se pudo aplicar retención.'); } }, 3600000);
+  pruneTimer.unref();
+  const server = createApp(db, {...config,key}).listen(config.port, config.host, () => {
     const host = config.host === "::1" ? "[::1]" : config.host;
     console.log(
       `ZeroTouch API disponible en http://${host}:${server.address().port}`,
@@ -21,6 +27,7 @@ try {
   function close() {
     if (closing) return;
     closing = true;
+    clearInterval(pruneTimer);
     server.close(() => {
       db.close();
       if (process.connected) process.disconnect();

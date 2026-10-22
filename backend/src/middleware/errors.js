@@ -1,3 +1,10 @@
+import { DomainError } from '../domain/errors.js';
+const statusByCode = {
+  INVALID_INPUT: 400, NOT_FOUND: 404, PROFILE_NOT_FOUND: 404,
+  DUPLICATE_CONTEXT: 409, RELATED_RECORDS: 409, DATABASE_BUSY: 503,
+  UNAUTHENTICATED: 401, INVALID_CREDENTIALS: 401, FORBIDDEN: 403,
+  RATE_LIMITED: 429, RESOURCE_LIMIT: 409, ACCOUNT_CONFLICT: 409,
+};
 export class ApiError extends Error {
   constructor(status, code, message) {
     super(message);
@@ -8,6 +15,10 @@ export class ApiError extends Error {
 export function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
   let failure = error;
+  if (error instanceof DomainError)
+    failure = new ApiError(statusByCode[error.code] || 500, error.code, error.message);
+  if (error.code === 'SQLITE_BUSY')
+    failure = new ApiError(503, 'DATABASE_BUSY', 'La base está ocupada. Reintenta la operación.');
   if (error.type === "entity.parse.failed")
     failure = new ApiError(
       400,
@@ -32,5 +43,6 @@ export function errorHandler(error, req, res, next) {
   }
   res
     .status(failure.status)
+    .set(failure.status === 429 ? { 'Retry-After': '900' } : {})
     .json({ error: { code: failure.code, message: failure.message } });
 }

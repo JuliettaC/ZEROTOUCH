@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:app": "vite --config frontend/vite.config.js",
+    "build:app": "vite build --config frontend/vite.config.js",
+    "preview:app": "vite preview --config frontend/vite.config.js",
+    "verify:separation": "node scripts/verify-separation.cjs",
+    "audit:licenses": "node scripts/audit-licenses.cjs"
   },
   "dependencies": {
     "react": "^19.2.8",

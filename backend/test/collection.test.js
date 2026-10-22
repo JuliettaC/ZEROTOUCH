@@ -10,7 +10,7 @@ test("colección Postman: todas las peticiones y sus scripts de verificación", 
   const collection = JSON.parse(
     fs.readFileSync(
       new URL(
-        "../../docs/api/ZeroTouch.postman_collection.json",
+        "../api/ZeroTouch.postman_collection.json",
         import.meta.url,
       ),
       "utf8",
@@ -51,6 +51,7 @@ test("colección Postman: todas las peticiones y sus scripts de verificación", 
           }
         },
         response: {
+          headers: { get: key => response.headers.get(key) },
           json: () => body,
           to: {
             have: { status: (code) => assert.equal(response.status, code) },
