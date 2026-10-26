@@ -3,8 +3,9 @@ import { useId } from 'react'
 const ASSETS = `${import.meta.env.BASE_URL}assets/`
 const iconFiles = { logo: 'home-imgImg2', eye: 'home-imgImg', eyeOff: 'home-imgImg1', wand: 'home-imgImg3', kitchen: 'home-imgImg4', moon: 'home-imgImg5', grid: 'home-imgImg6', desk: 'home-imgImg7', bolt: 'home-imgImg8', check: 'home-imgImg9', assistance: 'home-imgImg10', target: 'home-imgImg11', plus: 'home-imgImg12', phone: 'home-imgImg13', chevron: 'home-imgImg14', tip: 'home-imgImg15', back: 'calibration-imgImg3', next: 'calibration-imgImg4', hand: 'calibration-imgImg1', stable: 'calibration-imgImg2', laptop: 'mobile-calibration-imgLaptop', mobileBack: 'mobile-calibration-imgImg', fullscreen: 'mobile-calibration-imgImg1', mobileHand: 'mobile-calibration-imgImg2', fist: 'mobile-calibration-imgImg4', mobileNext: 'mobile-imgSvg1', close: 'gesture-imgImg', pinch: 'gesture-imgImg1', testHand: 'gesture-imgImg2', ergonomic: 'ergonomic-imgImg', rest: 'ergonomic-imgImg1', pause: 'playground-imgImg1' }
 
-export function Icon({ name, className = '' }) {
-  return <img className={`icon ${className}`} src={`${ASSETS}${iconFiles[name] || name}.svg`} alt="" aria-hidden="true" />
+export function Icon({ name, className = '', muted = false }) {
+  if (name === 'logo' || name === 'mobile-imgSvg') return <img className={`icon ${className}`} src={`${ASSETS}zerotouch-dark.png`} width={name === 'logo' ? 25 : 20} height={name === 'logo' ? 20 : 16} style={{ objectFit: 'contain' }} alt="" aria-hidden="true" />
+  return <img className={`icon ${className}`} src={`${ASSETS}${iconFiles[name] || name}${muted ? '-muted' : ''}.svg`} alt="" aria-hidden="true" />
 }
 
 export function NavLink({ to, navigate, children, className = '', ...props }) {
