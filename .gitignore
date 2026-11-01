@@ -17,6 +17,18 @@ dist-ssr
 .env.*
 !.env.example
 
+# Datos y secretos locales (el SQL y los ejemplos sí se versionan)
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-wal
+*.db-shm
+*.key
+*.pem
+*.p12
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
