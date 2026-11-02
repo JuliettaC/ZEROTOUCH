@@ -5,7 +5,7 @@ import { createAuthMiddleware } from '../middleware/auth.js';
 import { authConfig } from '../security/auth-config.js';
 import { checkOrigin } from '../middleware/csrf.js';
 
-// Mount at /api/v1/auth. Only session/logout are private in this router.
+// Mount at /api/v1/auth. Account lookup and logout require a session.
 export function createAuthRouter({ db, config }) {
   const router = Router(), settings = authConfig(config);
   const controller = createAuthController(createAuthService({ db, config }), settings);
@@ -16,6 +16,7 @@ export function createAuthRouter({ db, config }) {
   router.post('/registro', controller.register);
   router.post('/login', controller.login);
   const authenticate = createAuthMiddleware({ db, config });
+  router.get('/me', authenticate, controller.session);
   router.get('/sesion', authenticate, controller.session);
   router.post('/logout', authenticate, controller.logout);
   return router;

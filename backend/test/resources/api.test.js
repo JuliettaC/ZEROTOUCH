@@ -37,6 +37,30 @@ async function fixture(t) {
   }
   return { db, request, account };
 }
+test('contrato auth/me en app real: identidad, alias, CSRF y revocación', async t => {
+  const { request, account, db } = await fixture(t);
+  assert.equal((await request('GET', '/api/v1/auth/me')).status, 401);
+  const session = await account('cliente_tauri');
+  const current = await request('GET', '/api/v1/auth/me', undefined, session);
+  assert.equal(current.status, 200);
+  assert.deepEqual(current.body, { data: { usuario: session.user, csrf_token: session.csrf } });
+  assert.equal(current.headers.get('cache-control'), 'no-store');
+  assert.deepEqual((await request('GET', '/api/v1/auth/sesion', undefined, session)).body, current.body);
+  assert.equal((await request('GET', '/api/v1/auth/me', undefined, session,
+    { headers: { Origin: 'https://otro.example' } })).status, 403);
+  assert.equal((await request('POST', '/api/v1/auth/logout', undefined, session,
+    { headers: { 'X-CSRF-Token': '' } })).status, 403);
+  assert.equal((await request('GET', '/api/v1/auth/me', undefined, session)).status, 200);
+  const logout = await request('POST', '/api/v1/auth/logout', undefined, session);
+  assert.equal(logout.status, 204);
+  assert.equal(logout.text, '');
+  assert.match(logout.headers.get('set-cookie'), /zt_session=;/);
+  assert.equal(db.prepare('SELECT count(*) n FROM sesiones').get().n, 0);
+  for (const route of ['/auth/me', '/auth/sesion', '/perfiles']) {
+    assert.equal((await request('GET', `/api/v1${route}`, undefined, session)).status, 401);
+  }
+});
+
 test('dos CRUD completos, valores predeterminados, paginación y cascada', async t => {
   const { request, account, db } = await fixture(t), session = await account('propietario');
   const created = await request('POST', '/api/v1/perfiles', { nombre: ' Cocina ', descripcion: 'Recetas' }, session);
