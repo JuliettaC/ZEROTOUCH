@@ -27,3 +27,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Bases y secretos locales: solo se versiona el esquema SQL.
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.ztbackup
+*.key
+*.pem
+*.p12
+
+# Copias de trabajo y artefactos locales; no forman parte de esta entrega.
+/.worktrees/
+/codex-interno/
+/tmp/
+/output/
+/desktop/target/
+/desktop/runtime/
+/desktop/downloads/
+/dist-app/
+**/.venv/
+**/__pycache__/
