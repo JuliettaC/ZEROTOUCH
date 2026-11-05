@@ -1,0 +1,12 @@
+{
+  "identifier": "main",
+  "description": "API Hito 2 y motor gestual local para la única ventana autorizada.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-register", "allow-login", "allow-account", "allow-logout",
+    "allow-profiles", "allow-create-profile", "allow-update-profile", "allow-delete-profile",
+    "allow-contexts", "allow-create-context", "allow-update-context", "allow-delete-context",
+    "allow-engine-start", "allow-engine-stop", "allow-engine-status",
+    "allow-engine-update-config", "allow-engine-set-mode", "allow-engine-set-paused"
+  ]
+}

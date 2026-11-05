@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-context"
+description = "Enables the update_context command without any pre-configured scope."
+commands.allow = ["update_context"]
+
+[[permission]]
+identifier = "deny-update-context"
+description = "Denies the update_context command without any pre-configured scope."
+commands.deny = ["update_context"]

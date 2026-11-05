@@ -8,7 +8,7 @@ Fecha: 2 de noviembre de 2026. Entorno local Windows, Node 24.19.0. Datos fictic
 node --test --test-concurrency=1 backend/test/database/*.test.js backend/test/security/*.test.js backend/test/resources/*.test.js backend/test/integration/*.test.js
 ```
 
-Backend: 24 pruebas aprobadas, cero fallos. Incluye 23 de I1/I2 y una integral de I3. La integral ejecuta 24 solicitudes definidas en la colección, sus scripts de comprobación con un adaptador pm limitado, más comprobaciones propias de aislamiento, CSRF, reinicio y exportación JSON. No equivale a ejecutar la interfaz de Postman ni demuestra compatibilidad de todas sus funciones. La suite final no depende de Python, motor ni cámara.
+Backend: 25 pruebas aprobadas, cero fallos, en la verificación del 5 de noviembre de 2026. Incluye pruebas de datos, seguridad, recursos e integración. La integral ejecuta 24 solicitudes definidas en la colección, sus scripts de comprobación con un adaptador pm limitado, más comprobaciones propias de aislamiento, CSRF, reinicio y exportación JSON. No equivale a ejecutar la interfaz de Postman ni demuestra compatibilidad de todas sus funciones. La suite final no depende de Python, motor ni cámara.
 
 | Área | Evidencia |
 |---|---|

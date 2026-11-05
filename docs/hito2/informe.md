@@ -30,7 +30,7 @@ PATCH exige version esperada. El repositorio compara e incrementa de forma atóm
 
 ## 5. API y seguridad
 
-Prefijo `/api/v1`. Éxito `{data:...}`; listados añaden paginacion con limite/offset; error `{error:CODIGO,mensaje:...}`. Creación 201, lectura/edición 200 y borrado/logout 204. El contrato OpenAPI documenta 15 rutas y 21 operaciones. Salud pública; registro y login públicos; recursos y administración requieren sesión.
+Prefijo `/api/v1`. Éxito `{data:...}`; listados añaden paginacion con limite/offset; error `{error:CODIGO,mensaje:...}`. Creación 201, lectura/edición 200 y borrado/logout 204. El contrato OpenAPI documenta 16 rutas y 22 operaciones. Salud pública; registro y login públicos; recursos y administración requieren sesión.
 
 Registro crea user activo. Argon2id protege contraseñas con parámetros explícitos. Login entrega cookie de sesión opaca y token CSRF; SQLite conserva el hash del token de sesión, no el original. HttpOnly, SameSite=Strict y Secure según HTTPS/producción limitan exposición. Mutaciones requieren X-CSRF-Token y validan Origin cuando existe. Roles y suspensión revocan sesiones; no se permite eliminar al último administrador activo mediante esos cambios.
 
@@ -42,7 +42,7 @@ La exportación `GET /modos/:id/gestos` devuelve formato_version 1, modo y gesto
 
 I1 aportó SQL, conexión, autenticación y administración. I2 integró aplicación, CRUD, contrato y automatización. I3 agregó colección y prueba de extremo a extremo, consolidando evidencias sin modificar producción ajena. La colección tiene 24 solicitudes, variables locales para datos ficticios y comprobación de códigos HTTP. La integración ejecuta esas solicitudes contra el servidor de producto, con un adaptador acotado de scripts Postman.
 
-La suite conjunta obtuvo 24 pruebas aprobadas, cero fallos. Se comprueban integridad, autenticación, expiración/revocación, roles, CSRF, acceso A a B, duplicados, tipos/rangos, conflictos de versión, errores de formato/tamaño y bloqueo SQLite. Para persistencia se termina el proceso con salida 0, se arranca otro PID sobre el mismo archivo y se recuperan modo y sesión. Esta evidencia supera una simple reapertura de conexión dentro del mismo proceso.
+La suite conjunta obtuvo 25 pruebas aprobadas, cero fallos. Se comprueban integridad, autenticación, expiración/revocación, roles, CSRF, acceso A a B, duplicados, tipos/rangos, conflictos de versión, errores de formato/tamaño y bloqueo SQLite. Para persistencia se termina el proceso con salida 0, se arranca otro PID sobre el mismo archivo y se recuperan modo y sesión. Esta evidencia supera una simple reapertura de conexión dentro del mismo proceso.
 
 La prueba I3 verifica también el contenido del DTO exportado y ausencia de credenciales. No requiere Python ni cámara. El servidor escucha solo en loopback, usa cuentas ficticias y elimina exclusivamente la carpeta temporal creada por cada prueba. No hay endpoints de bypass para facilitar el recorrido.
 

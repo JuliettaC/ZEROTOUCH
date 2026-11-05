@@ -148,7 +148,7 @@ Las pruebas de recursos cubren ambos CRUD, lectura individual/listas, valores pr
 
 Resultado de esta entrega: **23 pruebas aprobadas, 0 fallos**, ejecutadas también en una copia limpia sin node_modules previo tras `npm ci`. Se instalaron 82 paquetes y se comprobó carga real de SQLite/Argon2 mediante la suite. npm avisó que sus scripts de instalación no estaban autorizados explícitamente en allowScripts; los módulos incluidos cargaron en este Windows. No se habilitaron scripts globalmente: una plataforma que necesite compilarlos debe revisar esa política de forma específica. Esta comprobación no equivale a instalación en otro computador.
 
-Análisis estático: cero errores y una advertencia previa de useEffect en App.jsx. Contrato OpenAPI leído y referencias internas verificadas: 15 rutas y 21 operaciones. git diff --check sin errores.
+Análisis estático: cero errores y una advertencia previa de useEffect en App.jsx. Contrato OpenAPI leído y referencias internas verificadas: 16 rutas y 22 operaciones. git diff --check sin errores.
 
 ESLint distingue fuentes React y Node. Excluye artefactos, copias temporales y worktrees ajenos. No se modificó App.jsx para ocultar su advertencia previa de dependencias de useEffect. El workflow test.yml instala y ejecuta la suite del backend; su ejecución remota solo puede confirmarse después de publicar y correr GitHub Actions.
 
