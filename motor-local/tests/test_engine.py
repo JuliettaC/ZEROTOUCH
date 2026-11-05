@@ -64,7 +64,7 @@ def make_closed_fist(cx: float = 0.5, cy: float = 0.5, handedness: str = "Right"
     for idx in (6, 10, 14, 18):
         lms[idx] = Point3D(cx, cy + 0.05)
     for idx in (8, 12, 16, 20):
-        lms[idx] = Point3D(cx, cy + 0.09)
+        lms[idx] = Point3D(cx, cy + 0.03)  # puntas dentro de la palma
     lms[4] = Point3D(cx + 0.02, cy + 0.05)
     lms[2] = Point3D(cx + 0.02, cy + 0.06)
     return HandLandmarks(landmarks=lms, handedness=handedness, confidence=0.95)
@@ -218,15 +218,17 @@ def test_two_finger_scroll_pause_and_emergency_stop() -> None:
     assert scroll_dy > 0, "mover la mano hacia arriba debe desplazar hacia arriba"
     assert engine.total_scrolls >= 1
 
-    interp.process_frame(make_closed_fist(), now_ms=300.0)
-    evts_pause = interp.process_frame(make_closed_fist(), now_ms=750.0)
+    evts_pause = []
+    for t in range(300, 1100, 33):  # puño confirmado (~250 ms) y mantenido 450 ms
+        evts_pause += interp.process_frame(make_closed_fist(), now_ms=float(t))
     assert any(e.type == EVENT_PAUSE for e in evts_pause)
     assert interp.paused is True
 
-    assert len(interp.process_frame(make_open_palm(0.7, 0.7), now_ms=800.0)) == 0
+    assert len(interp.process_frame(make_open_palm(0.7, 0.7), now_ms=1150.0)) == 0
 
-    interp.process_frame(make_closed_fist(), now_ms=850.0)
-    evts_resume = interp.process_frame(make_closed_fist(), now_ms=1300.0)
+    evts_resume = []
+    for t in range(1200, 2000, 33):
+        evts_resume += interp.process_frame(make_closed_fist(), now_ms=float(t))
     assert any(e.type == EVENT_RESUME for e in evts_resume)
     assert interp.paused is False
 

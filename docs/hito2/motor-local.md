@@ -58,7 +58,7 @@ Un cambio de configuración libera primero el botón si hay arrastre o pinza en 
 | `pinza_sostenida` | Arrastre con botón izquierdo (`arrastrar`) | `drag` |
 | `liberacion_pinza` | Parte del arrastre (`soltar`); sin interruptor propio | informativo |
 | `dos_dedos` | Desplazamiento vertical (`desplazar`) | `scroll` |
-| `puno_cerrado` | Pausa al mantener; reanudar siempre permitido (`pausar`) | `fistPause` |
+| `puno_cerrado` | Pausa: puño confirmado durante ≥250 ms y 6 muestras, con la palma quieta, y mantenido 450 ms; reanudar siempre permitido (`pausar`) | `fistPause` |
 | `deslizamiento_izquierda` | Palma abierta, barrido a la izquierda: Alt+Izquierda (`atras`) | `swipeLeft` |
 | `deslizamiento_derecha` | Palma abierta, barrido a la derecha: Alt+Derecha (`adelante`) | `swipeRight` |
 

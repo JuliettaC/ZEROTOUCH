@@ -105,7 +105,7 @@ def test_closed_fist_during_drag_releases_without_click() -> None:
     _feed(interp, engine, [(make_open_palm(0.5, 0.5, pinch_dist=0.015), t) for t in (0.0, 40.0, 80.0, 120.0, 160.0)])
     assert mock_os.button_held is True
 
-    seen = _feed(interp, engine, [(make_closed_fist(), 200.0), (make_closed_fist(), 260.0)])
+    seen = _feed(interp, engine, [(make_closed_fist(), float(t)) for t in range(200, 500, 33)])
     assert EVENT_END_DRAG in seen
     assert EVENT_LEFT_CLICK not in seen
     assert mock_os.button_held is False
@@ -115,7 +115,7 @@ def test_closed_fist_during_drag_releases_without_click() -> None:
 def test_fist_hold_pauses_and_pinch_is_ignored_while_paused() -> None:
     interp = GestureInterpreter(EngineConfig(pause_hold_ms=400))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
-    seen = _feed(interp, engine, [(make_closed_fist(), 0.0), (make_closed_fist(), 500.0)])
+    seen = _feed(interp, engine, [(make_closed_fist(), float(t)) for t in range(0, 1000, 33)])
     assert EVENT_PAUSE in seen
     assert interp.paused is True
     seen = _feed(
@@ -129,9 +129,54 @@ def test_fist_hold_pauses_and_pinch_is_ignored_while_paused() -> None:
 def test_fist_pause_disabled_does_not_pause() -> None:
     interp = GestureInterpreter(EngineConfig(pause_hold_ms=400, fist_pause_enabled=False))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
-    seen = _feed(interp, engine, [(make_closed_fist(), 0.0), (make_closed_fist(), 500.0)])
+    seen = _feed(interp, engine, [(make_closed_fist(), float(t)) for t in range(0, 1000, 33)])
     assert EVENT_PAUSE not in seen
     assert interp.paused is False
+
+
+def _partial_curl(dy: float):
+    """Mano con las puntas a `dy` del nivel de las MCP: negativo = extendida, positivo = hacia la palma."""
+    from motor_local.detector import HandLandmarks, Point3D
+
+    hand = make_open_palm(0.5, 0.5, pinch_dist=0.14)
+    lms = list(hand.landmarks)
+    for tip, mcp in ((8, 5), (12, 9), (16, 13), (20, 17)):
+        lms[tip] = Point3D(lms[mcp].x, lms[mcp].y + dy)
+    return HandLandmarks(landmarks=lms, handedness="Right", confidence=0.95)
+
+
+def test_open_hand_with_slightly_bent_fingers_never_pauses() -> None:
+    interp = GestureInterpreter(EngineConfig(pause_hold_ms=450))
+    engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
+    seen = _feed(interp, engine, [(_partial_curl(-0.08), float(t)) for t in range(0, 3000, 33)])
+    assert EVENT_PAUSE not in seen
+    assert interp.paused is False
+
+
+def test_brief_fist_flicker_does_not_pause_or_release_drag() -> None:
+    interp = GestureInterpreter(EngineConfig(pause_hold_ms=450, drag_hold_ms=100))
+    engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
+    _feed(interp, engine, [(make_open_palm(0.5, 0.5, pinch_dist=0.015), t) for t in (0.0, 40.0, 80.0, 120.0, 160.0)])
+    assert mock_drag_held(engine)
+    seen = _feed(interp, engine, [(make_closed_fist(), float(t)) for t in range(200, 300, 33)])  # ~100 ms
+    seen += _feed(interp, engine, [(make_open_palm(0.5, 0.5, pinch_dist=0.015), float(t)) for t in range(330, 900, 33)])
+    assert EVENT_PAUSE not in seen
+    assert EVENT_END_DRAG not in seen
+    assert interp.paused is False
+
+
+def test_moving_fist_is_not_a_pause_gesture() -> None:
+    interp = GestureInterpreter(EngineConfig(pause_hold_ms=450))
+    engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
+    frames = []
+    for i in range(60):
+        frames.append((make_closed_fist(0.3 + 0.01 * i, 0.5), float(33 * i)))  # desplazándose
+    seen = _feed(interp, engine, frames)
+    assert EVENT_PAUSE not in seen
+
+
+def mock_drag_held(engine: LogicalActionEngine) -> bool:
+    return engine.adapter.button_held
 
 
 def test_disabled_pinch_produces_no_click_and_disabled_pointer_produces_no_movement() -> None:

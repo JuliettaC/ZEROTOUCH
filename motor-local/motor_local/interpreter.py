@@ -68,6 +68,12 @@ SWIPE_REVERSAL_PALM = 0.25     # si la mano vuelve este recorrido hacia atrás, 
 SWIPE_COOLDOWN_MS = 600.0
 SWIPE_STILL_PALM = 0.03        # movimiento por muestra por debajo del cual la mano cuenta como quieta
 SWIPE_REARM_MS = 200.0
+# Puño (pausa): puntas a menos de esta fracción de la palma de su articulación MCP, confirmado en el
+# tiempo y con la mano quieta. Hipótesis sin calibrar con cámara real.
+FIST_TIP_RATIO = 0.45
+FIST_CONFIRM_FRAMES = 6
+FIST_CONFIRM_MS = 250.0
+FIST_STILL_PALM = 0.05
 
 
 @dataclass(frozen=True)
@@ -184,6 +190,17 @@ def _confirmed(count: int, start_ms: float | None, now_ms: float, min_frames: in
     return start_ms is not None and count >= min_frames and (now_ms - start_ms) >= min_ms
 
 
+def _is_fist_pose(lms: list[Point3D], scale: float) -> bool:
+    """Puño: los cuatro dedos plegados y cada punta cerca de la palma (no solo más cerca de la muñeca)."""
+    for tip, mcp in ((8, 5), (12, 9), (16, 13), (20, 17)):
+        if _dist2d(lms[tip], lms[mcp]) > FIST_TIP_RATIO * scale:
+            return False
+    return not any(
+        _is_finger_extended(lms, tip, pip, mcp)
+        for tip, pip, mcp in ((8, 6, 5), (12, 10, 9), (16, 14, 13), (20, 18, 17))
+    )
+
+
 class GestureInterpreter:
     """Stateful gesture recognizer transforming 21 landmarks into logical events."""
 
@@ -212,6 +229,9 @@ class GestureInterpreter:
         self._scroll_accum: float = 0.0       # fracción de muesca aún no emitida
         self._missing_frames: int = 0
         self._tracking_lost_emitted: bool = False
+        self._fist_count: int = 0
+        self._fist_first_ms: float | None = None
+        self._fist_anchor: tuple[float, float] | None = None
         self._win_frames: int = 0
         self._win_start_ms: float | None = None
         self._win_anchor_y: float | None = None
@@ -274,9 +294,33 @@ class GestureInterpreter:
         self._scroll_pending = 0.0
         self._scroll_accum = 0.0
 
+    def _fist_confirmed(self, candidate: bool, palm_x: float, palm_y: float, scale: float, now_ms: float) -> bool:
+        """Confirma un puño: postura sostenida durante varias muestras y tiempo, con la palma quieta."""
+        if not candidate:
+            self._fist_count = 0
+            self._fist_first_ms = None
+            self._fist_anchor = None
+            return False
+        if self._fist_first_ms is None or self._fist_anchor is None:
+            self._fist_first_ms = now_ms
+            self._fist_anchor = (palm_x, palm_y)
+            self._fist_count = 0
+        ax, ay = self._fist_anchor
+        if math.hypot(palm_x - ax, palm_y - ay) / scale > FIST_STILL_PALM:
+            # La mano se mueve: no es un puño sostenido para pausar. Se reinicia la confirmación.
+            self._fist_first_ms = now_ms
+            self._fist_anchor = (palm_x, palm_y)
+            self._fist_count = 0
+            return False
+        self._fist_count += 1
+        return _confirmed(self._fist_count, self._fist_first_ms, now_ms, FIST_CONFIRM_FRAMES, FIST_CONFIRM_MS)
+
     def _cancel_candidates(self) -> None:
         """Cancela gestos discretos en curso sin tocar los bloqueos de rearme (un gesto ya disparado
         no vuelve a disparar porque se pierda y se recupere la mano en la misma postura)."""
+        self._fist_count = 0
+        self._fist_first_ms = None
+        self._fist_anchor = None
         self._win_frames = 0
         self._win_start_ms = None
         self._win_anchor_y = None
@@ -505,15 +549,15 @@ class GestureInterpreter:
         ring_ext = _is_finger_extended(lms, 16, 14, 13)
         pinky_ext = _is_finger_extended(lms, 20, 18, 17)
 
-        index_folded = _is_finger_folded(lms, 8, 6, 5)
-        middle_folded = _is_finger_folded(lms, 12, 10, 9)
         ring_folded = _is_finger_folded(lms, 16, 14, 13)
         pinky_folded = _is_finger_folded(lms, 20, 18, 17)
 
         raw_ax, raw_ay = self._compute_skeletal_anchor(lms)
 
         # 3. Puño: transición de parada. Si había arrastre o pinza, se liberan sin clic.
-        is_fist = index_folded and middle_folded and ring_folded and pinky_folded and (not index_ext) and (not middle_ext)
+        fist_palm_x = (lms[0].x + lms[5].x + lms[9].x + lms[17].x) * 0.25
+        fist_palm_y = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25
+        is_fist = self._fist_confirmed(_is_fist_pose(lms, scale), fist_palm_x, fist_palm_y, scale, now_ms)
         if is_fist:
             events.extend(self._release_pointer_state("fist"))
             self._reset_scroll()
