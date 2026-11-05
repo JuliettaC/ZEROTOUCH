@@ -52,12 +52,17 @@ def get_screen_size() -> tuple[int, int]:
     return 1920, 1080
 
 
+# Únicas combinaciones de teclado que el motor puede emitir. Cualquier otra se rechaza.
+ALLOWED_KEY_COMBOS = frozenset({("alt", "left"), ("alt", "right")})
+
+
 class OSAdapterProtocol(Protocol):
     def move_cursor(self, norm_x: float, norm_y: float) -> None: ...
     def left_click(self) -> None: ...
     def start_drag(self) -> None: ...
     def end_drag(self) -> None: ...
     def scroll(self, dy: int) -> None: ...
+    def key_combo(self, keys: tuple[str, ...]) -> None: ...
     def release_all(self) -> None: ...
     def close(self) -> None: ...
 
@@ -99,6 +104,11 @@ class MockOSAdapter:
     def scroll(self, dy: int) -> None:
         self.executed_actions.append(("SCROLL", {"dy": int(dy)}))
 
+    def key_combo(self, keys: tuple[str, ...]) -> None:
+        if tuple(keys) not in ALLOWED_KEY_COMBOS:
+            raise ValueError("Combinación de teclado no permitida.")
+        self.executed_actions.append(("KEY_COMBO", {"keys": list(keys)}))
+
     def release_all(self) -> None:
         if self.button_held:
             self.button_held = False
@@ -117,6 +127,7 @@ class PynputOSAdapter:
 
         self._mouse_mod = mouse
         self._keyboard_mod = keyboard
+        self._keyboard_ctl: Any = None
         self._mouse = mouse.Controller()
         self.screen_width, self.screen_height = get_screen_size()
         self.button_held: bool = False
@@ -178,6 +189,28 @@ class PynputOSAdapter:
         steps = max(-15, min(15, int(dy)))
         if steps != 0:
             self._mouse.scroll(0, steps)
+
+    def key_combo(self, keys: tuple[str, ...]) -> None:
+        """Pulsa una combinación de la lista permitida: modificadores, tecla, y suelta en orden inverso."""
+        if tuple(keys) not in ALLOWED_KEY_COMBOS:
+            raise ValueError("Combinación de teclado no permitida.")
+        keyboard_mod = self._keyboard_mod
+        names = {"alt": keyboard_mod.Key.alt, "left": keyboard_mod.Key.left, "right": keyboard_mod.Key.right}
+        mapped = [names[k] for k in keys]
+        if self._keyboard_ctl is None:
+            self._keyboard_ctl = keyboard_mod.Controller()
+        ctl = self._keyboard_ctl
+        pressed: list[Any] = []
+        try:
+            for key in mapped:
+                ctl.press(key)
+                pressed.append(key)
+        finally:
+            for key in reversed(pressed):
+                try:
+                    ctl.release(key)
+                except Exception:
+                    pass
 
     def release_all(self) -> None:
         if self.button_held:

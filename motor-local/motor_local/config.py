@@ -96,6 +96,9 @@ class EngineConfig:
     drag_enabled: bool = True      # pinza_sostenida -> arrastrar
     scroll_enabled: bool = True    # dos_dedos -> desplazar
     fist_pause_enabled: bool = True  # puno_cerrado -> pausar (siempre permite reanudar)
+    swipe_left_enabled: bool = True   # deslizamiento_izquierda -> atras
+    swipe_right_enabled: bool = True  # deslizamiento_derecha -> adelante
+    window_gestures_enabled: bool = False  # tres dedos: minimizar/restaurar ventanas (opt-in local)
     precision_mode: bool = False   # Fine cursor movement multiplier (sin gesto asignable aún)
     camera_index: int = 0
     click_cooldown_ms: int = 320   # Prevent accidental repeated clicks
@@ -137,6 +140,9 @@ class EngineConfig:
             drag_enabled=_bool_field(data, ("drag",), True),
             scroll_enabled=_bool_field(data, ("scroll", "scroll_enabled"), True),
             fist_pause_enabled=_bool_field(data, ("fistPause",), True),
+            swipe_left_enabled=_bool_field(data, ("swipeLeft",), True),
+            swipe_right_enabled=_bool_field(data, ("swipeRight",), True),
+            window_gestures_enabled=_bool_field(data, ("windowGestures",), False),
             precision_mode=_bool_field(data, ("precisionMode", "modo_precision"), False),
             camera_index=_int_field(data, ("cameraIndex",), 0, 0, 10),
         )
@@ -157,6 +163,9 @@ class EngineConfig:
             "drag": self.drag_enabled,
             "scroll": self.scroll_enabled,
             "fistPause": self.fist_pause_enabled,
+            "swipeLeft": self.swipe_left_enabled,
+            "swipeRight": self.swipe_right_enabled,
+            "windowGestures": self.window_gestures_enabled,
             "precisionMode": self.precision_mode,
             "cameraIndex": self.camera_index,
         }

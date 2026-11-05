@@ -3,7 +3,7 @@
 Enforces safety requirements:
 - Starts in OBSERVATION (simulation) mode by default; real OS control requires explicit activation.
 - Maintains an allowlist of logical events; never executes arbitrary shell/OS commands.
-- Releases held mouse buttons immediately on TRACKING_LOST, PAUSE, mode switch, or emergency stop.
+- Releases held mouse buttons immediately on TRACKING_LOST, PAUSE, END_DRAG, mode switch, or emergency stop.
 """
 
 from __future__ import annotations
@@ -11,10 +11,14 @@ from __future__ import annotations
 from typing import Iterable
 
 from .interpreter import (
+    EVENT_BACK,
     EVENT_END_DRAG,
+    EVENT_FORWARD,
     EVENT_LEFT_CLICK,
+    EVENT_MINIMIZE_WINDOW,
     EVENT_MOVE_CURSOR,
     EVENT_PAUSE,
+    EVENT_RESTORE_WINDOW,
     EVENT_RESUME,
     EVENT_SCROLL,
     EVENT_START_DRAG,
@@ -24,6 +28,7 @@ from .interpreter import (
     LogicalEvent,
 )
 from .os_adapter import OSAdapterProtocol
+from .window_control import WindowActions, WindowResult
 
 MODE_OBSERVATION = "OBSERVATION"
 MODE_CONTROL = "CONTROL"
@@ -40,18 +45,32 @@ ALLOWED_EVENTS = frozenset(
         EVENT_THUMBS_UP,
         EVENT_THUMBS_DOWN,
         EVENT_TRACKING_LOST,
+        EVENT_BACK,
+        EVENT_FORWARD,
+        EVENT_MINIMIZE_WINDOW,
+        EVENT_RESTORE_WINDOW,
     }
 )
+
+# Eventos de acción discreta que se ejecutan solo en CONTROL y nunca como liberación.
+_DISCRETE_KEY_COMBOS = {EVENT_BACK: ("alt", "left"), EVENT_FORWARD: ("alt", "right")}
 
 
 class LogicalActionEngine:
     """Routes validated logical events to the OS adapter only when in CONTROL mode."""
 
-    def __init__(self, adapter: OSAdapterProtocol, initial_mode: str = MODE_OBSERVATION) -> None:
+    def __init__(
+        self,
+        adapter: OSAdapterProtocol,
+        initial_mode: str = MODE_OBSERVATION,
+        window_actions: WindowActions | None = None,
+    ) -> None:
         self.adapter = adapter
+        self.window_actions = window_actions
         self.mode: str = initial_mode if initial_mode in (MODE_OBSERVATION, MODE_CONTROL) else MODE_OBSERVATION
         self.emergency_stopped: bool = False
         self.last_dispatched_event: str = "NONE"
+        self.last_window_result: str = "NONE"
         self.total_clicks: int = 0
         self.total_scrolls: int = 0
 
@@ -73,6 +92,17 @@ class LogicalActionEngine:
         self.mode = MODE_OBSERVATION
         self.adapter.release_all()
         self.last_dispatched_event = "EMERGENCY_STOP"
+
+    def _window_event(self, evt_type: str) -> None:
+        if self.window_actions is None:
+            self.last_window_result = "UNAVAILABLE"
+            return
+        result: WindowResult = (
+            self.window_actions.minimize_target()
+            if evt_type == EVENT_MINIMIZE_WINDOW
+            else self.window_actions.restore_last()
+        )
+        self.last_window_result = result.code
 
     def dispatch(self, events: Iterable[LogicalEvent]) -> list[str]:
         """Processes logical events, returning the list of event names handled."""
@@ -105,10 +135,12 @@ class LogicalActionEngine:
                 self.adapter.left_click()
             elif evt.type == EVENT_START_DRAG:
                 self.adapter.start_drag()
-            elif evt.type == EVENT_END_DRAG:
-                self.adapter.end_drag()
             elif evt.type == EVENT_SCROLL:
                 self.adapter.scroll(int(evt.payload.get("dy", 0)))
+            elif evt.type in _DISCRETE_KEY_COMBOS:
+                self.adapter.key_combo(_DISCRETE_KEY_COMBOS[evt.type])
+            elif evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):
+                self._window_event(evt.type)
 
         return handled
 

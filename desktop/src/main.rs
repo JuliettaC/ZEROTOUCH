@@ -184,6 +184,29 @@ async fn engine_set_paused(
     })?
 }
 
+#[tauri::command]
+async fn engine_load_export(
+    window: tauri::WebviewWindow,
+    engine: tauri::State<'_, SharedEngine>,
+    document: Value,
+    runtime: Option<Value>,
+) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    let shared = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut mgr = shared.lock().map_err(|_| BridgeError {
+            code: "ENGINE_LOCK".into(),
+            message: "No se pudo acceder al motor gestual.".into(),
+        })?;
+        mgr.load_export(document, runtime)
+    })
+    .await
+    .map_err(|_| BridgeError {
+        code: "ENGINE_ERROR".into(),
+        message: "Fallo al cargar la configuración en el motor gestual.".into(),
+    })?
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .setup(|app| {
@@ -219,7 +242,8 @@ fn main() {
             engine_status,
             engine_update_config,
             engine_set_mode,
-            engine_set_paused
+            engine_set_paused,
+            engine_load_export
         ])
         .build(tauri::generate_context!())
         .expect("No se pudo iniciar ZEROTOUCH");

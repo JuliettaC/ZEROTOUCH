@@ -7,6 +7,7 @@
     "allow-profiles", "allow-create-profile", "allow-update-profile", "allow-delete-profile",
     "allow-contexts", "allow-create-context", "allow-update-context", "allow-delete-context",
     "allow-engine-start", "allow-engine-stop", "allow-engine-status",
-    "allow-engine-update-config", "allow-engine-set-mode", "allow-engine-set-paused"
+    "allow-engine-update-config", "allow-engine-set-mode", "allow-engine-set-paused",
+    "allow-engine-load-export"
   ]
 }

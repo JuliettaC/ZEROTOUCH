@@ -29,6 +29,7 @@ from .config import ConfigError, EngineConfig
 from .detector import HandDetector
 from .interpreter import GestureInterpreter
 from .os_adapter import MockOSAdapter, PynputOSAdapter
+from .window_control import MockWindowController, WindowActions, Win32WindowController
 
 DETECTOR_MAX_CONSECUTIVE_FAILURES = 30
 VALID_MODES = (MODE_OBSERVATION, MODE_CONTROL)
@@ -220,12 +221,20 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
         return True
 
     try:
+        window_actions: WindowActions | None
         if use_mock_os:
             adapter = MockOSAdapter()
+            window_actions = WindowActions(MockWindowController())
         else:
             adapter = PynputOSAdapter(on_emergency_stop=lambda: cmd_queue.put({"cmd": "EMERGENCY_STOP"}))
+            try:
+                window_actions = WindowActions(Win32WindowController())
+            except Exception:
+                window_actions = None  # sin Win32 los gestos de ventana informan UNAVAILABLE
 
-        action_engine = LogicalActionEngine(adapter=adapter, initial_mode=MODE_OBSERVATION)
+        action_engine = LogicalActionEngine(
+            adapter=adapter, initial_mode=MODE_OBSERVATION, window_actions=window_actions
+        )
         detector = HandDetector(min_detection_confidence=0.50, min_tracking_confidence=0.50)
         camera_ok = capture.open(config.camera_index)
         x_min, x_max, y_min, y_max = config.active_bounds
@@ -318,6 +327,10 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                     "PAUSE",
                     "RESUME",
                     "TRACKING_LOST",
+                    "BACK",
+                    "FORWARD",
+                    "MINIMIZE_WINDOW",
+                    "RESTORE_WINDOW",
                 )
             )
             if important_event or (now_sec - last_telemetry_emit) >= 0.060:
@@ -358,6 +371,7 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                         "latencyMs": latency_ms,
                         "totalClicks": action_engine.total_clicks,
                         "totalScrolls": action_engine.total_scrolls,
+                        "windowResult": action_engine.last_window_result,
                     }
                 )
 

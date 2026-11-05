@@ -55,6 +55,8 @@ IMPLEMENTED_BINDINGS: dict[str, str] = {
     "liberacion_pinza": "soltar",  # implícita en el arrastre; no tiene interruptor propio
     "dos_dedos": "desplazar",
     "puno_cerrado": "pausar",
+    "deslizamiento_izquierda": "atras",   # Alt+Izquierda
+    "deslizamiento_derecha": "adelante",  # Alt+Derecha
 }
 
 # Interruptor del motor controlado por cada gesto implementado.
@@ -64,6 +66,8 @@ GESTURE_FLAG: dict[str, str] = {
     "pinza_sostenida": "drag_enabled",
     "dos_dedos": "scroll_enabled",
     "puno_cerrado": "fist_pause_enabled",
+    "deslizamiento_izquierda": "swipe_left_enabled",
+    "deslizamiento_derecha": "swipe_right_enabled",
 }
 
 _MODO_REQUIRED = frozenset(
@@ -236,6 +240,8 @@ def load_api_export(document: Any, runtime: Mapping[str, Any] | None = None) -> 
         drag_enabled=bool(flags["drag_enabled"]),
         scroll_enabled=bool(flags["scroll_enabled"]),
         fist_pause_enabled=bool(flags["fist_pause_enabled"]),
+        swipe_left_enabled=bool(flags["swipe_left_enabled"]),
+        swipe_right_enabled=bool(flags["swipe_right_enabled"]),
     )
     return ImportedConfig(
         config=config,

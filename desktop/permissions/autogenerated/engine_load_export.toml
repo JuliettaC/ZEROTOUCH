@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-engine-load-export"
+description = "Enables the engine_load_export command without any pre-configured scope."
+commands.allow = ["engine_load_export"]
+
+[[permission]]
+identifier = "deny-engine-load-export"
+description = "Denies the engine_load_export command without any pre-configured scope."
+commands.deny = ["engine_load_export"]

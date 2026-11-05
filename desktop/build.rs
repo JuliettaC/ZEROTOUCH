@@ -19,6 +19,7 @@ fn main() {
             "engine_update_config",
             "engine_set_mode",
             "engine_set_paused",
+            "engine_load_export",
         ]),
     ))
     .expect("No se pudo generar la política de comandos");

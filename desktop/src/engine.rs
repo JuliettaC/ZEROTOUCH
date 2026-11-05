@@ -502,6 +502,12 @@ impl GestureEngineManager {
         Ok(self.get_status())
     }
 
+    /// Carga una exportación de la API (formato 1). El motor valida todo el documento y solo
+    /// devuelve su ACK si lo aplicó; un rechazo llega con el código que indica el motor.
+    pub fn load_export(&mut self, document: Value, runtime: Option<Value>) -> Result<Value, BridgeError> {
+        self.send_cmd(json!({ "cmd": "LOAD_EXPORT", "document": document, "runtime": runtime }))
+    }
+
     pub fn set_mode(&mut self, mode: String) -> Result<EngineStatus, BridgeError> {
         let normalized = if mode.eq_ignore_ascii_case("CONTROL") {
             "CONTROL"

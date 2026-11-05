@@ -29,7 +29,7 @@ La configuración de pytest permite ejecutar desde la raíz y excluye por defect
 motor-local/.venv/Scripts/python.exe -m pytest motor-local/tests -m hardware
 ```
 
-Resultado sintético de la revisión del 5 de noviembre de 2026: 61 pruebas aprobadas sin cámara (incluida la prueba de protocolo IPC en proceso con cámara y detector falsos) y 1 prueba `hardware` aprobada con `--mock-os`. Esta cifra no certifica la cámara real ni los botones del sistema operativo. Pendientes de prueba física en Windows: cámara, micro-pinza, arrastre, scroll, pausa por puño, pérdida de mano, parada con Ctrl+Alt+Z y liberación de botones.
+Resultado sintético de la revisión del 5 de noviembre de 2026: 85 pruebas aprobadas sin hardware (incluidas las de protocolo IPC con cámara y detector falsos, y las de ventanas y barrido con controladores simulados) y 1 prueba `hardware` aprobada con `--mock-os`. Esta cifra no certifica la cámara real ni los botones del sistema operativo. Pendientes de prueba física en Windows: cámara, micro-pinza, arrastre, scroll, pausa por puño, pérdida de mano, parada con Ctrl+Alt+Z y liberación de botones.
 
 ## Protocolo IPC
 
@@ -59,6 +59,12 @@ Un cambio de configuración libera primero el botón si hay arrastre o pinza en 
 | `liberacion_pinza` | Parte del arrastre (`soltar`); sin interruptor propio | informativo |
 | `dos_dedos` | Desplazamiento vertical (`desplazar`) | `scroll` |
 | `puno_cerrado` | Pausa al mantener; reanudar siempre permitido (`pausar`) | `fistPause` |
+| `deslizamiento_izquierda` | Palma abierta, barrido a la izquierda: Alt+Izquierda (`atras`) | `swipeLeft` |
+| `deslizamiento_derecha` | Palma abierta, barrido a la derecha: Alt+Derecha (`adelante`) | `swipeRight` |
+
+Gestos de ventana con tres dedos (índice, medio y anular extendidos, meñique plegado, pinza abierta). No tienen código en el catálogo de la API: son locales y se activan solo con `windowGestures: true` en la configuración del equipo (desactivados por defecto). Hacia abajo minimizan únicamente la ventana en primer plano en el momento del gesto. Hacia arriba restauran solo la última ventana que el propio motor minimizó, y únicamente si sigue existiendo, es el mismo proceso y sigue minimizada; si no, no restauran nada. Una ventana no se restaura por reutilizar un identificador: se comparan HWND, PID y hora de creación del proceso. Restaurar no garantiza el foco: el resultado (`focused`) se informa en `windowResult`. Nunca se usa «mostrar escritorio» ni se cierran aplicaciones. Cada postura dispara una vez y exige soltarla (rearme) y un cooldown de 800 ms.
+
+El barrido de palma abierta exige recorrido horizontal de 1,2 longitudes de palma en como máximo 450 ms, velocidad de al menos 2 longitudes por segundo, predominio horizontal (al menos el doble que el vertical) y no volver hacia atrás más de 0,25 palmas. Dispara una vez y se rearma cuando la mano queda quieta 200 ms y pasó un cooldown de 600 ms. El puntero sigue activo durante la palma.
 
 Cualquier otra acción o asignación se rechaza si está habilitada y se registra como inactiva si está deshabilitada. Los pulgares se detectan en telemetría sin acción.
 
@@ -78,6 +84,16 @@ Hipótesis iniciales, no calibradas: pinza confirmada con 3 muestras consecutiva
 
 La configuración de interfaz se transmite mediante el puente nativo y se valida en el motor. La exportación `GET /api/v1/modos/:id/gestos` puede cargarse con `LOAD_EXPORT`, que está implementado en Python y probado sintéticamente. Su conexión desde la interfaz Tauri no está en este cambio. El catálogo de acciones futuras no autoriza comandos del sistema arbitrarios.
 
-Pendiente de implementación y de asignación de responsable: gestos de tres dedos para minimizar y restaurar ventanas con Win32, barrido horizontal atrás/adelante, quinto gesto, pulgares con acción, Air-Swipe, mirada y móvil. Ninguno está implementado.
+Pendiente de decisión y de asignación de responsable: gestos de ventana como catálogo de la API (exige cambiar `db/schema.sql` y coordinar con I1 e I2), pulgares con acción, Air-Swipe real, mirada y móvil. La conexión de `engine_load_export` queda expuesta por Tauri y en `src/api/client.js` (`engineLoadExport`), pero ningún control de la interfaz la invoca todavía.
+
+## Cómo añadir otro gesto
+
+Un gesto nuevo requiere cinco pasos. Si falla cualquiera, no se activa:
+
+1. **Reconocimiento** en `interpreter.py`: una función pura que reciba la postura y devuelva un evento. Debe ser excluyente con las demás posturas (ver la prioridad en el encabezado del módulo) y tener umbrales en unidades normalizadas (longitudes de palma) y tiempo en milisegundos.
+2. **Evento** nuevo en `interpreter.py`, añadido a `ALLOWED_EVENTS` en `action_engine.py`.
+3. **Acción permitida** en `os_adapter.py`: solo funciones explícitas (como `key_combo` con su lista blanca). Nunca comandos de shell ni rutas arbitrarias.
+4. **Asignación** en `api_export.py`: entradas en `IMPLEMENTED_BINDINGS` y `GESTURE_FLAG`, y el interruptor correspondiente en `config.py`. Mientras falte, la exportación rechaza cualquier asignación habilitada de ese código.
+5. **Pruebas sintéticas**: reconocimiento positivo, ruido, cadencias distintas, exclusión con las demás posturas y cooldown/rearme. Una prueba física no sustituye a estas pruebas.
 
 La implementación anterior y su documentación se preservaron localmente fuera de la entrega; no son un segundo motor activo. `.venv`, cachés y resultados de pruebas se excluyen de Git. El desarrollo del motor procede de la copia de Antigravity; la consolidación y sus comprobaciones no sustituyen la revisión humana ni la prueba física del equipo.

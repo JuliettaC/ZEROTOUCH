@@ -16,7 +16,9 @@ Esta actualización (5 de noviembre de 2026) revisa el motor y la aplicación Ta
 | Arrastre | Pinza sostenida ≥380 ms; `drag` del DTO; cancelado por puño | Sintético; arrastre real pendiente |
 | Scroll de dos dedos | Postura confirmada, zona muerta por longitud de palma, límite de muescas por segundo, cancelación por cambio de postura | Sintético; hacia arriba/abajo en aplicaciones reales pendiente |
 | Exportación de la API | `LOAD_EXPORT` valida formato 1, rechaza acciones no implementadas y credenciales | Sintético; carga desde la interfaz no conectada en este cambio |
-| Tres dedos, barrido horizontal, quinto gesto | No implementados (ventanas Win32, navegación atrás/adelante) | Pendiente; ninguna acción asociada |
+| Ventanas con tres dedos | Minimizar la ventana activa y restaurar la última minimizada por el motor (Win32 vía ctypes); identidad por HWND, PID y creación del proceso; opt-in local | Sintético con controlador simulado; Win32 real pendiente de prueba física |
+| Barrido horizontal | Palma abierta: Alt+Izquierda (atrás) y Alt+Derecha (adelante), una acción por barrido con rearme | Sintético; navegación en aplicaciones reales pendiente |
+| Quinto gesto | Procedimiento documentado en docs/hito2/motor-local.md; sin implementación ni acción | Pendiente |
 | Air-Swipe | Solo catálogo y continuidad documental | Futuro; no implementación ni texto almacenado |
 | Mirada, móvil y ergonomía | Campos previstos sin motor asociado | Futuro; sin beneficio ergonómico medido |
 | Distribución de escritorio | Tauri/Rust como puente nativo y motor Python explícito, invocado por JSON-lines | Compila y pasa pruebas Rust; sin instalador ni instalación probada en otro equipo |
