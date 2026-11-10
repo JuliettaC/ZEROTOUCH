@@ -3,7 +3,7 @@
 mod bridge;
 mod engine;
 
-use bridge::{Bridge, BridgeError, ContextInput, Credentials, ProfileInput};
+use bridge::{Bridge, BridgeError, ContextInput, Credentials, EmailRequest, ProfileInput, Registration};
 use engine::{resolve_motor_dir, EngineStatus, GestureEngineManager};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
@@ -41,7 +41,10 @@ macro_rules! endpoint {
         }
     }
 }
-endpoint!(register, c:Credentials);
+endpoint!(register, c:Registration);
+endpoint!(resend_verification, e:EmailRequest);
+endpoint!(forgot_password, e:EmailRequest);
+endpoint!(link_email, c:Registration);
 endpoint!(login, c:Credentials);
 endpoint!(account);
 endpoint!(logout);
@@ -226,6 +229,9 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             register,
+            resend_verification,
+            forgot_password,
+            link_email,
             login,
             account,
             logout,

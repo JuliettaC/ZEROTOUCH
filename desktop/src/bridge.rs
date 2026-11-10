@@ -32,6 +32,40 @@ pub struct Credentials {
     pub contrasena: String,
 }
 
+/// Registro y vinculación de correo: mismos tres campos; cualquier otro (p. ej. rol) se rechaza.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Registration {
+    #[serde(alias = "username")]
+    pub nombre_usuario: String,
+    #[serde(alias = "email")]
+    pub correo: String,
+    #[serde(alias = "password")]
+    pub contrasena: String,
+}
+
+/// Reenvío de verificación y recuperación de contraseña: solo el correo.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EmailRequest {
+    #[serde(alias = "email")]
+    pub correo: String,
+}
+
+/// Respuestas genéricas de cuenta: solo se reenvía al WebView el estado y un mensaje acotado.
+fn account_notice(value: &Value) -> Value {
+    let mensaje: String = value["data"]["mensaje"]
+        .as_str()
+        .unwrap_or("Revisa tu correo para continuar.")
+        .chars()
+        .take(300)
+        .collect();
+    match value["data"]["estado_verificacion"].as_str() {
+        Some("pendiente") => json!({ "estado_verificacion": "pendiente", "mensaje": mensaje }),
+        _ => json!({ "mensaje": mensaje }),
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ProfileInput {
@@ -206,12 +240,14 @@ fn sanitize_user(user: &Value) -> Result<Value> {
         .ok_or_else(|| error("SERVICE_RESPONSE", "Nombre de usuario ausente."))?;
     let rol = user["rol"].as_str().unwrap_or("user");
     let estado = user["estado"].as_str().unwrap_or("activo");
+    let correo_verificado = user["correo_verificado"].as_bool().unwrap_or(false);
     Ok(json!({
         "id": id,
         "nombre_usuario": nombre_usuario,
         "username": nombre_usuario,
         "rol": rol,
         "estado": estado,
+        "correo_verificado": correo_verificado,
     }))
 }
 
@@ -328,17 +364,54 @@ impl Bridge {
         Ok((value, cookie))
     }
 
-    pub fn register(&mut self, c: Credentials) -> Result<Value> {
+    /// 202: la cuenta queda pendiente de verificar el correo; no se inicia sesión.
+    pub fn register(&mut self, c: Registration) -> Result<Value> {
         let (value, _) = self.request(
             Method::POST,
             "/api/v1/auth/registro",
             Some(json!({
                 "nombre_usuario": c.nombre_usuario,
+                "correo": c.correo,
                 "contrasena": c.contrasena
             })),
             false,
         )?;
-        sanitize_user(&value["data"])
+        Ok(account_notice(&value))
+    }
+
+    pub fn resend_verification(&mut self, e: EmailRequest) -> Result<Value> {
+        let (value, _) = self.request(
+            Method::POST,
+            "/api/v1/auth/verificacion/reenviar",
+            Some(json!({ "correo": e.correo })),
+            false,
+        )?;
+        Ok(account_notice(&value))
+    }
+
+    pub fn forgot_password(&mut self, e: EmailRequest) -> Result<Value> {
+        let (value, _) = self.request(
+            Method::POST,
+            "/api/v1/auth/contrasena/olvido",
+            Some(json!({ "correo": e.correo })),
+            false,
+        )?;
+        Ok(account_notice(&value))
+    }
+
+    /// Cuentas sin correo confirmado (heredadas o con un error al registrarse).
+    pub fn link_email(&mut self, c: Registration) -> Result<Value> {
+        let (value, _) = self.request(
+            Method::POST,
+            "/api/v1/auth/correo",
+            Some(json!({
+                "nombre_usuario": c.nombre_usuario,
+                "contrasena": c.contrasena,
+                "correo": c.correo
+            })),
+            false,
+        )?;
+        Ok(account_notice(&value))
     }
 
     pub fn login(&mut self, c: Credentials) -> Result<Value> {
@@ -569,6 +642,14 @@ mod tests {
         }
     }
 
+    fn registration(name: &str) -> Registration {
+        Registration {
+            nombre_usuario: name.into(),
+            correo: format!("{}@ejemplo.test", name.to_ascii_lowercase()),
+            contrasena: "Ejemplo ficticio de acceso 2026!".into(),
+        }
+    }
+
     fn resolve_hito2_repo_root() -> PathBuf {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent().expect("desktop debe estar dentro del proyecto").to_path_buf();
@@ -592,7 +673,7 @@ mod tests {
             fs::create_dir_all(&temp_dir).unwrap();
             let db_path = temp_dir.join("test-hito2.sqlite");
 
-            // Initialize the Hito 2 7-table SQLite schema using backend/scripts/init-db.js
+            // Initialize the Hito 2 SQLite schema (v2) using backend/scripts/init-db.js
             let init_out = Command::new("node")
                 .arg(root.join("backend/scripts/init-db.js"))
                 .current_dir(&root)
@@ -616,6 +697,9 @@ mod tests {
                 .env("NODE_ENV", "test")
                 .env("APP_ORIGIN", "http://127.0.0.1:3000")
                 .env("SESSION_TTL_SECONDS", "28800")
+                // Development mail transport: messages are written as .eml in the temp folder.
+                .env("MAIL_TRANSPORT", "archivo")
+                .env("MAIL_OUTBOX_DIR", temp_dir.join("correo-saliente"))
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
@@ -641,6 +725,33 @@ mod tests {
                 db_path,
                 temp_dir,
             }
+        }
+
+        /// Reads the single-use token from the .eml written by the backend (shared Node helper)
+        /// and confirms the email through the same endpoint the account page uses.
+        fn verify_email(&self, client: &Client, to: &str) {
+            let root = resolve_hito2_repo_root();
+            let out = Command::new("node")
+                .current_dir(root.join("backend"))
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import { tokenFromOutbox } from './test/helpers/correo.js'; process.stdout.write(await tokenFromOutbox(process.argv[1], process.argv[2]));",
+                ])
+                .arg(self.temp_dir.join("correo-saliente"))
+                .arg(to)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            let token = String::from_utf8(out.stdout).unwrap();
+            assert_eq!(token.len(), 43);
+            let res = client
+                .post(format!("{}/api/v1/auth/verificacion", self.base))
+                .header("Content-Type", "application/json")
+                .body(json!({ "token": token }).to_string())
+                .send()
+                .unwrap();
+            assert_eq!(res.status().as_u16(), 200);
         }
 
         fn query_user_count(&self, username: &str) -> u64 {
@@ -687,6 +798,18 @@ mod tests {
             json!({"nombre_usuario":"user","contrasena":"secret","rol":"admin"})
         )
         .is_err());
+        assert!(serde_json::from_value::<Registration>(
+            json!({"nombre_usuario":"user","correo":"a@b.cl","contrasena":"secret","rol":"admin"})
+        )
+        .is_err());
+        assert!(serde_json::from_value::<EmailRequest>(
+            json!({"correo":"a@b.cl","url":"https://example.com"})
+        )
+        .is_err());
+        // Only the status and a bounded message reach the WebView.
+        let notice = account_notice(&json!({"data":{"estado_verificacion":"pendiente","mensaje":"x".repeat(1000),"token":"secreto"}}));
+        assert_eq!(notice["mensaje"].as_str().unwrap().len(), 300);
+        assert!(notice.get("token").is_none());
         assert!(valid_id("https://example.com").is_err());
         assert!(validate_loopback_base("https://example.com").is_err());
         assert!(validate_loopback_base("http://127.0.0.1:3000/api/v1").is_err());
@@ -704,7 +827,7 @@ mod tests {
         // Calling account without session returns SESION_INVALIDA immediately
         assert_eq!(bridge.account().unwrap_err().code, "SESION_INVALIDA");
         // Calling register/login while backend is offline returns SERVICE_OFFLINE without panicking
-        let reg_err = bridge.register(credentials("offline_user")).unwrap_err();
+        let reg_err = bridge.register(registration("offline_user")).unwrap_err();
         assert_eq!(reg_err.code, "SERVICE_OFFLINE");
         let login_err = bridge.login(credentials("offline_user")).unwrap_err();
         assert_eq!(login_err.code, "SERVICE_OFFLINE");
@@ -736,12 +859,10 @@ mod tests {
         let server = TestBackend::start();
         let mut bridge = Bridge::with_base(&server.base).unwrap();
 
-        // 1. Register a new account from Tauri Bridge
-        let reg = bridge.register(credentials("tauri_demo_user")).unwrap();
-        assert_eq!(reg["nombre_usuario"], "tauri_demo_user");
-        assert_eq!(reg["username"], "tauri_demo_user");
-        assert_eq!(reg["rol"], "user");
-        assert_eq!(reg["estado"], "activo");
+        // 1. Register a new account from Tauri Bridge: pending email verification, no account data
+        let reg = bridge.register(registration("tauri_demo_user")).unwrap();
+        assert_eq!(reg["estado_verificacion"], "pendiente");
+        assert!(reg.get("id").is_none());
         assert!(reg.get("csrf_token").is_none());
         assert!(reg.get("contrasena_hash").is_none());
 
@@ -749,8 +870,32 @@ mod tests {
         assert_eq!(server.query_user_count("tauri_demo_user"), 1);
 
         // 3. Reject duplicate usernames (409 USUARIO_DUPLICADO)
-        let dup = bridge.register(credentials("TAURI_DEMO_USER")).unwrap_err();
+        let dup = bridge
+            .register(Registration {
+                correo: "otro@ejemplo.test".into(),
+                ..registration("TAURI_DEMO_USER")
+            })
+            .unwrap_err();
         assert_eq!(dup.code, "USUARIO_DUPLICADO");
+
+        // 3b. An unverified account cannot sign in; the error is the generic one
+        let pending = bridge.login(credentials("tauri_demo_user")).unwrap_err();
+        assert_eq!(pending.code, "CREDENCIALES_INVALIDAS");
+        assert!(bridge.session.is_none());
+
+        // 3c. Resend and recovery answer generically, even for unknown addresses
+        let resent = bridge
+            .resend_verification(EmailRequest { correo: "nadie@ejemplo.test".into() })
+            .unwrap();
+        assert!(resent["mensaje"].as_str().unwrap().starts_with("Si existe"));
+        assert!(bridge
+            .forgot_password(EmailRequest { correo: "nadie@ejemplo.test".into() })
+            .is_ok());
+
+        // 3d. Confirm the email with the link received (development .eml outbox)
+        server.verify_email(&bridge.client, "tauri_demo_user@ejemplo.test");
+        let linked = bridge.link_email(registration("tauri_demo_user")).unwrap_err();
+        assert_eq!(linked.code, "CUENTA_YA_VERIFICADA");
 
         // 4. Reject incorrect passwords (401 CREDENCIALES_INVALIDAS)
         let bad_login = bridge
@@ -765,12 +910,13 @@ mod tests {
         // 5. Log in successfully
         let logged = bridge.login(credentials("tauri_demo_user")).unwrap();
         assert_eq!(logged["nombre_usuario"], "tauri_demo_user");
+        assert_eq!(logged["correo_verificado"], true);
         assert!(logged.get("csrf_token").is_none());
         assert!(bridge.session.is_some());
 
         // 6. Restore the authenticated session using GET /api/v1/auth/me
         let me = bridge.account().unwrap();
-        assert_eq!(me["id"], reg["id"]);
+        assert_eq!(me["id"], logged["id"]);
         assert_eq!(me["nombre_usuario"], "tauri_demo_user");
         assert!(me.get("csrf_token").is_none());
 
