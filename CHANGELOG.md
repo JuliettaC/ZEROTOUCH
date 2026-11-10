@@ -144,7 +144,7 @@ Conflictos previstos al fusionar la línea actual con `origin/main` (comprobados
 Otros pendientes:
 
 1. Confirmar la interfaz React preexistente y, con ella, aplicar o conservar el parche `.worktrees/seguridad-verificacion-ui.patch`.
-2. Migrar la base de demostración v1 con `npm run db:migrate --prefix backend` (no se ejecutó sobre la base real).
+2. ~~Migrar la base de demostración v1~~ **Hecho el 2026-11-10** con `npm run db:migrate --prefix backend`, con autorización de la persona usuaria: respaldo `*.v1-2026-11-10T15-56-07-381Z.ztbackup` junto a la base (v1, `quick_check` ok); base migrada a v2 con las mismas 2 cuentas y los mismos hashes de contraseña, integridad ok y estructura igual a una v2 nueva; el servidor arranca y cierra correctamente. Las 2 cuentas existentes no tienen correo: deben entrar y usar "Confirma tu correo" para vincular uno.
 3. Configurar un proveedor SMTP real para cualquier uso fuera de desarrollo.
 4. Actualizar eslint a la versión 10 cuando el equipo lo apruebe.
 5. Expiración de sesión por inactividad en el servidor y comprobación de contraseñas filtradas.

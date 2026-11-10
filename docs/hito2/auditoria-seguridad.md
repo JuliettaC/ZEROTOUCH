@@ -81,5 +81,5 @@ Verificación manual en navegador (servidor y base temporales): confirmación de
 ## 6. Configuración pendiente
 
 - Proveedor SMTP real para producción: `MAIL_TRANSPORT=smtp`, `MAIL_FROM`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`, `MAIL_SMTP_SECURE`, `MAIL_SMTP_USER`, `MAIL_SMTP_PASSWORD` (solo en `.env`). Configurar SPF, DKIM y DMARC del dominio remitente.
-- Base existente v1: ejecutar `npm run db:migrate --prefix backend` antes de arrancar; las cuentas existentes deberán vincular y confirmar un correo.
+- Base existente v1: migrada el 10 de noviembre con `npm run db:migrate --prefix backend` (respaldo previo verificado; datos y hashes intactos). Otras copias v1 del equipo necesitan el mismo comando. Las cuentas existentes deben vincular y confirmar un correo desde "Confirma tu correo" al intentar entrar.
 - Despliegue fuera de loopback: HTTPS, `APP_ORIGIN` público y revisión de proxy (no implementado).
