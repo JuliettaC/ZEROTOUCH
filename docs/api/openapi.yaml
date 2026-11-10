@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ZeroTouch Hito 2",
-    "version": "1.0.0",
-    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos."
+    "version": "1.1.0",
+    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos. v1.1: verificación de correo obligatoria antes de iniciar sesión (cuentas no verificadas reciben el mismo 401 genérico que unas credenciales incorrectas), recuperación de contraseña y respuestas que no revelan si un correo existe. Los enlaces abren /cuenta/verificar y /cuenta/restablecer fuera de /api/v1."
   },
   "servers": [
     {
@@ -52,11 +52,12 @@
     },
     "/auth/registro": {
       "post": {
-        "summary": "Registrar usuario",
+        "summary": "Registrar usuario (pendiente de verificar correo)",
+        "description": "Crea la cuenta sin verificar y envía un enlace de un solo uso (24 h). La respuesta es idéntica si el correo ya pertenece a otra cuenta: en ese caso la cuenta nueva queda sin correo y el dueño recibe un aviso. 409 solo para nombre_usuario duplicado. No inicia sesión.",
         "operationId": "Registrar_usuario",
         "security": [],
         "responses": {
-          "201": {
+          "202": {
             "description": "Operación correcta",
             "content": {
               "application/json": {
@@ -65,7 +66,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/Usuario"
+                      "$ref": "#/components/schemas/VerificacionPendiente"
                     }
                   },
                   "required": [
@@ -161,7 +162,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Credenciales"
+                "$ref": "#/components/schemas/Registro"
               }
             }
           }
@@ -489,6 +490,571 @@
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verificacion": {
+      "post": {
+        "summary": "Confirmar correo con token",
+        "operationId": "Confirmar_correo",
+        "description": "Token de 43 caracteres base64url leído del fragmento #token= del enlace. Un solo uso; ligado al correo al que se envió. 400 TOKEN_INVALIDO (inexistente, usado o con otro correo) o TOKEN_EXPIRADO.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Correo confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Aviso"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Token"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verificacion/reenviar": {
+      "post": {
+        "summary": "Reenviar correo de verificación",
+        "operationId": "Reenviar_verificacion",
+        "description": "Respuesta 202 idéntica exista o no la cuenta. Solo cuentas activas pendientes reciben un enlace nuevo, que invalida el anterior; enfriamiento de 60 s por cuenta y límites por correo (silencioso) e IP (429).",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Solicitud aceptada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Aviso"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorreoSolicitud"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/correo": {
+      "post": {
+        "summary": "Vincular o corregir correo de una cuenta no verificada",
+        "operationId": "Vincular_correo",
+        "description": "Requiere nombre_usuario y contrasena. Para cuentas migradas de v1 (sin correo) o con un correo aún no confirmado. 401 credenciales inválidas; 409 CUENTA_YA_VERIFICADA. Si el correo pertenece a otra cuenta, la respuesta es la misma y no se reasigna.",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Verificación pendiente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VerificacionPendiente"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cuenta ya verificada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VincularCorreo"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/contrasena/olvido": {
+      "post": {
+        "summary": "Solicitar recuperación de contraseña",
+        "operationId": "Solicitar_recuperacion",
+        "description": "Respuesta 202 idéntica exista o no la cuenta. Envía un enlace de un solo uso (30 min) a cuentas activas.",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Solicitud aceptada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Aviso"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorreoSolicitud"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/contrasena/restablecer": {
+      "post": {
+        "summary": "Restablecer contraseña con token",
+        "operationId": "Restablecer_contrasena",
+        "description": "Cambia el hash Argon2id, invalida los tokens de la cuenta, revoca todas sus sesiones, marca el correo como verificado y notifica al titular. 400 TOKEN_INVALIDO o TOKEN_EXPIRADO.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Contraseña actualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Aviso"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Restablecer"
               }
             }
           }
@@ -2550,6 +3116,118 @@
           "mensaje"
         ]
       },
+      "Registro": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre_usuario": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]{3,40}$"
+          },
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "description": "ASCII; se normaliza a minúsculas."
+          },
+          "contrasena": {
+            "type": "string",
+            "minLength": 15,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "nombre_usuario",
+          "correo",
+          "contrasena"
+        ]
+      },
+      "VincularCorreo": {
+        "$ref": "#/components/schemas/Registro"
+      },
+      "CorreoSolicitud": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        },
+        "required": [
+          "correo"
+        ]
+      },
+      "Token": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "Restablecer": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "contrasena": {
+            "type": "string",
+            "minLength": 15,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "token",
+          "contrasena"
+        ]
+      },
+      "VerificacionPendiente": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "estado_verificacion": {
+            "type": "string",
+            "enum": [
+              "pendiente"
+            ]
+          },
+          "mensaje": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "estado_verificacion",
+          "mensaje"
+        ]
+      },
+      "Aviso": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          },
+          "verificado": {
+            "type": "boolean"
+          },
+          "restablecida": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mensaje"
+        ]
+      },
       "Credenciales": {
         "type": "object",
         "additionalProperties": false,
@@ -2594,13 +3272,17 @@
               "activo",
               "suspendido"
             ]
+          },
+          "correo_verificado": {
+            "type": "boolean"
           }
         },
         "required": [
           "id",
           "nombre_usuario",
           "rol",
-          "estado"
+          "estado",
+          "correo_verificado"
         ]
       },
       "Sesion": {

@@ -121,3 +121,16 @@ Usar el SQL nuevo, las variables y los comandos anteriores. Generar cuentas fict
 SQLite fundamenta el uso de tipos estrictos; better-sqlite3 documenta conexión/transacciones; node-argon2 documenta hash/verificación. Las medidas de cookies, validación y TLS siguen la guía de Express. Estas fuentes no certifican la seguridad del proyecto: las comprobaciones y limitaciones se declaran arriba.
 
 Apoyo de IA: Codex ayudó a implementar y probar los módulos. El equipo debe revisar el diff y poder explicar SQL, hash, sesión, CSRF y autorización antes de entregar.
+
+## Actualización del 10 de noviembre de 2026: verificación de correo (esquema v2)
+
+Detalle completo, tabla de vulnerabilidades y resultados en `docs/hito2/auditoria-seguridad.md`; historial en `CHANGELOG.md`.
+
+- Registro con `nombre_usuario`, `correo` y `contrasena`; la cuenta queda sin verificar y la respuesta es 202 genérica. El login, el middleware y la administración rechazan cuentas sin correo confirmado.
+- Tabla nueva `tokens_cuenta`: solo SHA-256 de tokens aleatorios de 32 bytes, un solo uso, ligados al correo, 24 h (verificación) y 30 min (recuperación). Columnas nuevas `usuarios.correo` y `usuarios.correo_verificado_en`.
+- Endpoints públicos nuevos: `POST /auth/verificacion`, `/auth/verificacion/reenviar`, `/auth/correo`, `/auth/contrasena/olvido`, `/auth/contrasena/restablecer`. Páginas `/cuenta/verificar` y `/cuenta/restablecer` con CSP estricta; el token viaja en el fragmento de la URL.
+- Registro, reenvío y recuperación no revelan si un correo existe; el correo ajeno no se reasigna y su dueño recibe un aviso.
+- Restablecer la contraseña revoca todas las sesiones de la cuenta.
+- Bases v1: `npm run db:migrate --prefix backend` (respaldo previo, migración aditiva). El arranque nunca migra solo.
+- `bootstrapAdmin(db, nombre, contrasena, correo)` crea el administrador sin verificar y devuelve el token para que el CLI lo envíe por correo; el token nunca se imprime.
+- Registro de eventos de seguridad en `stderr` con lista blanca de campos (sin datos personales ni secretos).
