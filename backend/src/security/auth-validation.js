@@ -1,4 +1,5 @@
 import { AuthError } from './auth-errors.js';
+import { isCommonPassword } from './common-passwords.js';
 
 export const invalid = message => { throw new AuthError(400, 'DATOS_INVALIDOS', message); };
 export function fields(body, allowed, required = allowed) {
@@ -31,9 +32,23 @@ export function accountToken(value) {
   }
   return value;
 }
+// Length bounds for any password the API receives (login included). 8 is the usual minimum in
+// consumer apps (OWASP ASVS minimum); NIST SP 800-63B-4 asks for 15 when the password is the only
+// factor, a product decision documented in docs/hito2/auditoria-seguridad.md.
+export const PASSWORD_MIN = 8, PASSWORD_MAX = 128;
 export function password(value) {
-  if (typeof value !== 'string' || [...value].length < 15 || [...value].length > 128
-    || Buffer.byteLength(value, 'utf8') > 512) invalid('contrasena requiere de 15 a 128 caracteres.');
+  if (typeof value !== 'string' || [...value].length < PASSWORD_MIN || [...value].length > PASSWORD_MAX
+    || Buffer.byteLength(value, 'utf8') > 512) invalid(`La contraseña debe tener entre ${PASSWORD_MIN} y ${PASSWORD_MAX} caracteres.`);
+  return value;
+}
+// Passwords being chosen (registration, reset, first admin): no composition rules, but common
+// passwords and ones equal to the account name or email are rejected.
+export function newPassword(value, { nombreUsuario, correo } = {}) {
+  password(value);
+  const lowered = value.trim().toLowerCase();
+  if (isCommonPassword(lowered)) invalid('Esa contraseña es demasiado común. Elige otra, por ejemplo una frase corta.');
+  const personal = [nombreUsuario, correo, correo?.split('@')[0]].filter(Boolean).map(item => item.toLowerCase());
+  if (personal.includes(lowered)) invalid('La contraseña no puede ser igual a tu usuario o a tu correo.');
   return value;
 }
 export function uuid(value) {

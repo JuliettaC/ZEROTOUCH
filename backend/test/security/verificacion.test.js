@@ -120,6 +120,35 @@ test('inicio de sesión con correo o con usuario; reenvío desde el login con el
   for (const identifier of ['olga@', '@ejemplo.test', "x' OR 1=1 --"]) assert.equal((await login(identifier)).response.status, 400);
 });
 
+test('política de contraseñas: mínimo 8, sin contraseñas comunes ni iguales al usuario o correo', async t => {
+  const { mailer, api, register, login } = await fixture(t);
+  const rejected = [
+    ['siete77', 'a1'], ['password', 'a2'], ['12345678', 'a3'], ['87654321', 'a4'], ['aaaaaaaa', 'a5'],
+    ['qwertyuiop', 'a6'], ['Luciana_Demo', 'a7'], ['luciana.correo', 'a8'],
+  ];
+  for (const [contrasena, tag] of rejected) {
+    const correo = tag === 'a8' ? 'luciana.correo@ejemplo.test' : `${tag}@ejemplo.test`;
+    const response = await register('luciana_demo', correo, contrasena);
+    assert.equal(response.status, 400, contrasena);
+    assert.equal(response.body.error, 'DATOS_INVALIDOS');
+    assert.ok(!response.text.includes(contrasena), 'el error no repite la contraseña');
+  }
+  // Ocho caracteres poco comunes son suficientes; espacios y frases también valen.
+  assert.equal((await register('luciana_demo', 'luciana@ejemplo.test', 'gato2026')).status, 202);
+  assert.equal((await api('POST', '/auth/verificacion', { token: lastToken(mailer, 'luciana@ejemplo.test') })).status, 200);
+  assert.equal((await login('luciana_demo', 'gato2026')).response.status, 200);
+  assert.equal((await register('mateo_demo', 'mateo@ejemplo.test', 'mi gato duerme')).status, 202);
+
+  // Restablecer: una contraseña rechazada no consume el enlace.
+  await api('POST', '/auth/contrasena/olvido', { correo: 'luciana@ejemplo.test' });
+  const raw = lastToken(mailer, 'luciana@ejemplo.test', 'restablecer');
+  for (const contrasena of ['corta', '12345678', 'luciana_demo', 'LUCIANA']) {
+    assert.equal((await api('POST', '/auth/contrasena/restablecer', { token: raw, contrasena })).status, 400, contrasena);
+  }
+  assert.equal((await api('POST', '/auth/contrasena/restablecer', { token: raw, contrasena: 'perro_99' })).status, 200);
+  assert.equal((await login('luciana_demo', 'perro_99')).response.status, 200);
+});
+
 test('tokens: un solo uso, expiración, formato y vínculo con el correo', async t => {
   const { db, mailer, api, register } = await fixture(t);
   await register('beto_demo', 'beto@ejemplo.test');

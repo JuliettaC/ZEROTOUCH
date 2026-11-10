@@ -90,7 +90,7 @@
       event.preventDefault();
       const first = document.getElementById('contrasena'), second = document.getElementById('confirmacion');
       const length = [...first.value].length;
-      if (length < 15 || length > 128) { notify('La contraseña debe tener entre 15 y 128 caracteres.', 'error'); first.focus(); return; }
+      if (length < 8 || length > 128) { notify('La contraseña debe tener entre 8 y 128 caracteres.', 'error'); first.focus(); return; }
       if (first.value !== second.value) { notify('Las contraseñas no coinciden.', 'error'); second.focus(); return; }
       const button = form.querySelector('button[type=submit]');
       button.disabled = true;

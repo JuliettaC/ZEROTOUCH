@@ -3,7 +3,7 @@
   "info": {
     "title": "ZeroTouch Hito 2",
     "version": "1.1.0",
-    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos. v1.1: verificación de correo obligatoria antes de iniciar sesión (el login acepta usuario o correo y, solo con la contraseña correcta, responde 403 CUENTA_NO_VERIFICADA), recuperación de contraseña y respuestas que no revelan si un correo existe. Los enlaces abren /cuenta/verificar y /cuenta/restablecer fuera de /api/v1."
+    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos. Contraseñas de 8 a 128 caracteres; registro, restablecimiento y primer administrador rechazan contraseñas comunes o iguales al usuario o correo. v1.1: verificación de correo obligatoria antes de iniciar sesión (el login acepta usuario o correo y, solo con la contraseña correcta, responde 403 CUENTA_NO_VERIFICADA), recuperación de contraseña y respuestas que no revelan si un correo existe. Los enlaces abren /cuenta/verificar y /cuenta/restablecer fuera de /api/v1."
   },
   "servers": [
     {
@@ -3133,7 +3133,7 @@
           },
           "contrasena": {
             "type": "string",
-            "minLength": 15,
+            "minLength": 8,
             "maxLength": 128
           }
         },
@@ -3183,7 +3183,7 @@
           },
           "contrasena": {
             "type": "string",
-            "minLength": 15,
+            "minLength": 8,
             "maxLength": 128
           }
         },
@@ -3240,7 +3240,7 @@
           },
           "contrasena": {
             "type": "string",
-            "minLength": 15,
+            "minLength": 8,
             "maxLength": 128,
             "format": "password"
           }

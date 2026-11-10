@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createUsuariosRepository } from '../repositories/usuariosRepository.js';
 import { createSesionesRepository } from '../repositories/sesionesRepository.js';
 import { createTokensCuentaRepository } from '../repositories/tokensCuentaRepository.js';
-import { fields, username, password, email, accountToken } from '../security/auth-validation.js';
+import { fields, username, password, newPassword, email, accountToken } from '../security/auth-validation.js';
 import { hashPassword, verifyPassword } from '../security/passwords.js';
 import { AuthError } from '../security/auth-errors.js';
 import { authLimiter } from '../security/rate-limit.js';
@@ -94,6 +94,7 @@ export function createAuthService({ db, config, mailer, log = silentSecurityLog 
       const { name, secret } = credentials(body, ip, 'registro', ['correo']);
       const correo = email(body.correo);
       limit('registro:correo', correo, 5);
+      newPassword(secret, { nombreUsuario: name, correo });
       const hash = await hashPassword(secret);
       const now = Date.now();
       const outcome = users.transaction(() => {
@@ -232,6 +233,8 @@ export function createAuthService({ db, config, mailer, log = silentSecurityLog 
         log('restablecimiento_rechazado', { codigo: precheck.error });
         throw tokenError(precheck.error);
       }
+      // A rejected password leaves the token valid, so the person can try another one.
+      newPassword(secret, { nombreUsuario: precheck.user.nombre_usuario, correo: precheck.row.correo });
       const passwordHash = await hashPassword(secret);
       const outcome = users.transaction(() => {
         // Re-read after the asynchronous hash: two concurrent uses of one token cannot both succeed.

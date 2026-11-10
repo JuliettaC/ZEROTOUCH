@@ -16,7 +16,7 @@ POST /auth/registro y POST /auth/login reciben Content-Type: application/json y 
 {"nombre_usuario":"demo_usuario","contrasena":"Ejemplo ficticio de acceso 2026!"}
 ```
 
-nombre_usuario: 3–40 caracteres ASCII, letras, números o guion bajo. contrasena: 15–128 caracteres y hasta 512 bytes UTF-8. El ejemplo es ficticio y no crea credenciales predefinidas. Campos adicionales, incluido rol, se rechazan con 400.
+nombre_usuario: 3–40 caracteres ASCII, letras, números o guion bajo. contrasena: 8–128 caracteres y hasta 512 bytes UTF-8 (antes 15–128; cambio del 10-11-2026). El registro exige además `correo` y rechaza contraseñas comunes o iguales al usuario o correo. El ejemplo es ficticio y no crea credenciales predefinidas. Campos adicionales, incluido rol, se rechazan con 400.
 
 Registro: 201; no inicia sesión automáticamente:
 

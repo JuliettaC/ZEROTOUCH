@@ -43,6 +43,7 @@ Rama `codex/h2-seguridad-verificacion`, creada desde `e88547b`. Commits locales,
 - Paso "02b Verificar correo" en la colección Postman.
 
 ### Modificado
+- Política de contraseñas: **mínimo 8 caracteres** (antes 15), por decisión de usabilidad, como en las aplicaciones habituales. Sin reglas de composición. Al crear o restablecer una contraseña se rechazan las comunes (lista local en `security/common-passwords.js`, secuencias y caracteres repetidos) y las iguales al usuario o al correo. Las cuentas existentes no se ven afectadas. NIST SP 800-63B-4 pide 15 cuando no hay segundo factor: desviación aceptada y documentada en la auditoría.
 - Pruebas existentes adaptadas al flujo con verificación (sin relajar ninguna aserción de seguridad).
 - OpenAPI 1.1.0 con los endpoints y esquemas nuevos.
 - `.env.example`: variables `MAIL_*` comentadas y sin secretos.
@@ -59,7 +60,7 @@ Rama `codex/h2-seguridad-verificacion`, creada desde `e88547b`. Commits locales,
 - Diálogo de cuenta de React con el flujo habitual: Entrar ("Correo o usuario" y contraseña, sin textos de ayuda), "¿Olvidaste tu contraseña?", "¿No tienes cuenta? Crear cuenta". Si la cuenta no está confirmada, el propio diálogo muestra "Confirma tu correo" y reenvía el enlace con las credenciales recién escritas (cubre también cuentas antiguas sin correo); se eliminó el enlace "Mi cuenta no tiene correo confirmado" (`src/components/Dialogs.jsx`, `src/App.jsx`, `src/api/client.js`). **No se confirmó en Git** porque esos archivos contienen además cambios preexistentes sin confirmar de otra persona; el cambio propio está aislado en el parche local `.worktrees/seguridad-verificacion-ui.patch` (ver "Pendiente de integración").
 
 ### Pruebas de esta entrega
-Backend 40/40; puente Tauri 5/5 (con backend real, incluye entrar con correo); ESLint y build de escritorio correctos; verificación manual en navegador de confirmación, reutilización, recuperación y restablecimiento. No probado: SMTP real y ventana nativa de Tauri con una persona usuaria.
+Backend 41/41; puente Tauri 5/5 (con backend real, incluye entrar con correo); ESLint y build de escritorio correctos; verificación manual en navegador de confirmación, reutilización, recuperación y restablecimiento. No probado: SMTP real y ventana nativa de Tauri con una persona usuaria.
 
 ---
 
@@ -147,5 +148,6 @@ Otros pendientes:
 2. ~~Migrar la base de demostración v1~~ **Hecho el 2026-11-10** con `npm run db:migrate --prefix backend`, con autorización de la persona usuaria: respaldo `*.v1-2026-11-10T15-56-07-381Z.ztbackup` junto a la base (v1, `quick_check` ok); base migrada a v2 con las mismas 2 cuentas y los mismos hashes de contraseña, integridad ok y estructura igual a una v2 nueva; el servidor arranca y cierra correctamente. Las 2 cuentas existentes no tienen correo: deben entrar y usar "Confirma tu correo" para vincular uno.
 3. Configurar un proveedor SMTP real para cualquier uso fuera de desarrollo.
 4. Actualizar eslint a la versión 10 cuando el equipo lo apruebe.
+4b. Con el mínimo de 8 caracteres, considerar un segundo factor o una lista completa de contraseñas filtradas para cumplir NIST SP 800-63B-4.
 5. Expiración de sesión por inactividad en el servidor y comprobación de contraseñas filtradas.
 6. Acordar con el equipo los cambios de contrato (registro 202 con correo, ocho tablas) que afectan a `AGENTS.md` y al informe.

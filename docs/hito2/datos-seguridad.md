@@ -75,7 +75,7 @@ La administración verifica sesión vigente y rol actual, actualiza rol/estado y
 
 ## Protección de datos
 
-- Contraseñas: Argon2id, memoria 65536 KiB, 3 iteraciones, paralelismo 1, salida 32 bytes; salt aleatorio generado por la biblioteca. Longitud de entrada 15–128 caracteres y hasta 512 bytes. Máximo dos operaciones de hash/verificación simultáneas.
+- Contraseñas: Argon2id, memoria 65536 KiB, 3 iteraciones, paralelismo 1, salida 32 bytes; salt aleatorio generado por la biblioteca. Longitud de entrada 8–128 caracteres y hasta 512 bytes (15–128 hasta el 10-11-2026). Al crear o restablecer se rechazan contraseñas comunes o iguales al usuario o correo. Máximo dos operaciones de hash/verificación simultáneas.
 - Sesiones: token aleatorio de 32 bytes, solo SHA-256 persistido, TTL de 8 h por defecto, máximo cinco sesiones por cuenta. Al cerrar sesión se elimina el registro; cambios administrativos revocan las sesiones afectadas.
 - Cookie: HttpOnly, SameSite Strict, Path /api/v1; Secure cuando el origen es HTTPS. Producción rechaza origen HTTP. No JWT ni almacenamiento en localStorage.
 - CSRF: HMAC-SHA256 con el token de sesión como clave y propósito fijo. El token crudo solo vive en la petición/cookie, no se guarda en la base. X-CSRF-Token requerido en mutaciones protegidas; comparación de bytes constante. Validación de Origin cuando existe y rechazo de Sec-Fetch-Site cross-site.

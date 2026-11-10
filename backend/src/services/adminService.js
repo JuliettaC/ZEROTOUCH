@@ -3,7 +3,7 @@ import { createUsuariosRepository } from '../repositories/usuariosRepository.js'
 import { createSesionesRepository } from '../repositories/sesionesRepository.js';
 import { createTokensCuentaRepository } from '../repositories/tokensCuentaRepository.js';
 import { AuthError } from '../security/auth-errors.js';
-import { fields, uuid, pagination, username, password, email } from '../security/auth-validation.js';
+import { fields, uuid, pagination, username, newPassword, email } from '../security/auth-validation.js';
 import { hashPassword } from '../security/passwords.js';
 import { silentSecurityLog } from '../security/audit-log.js';
 import { VERIFICATION_TTL_SECONDS } from '../security/account-tokens.js';
@@ -59,7 +59,8 @@ export function createAdminService({ db, log = silentSecurityLog }) {
 // The administrator is created unverified, like any account; the caller sends the returned
 // single-use token by email (the raw token is never stored or printed).
 export async function bootstrapAdmin(db, name, secret, address) {
-  const normalized = username(name), correo = email(address), hash = await hashPassword(password(secret));
+  const normalized = username(name), correo = email(address);
+  const hash = await hashPassword(newPassword(secret, { nombreUsuario: normalized, correo }));
   const users = createUsuariosRepository(db), tokens = createTokensCuentaRepository(db);
   return users.transaction(() => {
     if (users.activeAdmins() > 0) throw new AuthError(409, 'ADMIN_EXISTENTE', 'Ya existe un administrador activo.');

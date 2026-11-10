@@ -32,7 +32,8 @@ Faltaban: correo y verificación de cuentas, recuperación de contraseña, regis
 | 8 | Cabeceras incompletas: faltaban `X-Frame-Options`, COOP, CORP, `Permissions-Policy` y HSTS en HTTPS | Baja | `backend/src/app.js` | A05; ASVS V3 | **Corregido** |
 | 9 | El registro responde 409 ante un `nombre_usuario` existente (enumeración de nombres) | Baja | `authService.register` | A07 | **Documentado**: decisión de contrato previa. El correo **no** se puede enumerar |
 | 10 | Sesiones sin expiración por inactividad en el servidor (TTL absoluto de 8 h; el puente aplica 30 min solo en el cliente) | Baja | `sesiones` | ASVS V7 | **Pendiente**: requiere columna `ultimo_uso` |
-| 11 | Sin comprobación de contraseñas filtradas | Baja | `security/auth-validation.js` | ASVS V6 | **Pendiente** |
+| 11 | Sin comprobación de contraseñas filtradas | Baja | `security/auth-validation.js` | ASVS V6 | **Parcial**: lista local de contraseñas comunes, secuencias y repeticiones; falta una lista completa de filtraciones |
+| 11b | Mínimo de contraseña bajado de 15 a 8 caracteres por decisión de usabilidad (10-11-2026). Cumple el mínimo de ASVS, pero NIST SP 800-63B-4 exige 15 cuando no hay segundo factor | Media | `security/auth-validation.js` | ASVS V6; NIST 800-63B-4 | **Aceptado** y mitigado: bloqueo de contraseñas comunes o iguales al usuario/correo, límites de intentos y Argon2id. Recomendado: segundo factor |
 | 12 | Límite de 2 operaciones Argon2 simultáneas y límites de intentos en memoria: un cliente local puede provocar 429 a otros; se reinician con el proceso | Baja | `security/passwords.js`, `rate-limit.js` | A04 | **Documentado** (diseño de proceso único y loopback) |
 | 13 | HTTP sin TLS fuera de loopback; cookie `Secure` solo con origen HTTPS | Informativa | `config/env.js` | A02 | **Documentado**: `HOST` restringido a loopback; despliegue remoto no realizado |
 | 14 | Contraseñas en el historial de Git | Informativa | historial | A07 | **Verificado**: solo frases ficticias de pruebas; no se encontraron secretos reales, claves ni tokens en el repositorio |
@@ -68,7 +69,7 @@ Esquema v2 (`PRAGMA user_version = 2`): columnas `correo` (único, minúsculas, 
 
 | Suite | Antes | Después |
 |---|---|---|
-| Backend (`node --test`, datos + seguridad + recursos + integración) | 25/25 | **40/40** (25 adaptadas + 15 nuevas) |
+| Backend (`node --test`, datos + seguridad + recursos + integración) | 25/25 | **41/41** (25 adaptadas + 16 nuevas) |
 | Puente Tauri (`cargo test`, incluye backend real) | 5/5 | **5/5** (prueba de integración ampliada) |
 | Motor Python (`pytest`, sin hardware) | 97/97 | no modificado |
 | ESLint (`src`, `backend`) | sin errores | sin errores |
