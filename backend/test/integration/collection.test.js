@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { openDatabase } from '../../src/config/database.js';
+import { tokenFromOutbox } from '../helpers/correo.js';
 
 // Executes only this repository's Postman scripts, with a small explicit pm adapter.
 // This is HTTP integration evidence, not a claim that the Postman UI was tested.
@@ -46,6 +47,7 @@ test('colección: HTTP real, aislamiento, reinicio y exportación sin credencial
     });
     return { ...runtime, base: `http://127.0.0.1:${port}/api/v1`, pid: child.pid };
   }
+  const outbox = path.join(dir, 'correo-saliente');
   let server = await start();
   const collection = JSON.parse(readFileSync(new URL('../../../docs/api/coleccion.json', import.meta.url), 'utf8'));
   const values = new Map([['base_url', server.base]]);
@@ -71,6 +73,9 @@ test('colección: HTTP real, aislamiento, reinicio y exportación sin credencial
     };
     const scripts = event => item.event.filter(e => e.listen === event).forEach(e => vm.runInNewContext(e.script.exec.join('\n'), { pm }, { timeout: 1000 }));
     scripts('prerequest');
+    // Postman users paste the token from the received email; here the real server's development
+    // transport wrote it as .eml next to the temporary database.
+    if (item.name.startsWith('02b ')) values.set('token_verificacion', await tokenFromOutbox(outbox, values.get('correo')));
     const headers = Object.fromEntries(item.request.header.map(h => [h.key, replace(h.value)]));
     if (cookie) headers.Cookie = cookie;
     response = await fetch(replace(item.request.url), {
@@ -101,7 +106,9 @@ test('colección: HTTP real, aislamiento, reinicio y exportación sin credencial
       assert.equal((await request('PATCH', `/modos/${values.get('modo_id')}`, { nombre: 'Sin CSRF', version: 2 })).status, 403);
       const ownerCookie = cookie;
       const other = { nombre_usuario: 'otro_usuario', contrasena: randomUUID() };
-      assert.equal((await request('POST', '/auth/registro', other)).status, 201);
+      assert.equal((await request('POST', '/auth/registro', { ...other, correo: 'otro_usuario@ejemplo.test' })).status, 202);
+      const token = await tokenFromOutbox(outbox, 'otro_usuario@ejemplo.test');
+      assert.equal((await request('POST', '/auth/verificacion', { token })).status, 200);
       const login = await request('POST', '/auth/login', other);
       assert.equal(login.status, 200);
       cookie = login.headers.get('set-cookie').split(';')[0];

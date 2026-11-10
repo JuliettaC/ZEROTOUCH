@@ -13,6 +13,24 @@ export function username(value) {
   }
   return value.toLowerCase();
 }
+// ASCII addresses only (no SMTPUTF8/IDN). Normalized to lowercase: providers treat the
+// local part case-insensitively in practice, and uniqueness must not depend on letter case.
+const EMAIL_LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
+const EMAIL_PATTERN = new RegExp(`^[a-z0-9!#$%&'*+/=?^_\`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_\`{|}~-]+)*@${EMAIL_LABEL}(?:\\.${EMAIL_LABEL})+$`);
+export function email(value) {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  const local = normalized.split('@')[0];
+  if (normalized.length < 6 || normalized.length > 254 || local.length > 64 || !EMAIL_PATTERN.test(normalized)) {
+    invalid('correo requiere una dirección válida de hasta 254 caracteres ASCII.');
+  }
+  return normalized;
+}
+export function accountToken(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(value)) {
+    throw new AuthError(400, 'TOKEN_INVALIDO', 'El enlace no es válido o ya fue utilizado.');
+  }
+  return value;
+}
 export function password(value) {
   if (typeof value !== 'string' || [...value].length < 15 || [...value].length > 128
     || Buffer.byteLength(value, 'utf8') > 512) invalid('contrasena requiere de 15 a 128 caracteres.');

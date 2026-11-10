@@ -1,7 +1,10 @@
 import { createInterface } from 'node:readline/promises';
 import { openDatabase } from '../src/config/database.js';
-import { databasePathFromEnv } from '../src/security/cli-config.js';
+import { loadConfig } from '../src/config/env.js';
 import { bootstrapAdmin } from '../src/services/adminService.js';
+import { authConfig } from '../src/security/auth-config.js';
+import { createMailer } from '../src/security/mailer.js';
+import { verificationMessage } from '../src/security/mail-templates.js';
 
 function secretPrompt(label) {
   return new Promise((resolve, reject) => {
@@ -38,15 +41,26 @@ try {
   if (!process.stdin.isTTY || !process.stdout.isTTY || process.argv.length > 2) {
     throw new Error('Usa una terminal interactiva y no pases credenciales como argumentos.');
   }
-  db = openDatabase(databasePathFromEnv());
+  const config = loadConfig();
+  const mailer = createMailer(config.mail);
+  db = openDatabase(config.databasePath);
   line = createInterface({ input: process.stdin, output: process.stdout });
   const name = await line.question('Nombre del primer administrador: ');
+  const address = await line.question('Correo del administrador (recibirá el enlace de verificación): ');
   line.close();
   const secret = await secretPrompt('Contraseña (no se muestra): ');
   const confirmation = await secretPrompt('Repite la contraseña: ');
   if (secret !== confirmation) throw new Error('Las contraseñas no coinciden.');
-  await bootstrapAdmin(db, name, secret);
-  console.log('Administrador inicial creado. Inicia sesión mediante la API.');
+  const created = await bootstrapAdmin(db, name, secret, address);
+  // The single-use token travels only inside the email; it is never printed.
+  try {
+    await mailer.send(verificationMessage({ to: created.correo, nombreUsuario: created.usuario.nombre_usuario, link: authConfig(config).links.verify(created.token) }));
+  } catch {
+    console.error('Administrador creado, pero el correo no se pudo enviar. Revisa MAIL_* y usa "Reenviar correo de verificación".');
+    process.exitCode = 1;
+  }
+  console.log('Administrador inicial creado sin verificar. Confirma el correo con el enlace recibido y luego inicia sesión.');
+  if (config.mail.transport === 'archivo') console.log(`Desarrollo: el mensaje se guardó como .eml en ${config.mail.outboxDir}`);
 } catch (error) {
   console.error(`No se creó el administrador: ${error.message}`);
   process.exitCode = 1;

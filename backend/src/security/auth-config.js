@@ -12,5 +12,12 @@ export function authConfig(config = {}) {
   return {
     appOrigin, sessionTtlSeconds,
     cookie: { httpOnly: true, sameSite: 'strict', secure: origin.protocol === 'https:', path: '/api/v1' },
+    // Account pages served by this backend. Tokens travel in the URL fragment (#token=...),
+    // which browsers never send to the server, proxies or Referer headers.
+    links: {
+      verify: raw => `${appOrigin}/cuenta/verificar#token=${raw}`,
+      reset: raw => `${appOrigin}/cuenta/restablecer#token=${raw}`,
+      resetPage: `${appOrigin}/cuenta/restablecer`,
+    },
   };
 }

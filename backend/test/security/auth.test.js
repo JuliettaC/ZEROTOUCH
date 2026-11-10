@@ -11,16 +11,20 @@ import { bootstrapAdmin } from '../../src/services/adminService.js';
 import { verifyPassword } from '../../src/security/passwords.js';
 import { csrfToken } from '../../src/middleware/csrf.js';
 import { authConfig } from '../../src/security/auth-config.js';
+import { publicUser } from '../../src/services/authService.js';
+import { createMemoryMailer, lastToken } from '../helpers/correo.js';
 
 const sql = readFileSync(new URL('../../../db/schema.sql', import.meta.url), 'utf8');
 const secret = 'Solo pruebas locales 2026!';
 const config = { nodeEnv: 'test', appOrigin: 'http://127.0.0.1:3000', sessionTtlSeconds: 28800 };
+const mailOf = name => `${name.toLowerCase()}@ejemplo.test`;
 async function fixture(t) {
   const db = new Database(':memory:');
   db.exec(sql);
+  const mailer = createMemoryMailer();
   const app = express();
   app.use(express.json({ limit: '16kb' }));
-  app.use('/api/v1/auth', createAuthRouter({ db, config }));
+  app.use('/api/v1/auth', createAuthRouter({ db, config, mailer }));
   app.use('/api/v1/admin', createAdminRouter({ db, config }));
   // Test-only identity observation; no fixture endpoint is shipped in production.
   app.get('/api/v1/test-identidad', createAuthMiddleware({ db, config }), (req, res) => res.json({ usuarioId: req.auth.usuarioId, rol: req.auth.rol }));
@@ -45,10 +49,16 @@ async function fixture(t) {
     const text = await response.text();
     return { status: response.status, headers: response.headers, text, body: text ? JSON.parse(text) : null };
   }
+  async function verify(token) {
+    const response = await request('POST', '/auth/verificacion', { token });
+    assert.equal(response.status, 200, response.text);
+  }
+  // Registers and confirms the email through the real HTTP flow; returns the public user.
   async function register(name = 'usuario') {
-    const response = await request('POST', '/auth/registro', { nombre_usuario: name, contrasena: secret });
-    assert.equal(response.status, 201, response.text);
-    return response.body.data;
+    const response = await request('POST', '/auth/registro', { nombre_usuario: name, correo: mailOf(name), contrasena: secret });
+    assert.equal(response.status, 202, response.text);
+    await verify(lastToken(mailer, mailOf(name)));
+    return publicUser(db.prepare('SELECT * FROM usuarios WHERE nombre_usuario=?').get(name.toLowerCase()));
   }
   async function login(name = 'usuario') {
     const response = await request('POST', '/auth/login', { nombre_usuario: name, contrasena: secret });
@@ -56,7 +66,7 @@ async function fixture(t) {
     return { cookie: response.headers.get('set-cookie').split(';')[0], csrf: response.body.data.csrf_token,
       user: response.body.data.usuario, response };
   }
-  return { db, request, register, login };
+  return { db, request, register, login, verify, mailer };
 }
 
 test('registro seguro, cookie y consulta de sesión; logout invalida el token', async t => {
@@ -64,13 +74,15 @@ test('registro seguro, cookie y consulta de sesión; logout invalida el token', 
   const user = await register('USUARIO');
   assert.equal(user.nombre_usuario, 'usuario');
   assert.equal(user.rol, 'user');
-  assert.deepEqual(Object.keys(user).sort(), ['estado', 'id', 'nombre_usuario', 'rol']);
+  assert.equal(user.correo_verificado, true);
   const stored = db.prepare('SELECT contrasena_hash FROM usuarios WHERE id=?').get(user.id).contrasena_hash;
   assert.match(stored, /^\$argon2id\$v=19\$/);
   assert.deepEqual(Object.fromEntries(stored.split('$')[3].split(',').map(item => item.split('='))),
     { m: '65536', t: '3', p: '1' });
   assert.ok(await verifyPassword(stored, secret));
   const session = await login();
+  assert.deepEqual(Object.keys(session.user).sort(), ['correo_verificado', 'estado', 'id', 'nombre_usuario', 'rol']);
+  assert.ok(!session.response.text.includes('@ejemplo.test'), 'el DTO no expone el correo');
   assert.match(session.response.headers.get('set-cookie'), /HttpOnly/);
   assert.match(session.response.headers.get('set-cookie'), /SameSite=Strict/);
   assert.match(session.response.headers.get('set-cookie'), /Path=\/api\/v1/);
@@ -91,10 +103,11 @@ test('registro seguro, cookie y consulta de sesión; logout invalida el token', 
 });
 test('rechaza escalamiento de registro, duplicados y credenciales inválidas', async t => {
   const { request, register } = await fixture(t);
-  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: 'usuario', contrasena: secret, rol: 'admin' })).status, 400);
-  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: 'usuario', contrasena: 'corta' })).status, 400);
+  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: 'usuario', correo: mailOf('usuario'), contrasena: secret, rol: 'admin' })).status, 400);
+  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: 'usuario', correo: mailOf('usuario'), contrasena: 'corta' })).status, 400);
+  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: 'usuario', contrasena: secret })).status, 400);
   await register();
-  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: 'USUARIO', contrasena: secret })).status, 409);
+  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: 'USUARIO', correo: 'otro@ejemplo.test', contrasena: secret })).status, 409);
   for (const name of ['usuario', 'inexistente']) {
     const response = await request('POST', '/auth/login', { nombre_usuario: name, contrasena: 'Una contraseña incorrecta' });
     assert.equal(response.status, 401);
@@ -132,9 +145,12 @@ test('identidad proviene de la sesión; user no puede administrar', async t => {
   assert.equal((await request('PATCH', `/admin/usuarios/${b.id}/rol`, { rol: 'admin' }, sa)).status, 403);
 });
 test('admin cambia roles/estado y revoca sesiones; último admin protegido', async t => {
-  const { db, request, register, login } = await fixture(t);
-  const admin = await bootstrapAdmin(db, 'administrador', secret);
-  await assert.rejects(bootstrapAdmin(db, 'segundo', secret), { code: 'ADMIN_EXISTENTE' });
+  const { db, request, register, login, verify } = await fixture(t);
+  const { usuario: admin, token } = await bootstrapAdmin(db, 'administrador', secret, 'admin@ejemplo.test');
+  assert.equal(admin.correo_verificado, false);
+  assert.equal((await request('POST', '/auth/login', { nombre_usuario: 'administrador', contrasena: secret })).status, 401);
+  await verify(token);
+  await assert.rejects(bootstrapAdmin(db, 'segundo', secret, 'segundo@ejemplo.test'), { code: 'ADMIN_EXISTENTE' });
   const user = await register();
   const adminSession = await login('administrador'), userSession = await login();
   const listing = await request('GET', '/admin/usuarios?limite=1&offset=0', undefined, adminSession);
@@ -153,7 +169,8 @@ test('admin cambia roles/estado y revoca sesiones; último admin protegido', asy
 });
 test('rate limiting bloquea repetición; no permite payload SQL en identidad', async t => {
   const { db, request } = await fixture(t);
-  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: "a' OR 1=1 --", contrasena: secret })).status, 400);
+  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: "a' OR 1=1 --", correo: 'sql@ejemplo.test', contrasena: secret })).status, 400);
+  assert.equal((await request('POST', '/auth/registro', { nombre_usuario: 'sqlcorreo', correo: "x'@a.cl OR 1=1 --", contrasena: secret })).status, 400);
   let response;
   for (let index = 0; index < 11; index++) response = await request('POST', '/auth/login', { nombre_usuario: 'inexistente', contrasena: secret });
   assert.equal(response.status, 429);

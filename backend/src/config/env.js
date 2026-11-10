@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { authConfig } from '../security/auth-config.js';
+import { readMailSettings } from '../security/mailer.js';
 
 export function readConfig(env = process.env) {
   const integer = (key, fallback, min, max) => {
@@ -20,6 +21,7 @@ export function readConfig(env = process.env) {
     sessionTtlSeconds: integer('SESSION_TTL_SECONDS', 28800, 60, 86400),
   };
   authConfig(config);
+  config.mail = readMailSettings(env, config);
   return config;
 }
 export function loadConfig() {

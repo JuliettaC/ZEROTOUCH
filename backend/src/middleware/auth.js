@@ -17,7 +17,9 @@ export function createAuthMiddleware({ db, config }) {
       res.set('Cache-Control', 'no-store');
       checkOrigin(req, settings.appOrigin);
       const raw = readSessionCookie(req), hash = sessionHash(raw), session = sessions.get(hash);
-      if (!session || session.estado !== 'activo' || Date.parse(session.expira_en) <= Date.now()) {
+      // Backend enforcement of email verification: an unverified account never passes this point,
+      // even with a session created before the v2 migration.
+      if (!session || session.estado !== 'activo' || !session.correo_verificado_en || Date.parse(session.expira_en) <= Date.now()) {
         throw new AuthError(401, 'SESION_INVALIDA', 'Inicia sesión.');
       }
       checkCsrf(req, raw);

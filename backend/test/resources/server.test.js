@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDatabase } from '../../src/config/database.js';
+import { tokenFromOutbox } from '../helpers/correo.js';
 
 test('servidor real: bloqueo 503, cierre y persistencia después de reiniciar el proceso', { timeout: 30000 }, async t => {
   const directory = mkdtempSync(path.join(tmpdir(), 'zt-i2-server-'));
@@ -51,7 +52,10 @@ test('servidor real: bloqueo 503, cierre y persistencia después de reiniciar el
   }
   let server = await start();
   const credentials = { nombre_usuario: 'persistente', contrasena: 'Prueba de reinicio 2026!' };
-  assert.equal((await server.request('POST', '/auth/registro', credentials)).status, 201);
+  assert.equal((await server.request('POST', '/auth/registro', { ...credentials, correo: 'persistente@ejemplo.test' })).status, 202);
+  // Development transport: the real server writes the message as .eml next to the test database.
+  const token = await tokenFromOutbox(path.join(directory, 'correo-saliente'), 'persistente@ejemplo.test');
+  assert.equal((await server.request('POST', '/auth/verificacion', { token })).status, 200);
   const login = await server.request('POST', '/auth/login', credentials);
   const session = { cookie: login.headers.get('set-cookie').split(';')[0], csrf: login.body.data.csrf_token };
   const p = (await server.request('POST', '/perfiles', { nombre: 'Persistente' }, session)).body.data;

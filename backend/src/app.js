@@ -18,14 +18,25 @@ import { createCatalogosController } from './controllers/catalogosController.js'
 import { perfilesRoutes } from './routes/perfilesRoutes.js';
 import { modosRoutes } from './routes/modosRoutes.js';
 import { catalogosRoutes } from './routes/catalogosRoutes.js';
+import { createCuentaRouter } from './routes/cuentaRoutes.js';
+import { createMailer } from './security/mailer.js';
+import { createSecurityLog } from './security/audit-log.js';
 
-export function createApp({ db, config }) {
+// mailer/securityLog are injectable for tests; production builds them from config.
+export function createApp({ db, config, mailer, securityLog }) {
   if (!db?.open) throw new Error('Se requiere una conexión abierta.');
+  const mail = mailer ?? createMailer(config.mail);
+  const log = securityLog ?? createSecurityLog({ enabled: config.nodeEnv !== 'test' });
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', false);
+  app.locals.securityLog = log;
+  const https = String(config.appOrigin ?? '').startsWith('https:');
   app.use((req, res, next) => {
-    res.set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" });
+    res.set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+      'X-Frame-Options': 'DENY', 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Resource-Policy': 'same-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      ...(https ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}) });
     const hasBody = req.headers['transfer-encoding'] || Number(req.headers['content-length']) > 0;
     if (hasBody && !req.is('application/json')) return next(new ResourceError(415, 'FORMATO_NO_SOPORTADO', 'Usa application/json.'));
     next();
@@ -33,8 +44,9 @@ export function createApp({ db, config }) {
   app.use(express.json({ limit: '16kb', inflate: false }));
   app.use('/api/v1', healthRoutes);
   app.use('/api', healthRoutes); // Compatibility alias for the original health probe only.
-  app.use('/api/v1/auth', createAuthRouter({ db, config }));
-  app.use('/api/v1/admin', createAdminRouter({ db, config }));
+  app.use('/cuenta', createCuentaRouter()); // Static pages opened from verification/reset emails.
+  app.use('/api/v1/auth', createAuthRouter({ db, config, mailer: mail, log }));
+  app.use('/api/v1/admin', createAdminRouter({ db, config, log }));
   const profiles = id => createPerfilesRepository(db, id);
   const modes = id => createModosRepository(db, id);
   const profileController = createPerfilesController(id => createPerfilesService(profiles(id)));

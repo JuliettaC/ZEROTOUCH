@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { createApp } from '../../src/app.js';
 import { bootstrapAdmin } from '../../src/services/adminService.js';
 import { readConfig } from '../../src/config/env.js';
+import { createMemoryMailer, lastToken } from '../helpers/correo.js';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -15,7 +16,8 @@ const password = 'Pruebas API solamente 2026';
 async function fixture(t) {
   const db = new Database(':memory:');
   db.exec(schema);
-  const server = createApp({ db, config }).listen(0, '127.0.0.1');
+  const mailer = createMemoryMailer();
+  const server = createApp({ db, config, mailer }).listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); if (db.open) db.close(); });
   async function request(method, route, body, session, options = {}) {
@@ -28,9 +30,15 @@ async function fixture(t) {
     return { status: response.status, body: text ? JSON.parse(text) : null, text, headers: response.headers };
   }
   async function account(name, admin = false) {
-    const credentials = { nombre_usuario: name, contrasena: password };
-    if (admin) await bootstrapAdmin(db, name, password);
-    else assert.equal((await request('POST', '/api/v1/auth/registro', credentials)).status, 201);
+    const credentials = { nombre_usuario: name, contrasena: password }, correo = `${name}@ejemplo.test`;
+    // Every account (admin included) confirms its email through the real endpoint before login.
+    let token;
+    if (admin) ({ token } = await bootstrapAdmin(db, name, password, correo));
+    else {
+      assert.equal((await request('POST', '/api/v1/auth/registro', { ...credentials, correo })).status, 202);
+      token = lastToken(mailer, correo);
+    }
+    assert.equal((await request('POST', '/api/v1/auth/verificacion', { token })).status, 200);
     const result = await request('POST', '/api/v1/auth/login', credentials);
     assert.equal(result.status, 200);
     return { cookie: result.headers.get('set-cookie').split(';')[0], csrf: result.body.data.csrf_token, user: result.body.data.usuario };

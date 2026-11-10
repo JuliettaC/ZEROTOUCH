@@ -1,6 +1,6 @@
 export function createSesionesRepository(db) {
   return {
-    get: hash => db.prepare('SELECT s.*,u.rol,u.estado FROM sesiones s JOIN usuarios u ON u.id=s.usuario_id WHERE s.token_hash=?').get(hash),
+    get: hash => db.prepare('SELECT s.*,u.rol,u.estado,u.correo_verificado_en FROM sesiones s JOIN usuarios u ON u.id=s.usuario_id WHERE s.token_hash=?').get(hash),
     insert(session) {
       db.prepare('DELETE FROM sesiones WHERE julianday(expira_en)<=julianday(?)').run(session.creado_en);
       // At most five sessions per account. Oldest ones are revoked at login.

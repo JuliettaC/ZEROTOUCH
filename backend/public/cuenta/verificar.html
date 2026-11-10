@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Confirmar correo · ZeroTouch</title>
+  <link rel="stylesheet" href="/cuenta/cuenta.css">
+  <script src="/cuenta/cuenta.js" defer></script>
+</head>
+<body data-pagina="verificar">
+  <main class="tarjeta" aria-labelledby="titulo">
+    <p class="marca">ZEROTOUCH</p>
+    <h1 id="titulo" tabindex="-1">Confirma tu correo</h1>
+
+    <section data-vista="confirmar">
+      <p>Pulsa el botón para activar tu cuenta. El enlace solo puede usarse una vez.</p>
+      <button type="button" class="boton" id="confirmar">Confirmar mi correo</button>
+    </section>
+
+    <section data-vista="exito" hidden>
+      <p class="estado ok" role="status">Correo confirmado. Tu cuenta ya está activa.</p>
+      <p>Vuelve a la aplicación ZeroTouch e inicia sesión con tu nombre de usuario y contraseña.</p>
+    </section>
+
+    <section data-vista="expirado" hidden>
+      <p class="estado error" role="alert">El enlace venció.</p>
+      <p>Escribe tu correo y te enviaremos un enlace nuevo si la cuenta sigue pendiente.</p>
+    </section>
+
+    <section data-vista="invalido" hidden>
+      <p class="estado error" role="alert">El enlace no es válido o ya fue utilizado.</p>
+      <p>Si ya confirmaste tu correo, inicia sesión en ZeroTouch. Si no, solicita un enlace nuevo.</p>
+    </section>
+
+    <form id="reenviar" class="formulario" data-vista="reenviar" hidden novalidate>
+      <label for="correo">Correo de la cuenta</label>
+      <input id="correo" name="correo" type="email" autocomplete="email" maxlength="254" required>
+      <button type="submit" class="boton secundario">Reenviar correo de verificación</button>
+    </form>
+
+    <p id="mensaje" class="estado" role="status" aria-live="polite" hidden></p>
+  </main>
+</body>
+</html>

@@ -5,6 +5,9 @@
 -- IDs: el backend genera UUID (crypto.randomUUID()), no se generan aquí.
 -- Fechas: ISO 8601 UTC; el backend actualiza actualizado_en y version.
 -- Inicialización exclusiva: no ejecutar sobre una base existente. Application ID ZT02.
+-- Versión de esquema 2 (user_version = 2): agrega correo verificable y tokens de cuenta.
+-- Una base v1 existente se actualiza solo con db/migraciones/001_v1_a_v2.sql mediante
+-- `npm run db:migrate --prefix backend`, que crea un respaldo antes de modificarla.
 -- Nombres: NFC en servicios; NOCASE solo ignora mayúsculas ASCII. No promete equivalencia Unicode completa.
 -- La cámara, el reconocimiento gestual y las acciones sobre el SO se ejecutan localmente:
 -- ¡NO se guardan videos, imágenes, coordenadas de manos ni textos escritos con Air-Swipe!
@@ -24,8 +27,15 @@ CREATE TABLE usuarios (
         CHECK (rol IN ('user', 'admin')),
     estado TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo','suspendido')),
     creado_en TEXT NOT NULL CHECK(julianday(creado_en) IS NOT NULL) DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    actualizado_en TEXT NOT NULL CHECK(julianday(actualizado_en) IS NOT NULL) DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    actualizado_en TEXT NOT NULL CHECK(julianday(actualizado_en) IS NOT NULL) DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    -- v2: correo normalizado en minúsculas (ASCII). NULL solo en cuentas heredadas de v1
+    -- o registros cuyo correo ya pertenecía a otra cuenta; esas cuentas no pueden iniciar sesión.
+    correo TEXT COLLATE NOCASE
+        CHECK (correo IS NULL OR (length(correo) BETWEEN 6 AND 254 AND (correo COLLATE BINARY) = lower(trim(correo)) AND instr(correo, '@') > 1)),
+    correo_verificado_en TEXT
+        CHECK (correo_verificado_en IS NULL OR (julianday(correo_verificado_en) IS NOT NULL AND correo IS NOT NULL))
 ) STRICT;
+CREATE UNIQUE INDEX ux_usuarios_correo ON usuarios(correo);
 
 -- 2. Sesiones del backend. Solo se guarda el HASH del token, nunca el token original.
 CREATE TABLE sesiones (
@@ -36,6 +46,20 @@ CREATE TABLE sesiones (
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
 ) STRICT;
 CREATE INDEX idx_sesiones_usuario ON sesiones(usuario_id);
+
+-- 2b (v2). Tokens de un solo uso para verificar el correo o restablecer la contraseña.
+-- Solo se guarda el HASH SHA-256 del token aleatorio. El token queda ligado al correo al que
+-- se envió: si el correo de la cuenta cambia, el token deja de servir. Se elimina al usarse.
+CREATE TABLE tokens_cuenta (
+    token_hash TEXT PRIMARY KEY NOT NULL CHECK (length(token_hash) = 64 AND token_hash NOT GLOB '*[^0-9a-f]*'),
+    usuario_id TEXT NOT NULL,
+    proposito TEXT NOT NULL CHECK (proposito IN ('verificacion', 'recuperacion')),
+    correo TEXT NOT NULL CHECK (length(correo) BETWEEN 6 AND 254 AND instr(correo, '@') > 1),
+    creado_en TEXT NOT NULL CHECK(julianday(creado_en) IS NOT NULL) DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    expira_en TEXT NOT NULL CHECK(julianday(expira_en) IS NOT NULL AND julianday(expira_en) > julianday(creado_en)),
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX idx_tokens_cuenta_usuario ON tokens_cuenta(usuario_id, proposito);
 
 -- 3. Un usuario puede disponer de distintos perfiles de configuración.
 CREATE TABLE perfiles (
@@ -154,5 +178,5 @@ INSERT INTO gestos (codigo, nombre, accion_predeterminada) VALUES
 -- Estado temporal (pausa, cámara, puntero, temporizadores), visión y predicción
 -- Air-Swipe permanecen en el dispositivo local. No se exige crear tablas para ellos.
 
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 COMMIT;

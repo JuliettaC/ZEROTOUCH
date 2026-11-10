@@ -2,7 +2,7 @@
   "info": {
     "name": "ZeroTouch Hito 2 — recorrido local",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Ejecutar en Collection Runner, en orden, sobre una base de demostración. Genera una cuenta ficticia por ejecución (no hay DELETE de usuarios). Cookie jar habilitado. Variables de contraseña/CSRF solo locales al recorrido; no exportarlas. Para motor: ejecutar hasta 18 y guardar solamente el cuerpo data de esa respuesta como motor-local/config.local.json. El recorrido completo borra perfil y modo. Persistencia: usar la prueba integration/collection.test.js o detener entre 18 y 19, reiniciar servidor y repetir 13. No utiliza React."
+    "description": "Ejecutar en Collection Runner, en orden, sobre una base de demostración. Genera una cuenta ficticia por ejecución (no hay DELETE de usuarios). Cookie jar habilitado. Antes de 02b, copiar el token del enlace recibido (en desarrollo, archivo .eml en MAIL_OUTBOX_DIR; parte tras #token=) en la variable local token_verificacion; no exportarla. Variables de contraseña/CSRF solo locales al recorrido; no exportarlas. Para motor: ejecutar hasta 18 y guardar solamente el cuerpo data de esa respuesta como motor-local/config.local.json. El recorrido completo borra perfil y modo. Persistencia: usar la prueba integration/collection.test.js o detener entre 18 y 19, reiniciar servidor y repetir 13. No utiliza React."
   },
   "variable": [
     {
@@ -49,7 +49,7 @@
         "url": "{{base_url}}/auth/registro",
         "body": {
           "mode": "raw",
-          "raw": "{\"nombre_usuario\":\"{{usuario}}\",\"contrasena\":\"{{contrasena}}\"}",
+          "raw": "{\"nombre_usuario\":\"{{usuario}}\",\"correo\":\"{{correo}}\",\"contrasena\":\"{{contrasena}}\"}",
           "options": {
             "raw": {
               "language": "json"
@@ -64,6 +64,7 @@
             "type": "text/javascript",
             "exec": [
               "pm.variables.set(\"usuario\", \"demo_\" + pm.variables.replaceIn(\"{{$guid}}\").replace(/-/g, \"\").slice(0, 24));",
+              "pm.variables.set(\"correo\", pm.variables.replaceIn(\"{{usuario}}\") + \"@ejemplo.test\");",
               "pm.variables.set(\"contrasena\", pm.variables.replaceIn(\"{{$guid}}\") + \"!Aa\");"
             ]
           }
@@ -73,7 +74,41 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));"
+              "pm.test(\"HTTP 202 verificación pendiente\", () => pm.response.to.have.status(202));",
+              "pm.test(\"Respuesta genérica sin datos de cuenta\", () => { if (pm.response.json().data.estado_verificacion !== \"pendiente\") throw new Error(\"estado\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02b Verificar correo",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/auth/verificacion",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"token\":\"{{token_verificacion}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200 correo confirmado\", () => pm.response.to.have.status(200));"
             ]
           }
         }

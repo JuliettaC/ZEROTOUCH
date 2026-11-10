@@ -21,9 +21,21 @@ function fixture(t) {
   db.prepare('INSERT INTO modos_uso(id,perfil_id,nombre) VALUES(?,?,?)').run(mode, profile, 'Modo');
   return { db, user, profile, mode };
 }
-test('siete tablas, catálogos y restricciones de identidad/hash/roles', t => {
-  const { db } = fixture(t);
-  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table'").get().n, 7);
+test('ocho tablas (v2), catálogos y restricciones de identidad/hash/roles/correo', t => {
+  const { db, user } = fixture(t);
+  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table'").get().n, 8);
+  assert.equal(db.pragma('user_version', { simple: true }), 2);
+  const email = db.prepare('UPDATE usuarios SET correo=? WHERE id=?');
+  for (const value of ['MAYUS@ejemplo.test', ' espacio@ejemplo.test', 'sin-arroba', '@ejemplo.test']) assert.throws(() => email.run(value, user));
+  assert.throws(() => db.prepare("UPDATE usuarios SET correo=NULL, correo_verificado_en='2026-01-01T00:00:00.000Z' WHERE id=?").run(user));
+  const token = db.prepare("INSERT INTO tokens_cuenta(token_hash,usuario_id,proposito,correo,creado_en,expira_en) VALUES(?,?,?,?,'2026-01-01T00:00:00.000Z','2026-01-02T00:00:00.000Z')");
+  assert.throws(() => token.run('x'.repeat(64), user, 'verificacion', 'a@b.cl'));
+  assert.throws(() => token.run('a'.repeat(64), user, 'otro', 'a@b.cl'));
+  const other = randomUUID();
+  db.prepare('INSERT INTO usuarios(id,nombre_usuario,contrasena_hash,correo) VALUES(?,?,?,?)').run(other, 'cascada', sqlHash, 'a@b.cl');
+  token.run('a'.repeat(64), other, 'verificacion', 'a@b.cl');
+  db.prepare('DELETE FROM usuarios WHERE id=?').run(other);
+  assert.equal(db.prepare('SELECT count(*) n FROM tokens_cuenta').get().n, 0, 'los tokens se eliminan en cascada');
   assert.equal(db.prepare('SELECT count(*) n FROM gestos').get().n, 13);
   assert.equal(db.prepare('SELECT count(*) n FROM acciones').get().n, 17);
   const insert = db.prepare('INSERT INTO usuarios(id,nombre_usuario,contrasena_hash,rol) VALUES(?,?,?,?)');
