@@ -148,7 +148,7 @@ test('admin cambia roles/estado y revoca sesiones; último admin protegido', asy
   const { db, request, register, login, verify } = await fixture(t);
   const { usuario: admin, token } = await bootstrapAdmin(db, 'administrador', secret, 'admin@ejemplo.test');
   assert.equal(admin.correo_verificado, false);
-  assert.equal((await request('POST', '/auth/login', { nombre_usuario: 'administrador', contrasena: secret })).status, 401);
+  assert.equal((await request('POST', '/auth/login', { nombre_usuario: 'administrador', contrasena: secret })).body.error, 'CUENTA_NO_VERIFICADA');
   await verify(token);
   await assert.rejects(bootstrapAdmin(db, 'segundo', secret, 'segundo@ejemplo.test'), { code: 'ADMIN_EXISTENTE' });
   const user = await register();

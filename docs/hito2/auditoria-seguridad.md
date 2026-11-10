@@ -46,14 +46,15 @@ No se encontraron inyección SQL (todas las consultas usan parámetros; los iden
 1. **Registro** (`POST /api/v1/auth/registro`, ahora con `correo`): valida datos, aplica límites, guarda Argon2id, crea la cuenta **sin verificar**, genera un token aleatorio de 32 bytes (43 caracteres base64url) y guarda solo su SHA-256 en `tokens_cuenta` con vencimiento de 24 h. Responde **202** con un mensaje genérico y no inicia sesión.
 2. **Enlace**: `APP_ORIGIN/cuenta/verificar#token=…`. El token va en el **fragmento**, que el navegador no envía al servidor, a proxies ni en `Referer`; la página lo borra de la barra y del historial y exige un clic, lo que evita que los analizadores de enlaces del correo lo consuman.
 3. **Verificación** (`POST /auth/verificacion`): el backend busca el hash, comprueba vencimiento (`TOKEN_EXPIRADO`), que pertenezca a la cuenta y que el correo actual sea aquel al que se envió, marca `correo_verificado_en` y elimina todos los tokens de verificación de la cuenta. Reutilizarlo devuelve `TOKEN_INVALIDO`.
-4. **Bloqueo en el backend**: el login de una cuenta no verificada falla, y el middleware rechaza cualquier sesión de una cuenta no verificada, incluidas sesiones anteriores a la migración. La administración también exige cuenta verificada.
+4. **Bloqueo en el backend**: el login de una cuenta no verificada falla (403 `CUENTA_NO_VERIFICADA`, solo si la contraseña es correcta), y el middleware rechaza cualquier sesión de una cuenta no verificada, incluidas sesiones anteriores a la migración. La administración también exige cuenta verificada.
 5. **Reenvío** (`POST /auth/verificacion/reenviar`): respuesta 202 idéntica exista o no la cuenta; solo cuentas activas pendientes reciben un enlace nuevo, que invalida el anterior; espera de 60 s por cuenta, 5 solicitudes por correo cada 15 min (silencioso) y 10 por IP (429).
-6. **Vincular correo** (`POST /auth/correo`, con usuario y contraseña): para cuentas migradas de v1 sin correo o con un correo aún no confirmado. Si el correo es de otra cuenta, la respuesta es la misma y no se reasigna.
+6. **Vincular correo** (`POST /auth/correo`, con usuario o correo y contraseña): para cuentas migradas de v1 sin correo o con un correo aún no confirmado. La interfaz lo usa al pulsar "Reenviar enlace" tras un intento de entrar con una cuenta sin confirmar, sin volver a pedir la contraseña. Si el correo es de otra cuenta, la respuesta es la misma y no se reasigna.
+6b. **Entrar con correo o usuario**: `nombre_usuario` del login acepta cualquiera de los dos; los límites de intentos se aplican al identificador normalizado.
 7. **Recuperación** (`POST /auth/contrasena/olvido` y `/auth/contrasena/restablecer`): enlace de un solo uso de 30 min; al restablecer cambia el hash, invalida los tokens de la cuenta, **revoca todas sus sesiones**, marca el correo como verificado (el enlace llegó a esa dirección) y envía un aviso al titular.
 
 ### 4.2 Protección contra enumeración
 
-Registro, reenvío y recuperación responden igual exista o no el correo, y el envío de correo ocurre después de responder, de modo que el tiempo tampoco lo revela. Si alguien se registra con un correo ajeno, la cuenta nueva se crea **sin correo** (no puede entrar) y el dueño recibe un aviso. El login de una cuenta pendiente devuelve el mismo 401 genérico que una contraseña incorrecta: de lo contrario, combinando registro y login se podría deducir qué correos ya estaban registrados. Esto es relevante porque ZeroTouch es una herramienta de accesibilidad y la pertenencia de un correo puede revelar información sensible.
+Registro, reenvío y recuperación responden igual exista o no el correo, y el envío de correo ocurre después de responder, de modo que el tiempo tampoco lo revela. Si alguien se registra con un correo ajeno, la cuenta nueva se crea **sin correo** (no puede entrar) y el dueño recibe un aviso. El login informa "Confirma tu correo" (403) solo después de una contraseña correcta, y con la misma respuesta para una cuenta sin correo que para una con el correo pendiente: así, quien registró una cuenta con un correo ajeno no puede deducir si ese correo ya existía. Usuario, correo o contraseña incorrectos reciben el mismo 401. Esto es relevante porque ZeroTouch es una herramienta de accesibilidad y la pertenencia de un correo puede revelar información sensible.
 
 ### 4.3 Registro de eventos
 
@@ -67,7 +68,7 @@ Esquema v2 (`PRAGMA user_version = 2`): columnas `correo` (único, minúsculas, 
 
 | Suite | Antes | Después |
 |---|---|---|
-| Backend (`node --test`, datos + seguridad + recursos + integración) | 25/25 | **39/39** (25 adaptadas + 14 nuevas) |
+| Backend (`node --test`, datos + seguridad + recursos + integración) | 25/25 | **40/40** (25 adaptadas + 15 nuevas) |
 | Puente Tauri (`cargo test`, incluye backend real) | 5/5 | **5/5** (prueba de integración ampliada) |
 | Motor Python (`pytest`, sin hardware) | 97/97 | no modificado |
 | ESLint (`src`, `backend`) | sin errores | sin errores |
@@ -75,7 +76,7 @@ Esquema v2 (`PRAGMA user_version = 2`): columnas `correo` (único, minúsculas, 
 
 Casos nuevos automatizados: token con hash y sin texto original en la base; 24 h y 30 min; un solo uso; vencido; formato inválido; ligado al correo; reenvío con respuesta idéntica, enfriamiento y 429 por IP; correo duplicado sin reasignación y con aviso; vinculación de cuentas heredadas; recuperación con revocación de sesiones y aviso; cuenta suspendida sin enlace; sesión de cuenta no verificada rechazada; registro de eventos sin datos sensibles; fallo de SMTP sin romper el registro; CSP de las páginas; configuración de correo segura en producción; transporte `archivo`; migración v1→v2 con respaldo, idempotencia y equivalencia estructural. Una prueba de mutación (quitar el bloqueo del middleware) hizo fallar la suite, como se esperaba.
 
-Verificación manual en navegador (servidor y base temporales): confirmación de correo, reutilización del enlace rechazada, recuperación solicitada desde la página, contraseñas distintas rechazadas, restablecimiento correcto, login con la nueva contraseña (200) y con la anterior (401), sin errores de CSP. El diálogo de React se probó en el navegador con el IPC de Tauri simulado (vistas Entrar, Crear cuenta, Revisa tu correo, Recuperar y Vincular). **No se probó** el envío por SMTP real ni la ventana nativa de Tauri con un usuario.
+Verificación manual en navegador (servidor y base temporales): confirmación de correo, reutilización del enlace rechazada, recuperación solicitada desde la página, contraseñas distintas rechazadas, restablecimiento correcto, login con la nueva contraseña (200) y con la anterior (401), sin errores de CSP. El diálogo de React se probó en el navegador con el IPC de Tauri simulado (Entrar con correo o usuario, Crear cuenta, Confirma tu correo con reenvío sin volver a pedir la contraseña, y Recuperar). **No se probó** el envío por SMTP real ni la ventana nativa de Tauri con un usuario.
 
 ## 6. Configuración pendiente
 

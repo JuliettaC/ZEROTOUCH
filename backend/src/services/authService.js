@@ -29,9 +29,11 @@ export const PENDING_VERIFICATION = Object.freeze({
 export const REQUEST_ACCEPTED = Object.freeze({
   mensaje: 'Si existe una cuenta pendiente asociada a ese correo, enviaremos un mensaje con las instrucciones.',
 });
-// An unverified account gets the same answer as a wrong password; otherwise login would reveal
-// which registrations created a pending account (and therefore which emails were already taken).
-const invalidCredentials = () => new AuthError(401, 'CREDENCIALES_INVALIDAS', 'Credenciales inválidas o cuenta pendiente de verificación.');
+const invalidCredentials = () => new AuthError(401, 'CREDENCIALES_INVALIDAS', 'Correo, usuario o contraseña incorrectos.');
+// Only reported after a correct password, so it tells nothing to someone without the password.
+// Accounts without an email and accounts with an unconfirmed one get this same answer: a person
+// who registered with someone else's address cannot learn whether that address was already taken.
+const unverifiedAccount = () => new AuthError(403, 'CUENTA_NO_VERIFICADA', 'Confirma tu correo para entrar. Revisa tu bandeja de entrada o pide un enlace nuevo.');
 const invalidToken = () => new AuthError(400, 'TOKEN_INVALIDO', 'El enlace no es válido o ya fue utilizado.');
 const expiredToken = () => new AuthError(400, 'TOKEN_EXPIRADO', 'El enlace venció. Solicita uno nuevo.');
 
@@ -65,6 +67,15 @@ export function createAuthService({ db, config, mailer, log = silentSecurityLog 
     const name = username(body.nombre_usuario), secret = password(body.contrasena);
     limit(`${action}:usuario`, name, 10);
     return { name, secret };
+  }
+  // Sign-in style credentials: `nombre_usuario` may hold the account name or its email address.
+  function signIn(body, ip, action, extra = []) {
+    limit(`${action}:ip`, ip, 30);
+    fields(body, ['nombre_usuario', 'contrasena', ...extra]);
+    const byEmail = typeof body.nombre_usuario === 'string' && body.nombre_usuario.includes('@');
+    const identifier = byEmail ? email(body.nombre_usuario) : username(body.nombre_usuario), secret = password(body.contrasena);
+    limit(`${action}:usuario`, identifier, 10);
+    return { snapshot: byEmail ? users.byEmail(identifier) : users.byName(identifier), secret };
   }
   // Token lookup shared by verification and reset. Returns an error kind instead of throwing so
   // the deletion of an expired or orphaned token is committed by the surrounding transaction.
@@ -104,20 +115,23 @@ export function createAuthService({ db, config, mailer, log = silentSecurityLog 
       return PENDING_VERIFICATION;
     },
     async login(body, ip) {
-      const { name, secret } = credentials(body, ip, 'login');
-      const snapshot = users.byName(name);
+      const { snapshot, secret } = signIn(body, ip, 'login');
       const valid = await verifyPassword(snapshot?.contrasena_hash, secret);
-      if (!valid || !snapshot || snapshot.estado !== 'activo' || !isVerified(snapshot)) {
-        const codigo = !valid || !snapshot ? 'CREDENCIALES' : snapshot.estado !== 'activo' ? 'SUSPENDIDA' : 'NO_VERIFICADA';
-        log('login_rechazado', { usuario_id: snapshot?.id, codigo });
+      if (!valid || !snapshot || snapshot.estado !== 'activo') {
+        log('login_rechazado', { usuario_id: snapshot?.id, codigo: !valid || !snapshot ? 'CREDENCIALES' : 'SUSPENDIDA' });
         throw invalidCredentials();
+      }
+      if (!isVerified(snapshot)) {
+        log('login_rechazado', { usuario_id: snapshot.id, codigo: 'NO_VERIFICADA' });
+        throw unverifiedAccount();
       }
       return users.transaction(() => {
         // Hash verification awaits work: recheck account state before issuing a session.
         const user = users.get(snapshot.id);
-        if (!user || user.estado !== 'activo' || !isVerified(user) || user.rol !== snapshot.rol || user.contrasena_hash !== snapshot.contrasena_hash) {
+        if (!user || user.estado !== 'activo' || user.rol !== snapshot.rol || user.contrasena_hash !== snapshot.contrasena_hash) {
           throw invalidCredentials();
         }
+        if (!isVerified(user)) throw unverifiedAccount();
         const raw = randomBytes(32).toString('base64url'), now = Date.now();
         sessions.insert({ token_hash: sessionHash(raw), usuario_id: user.id,
           creado_en: new Date(now).toISOString(), expira_en: new Date(now + settings.sessionTtlSeconds * 1000).toISOString() });
@@ -170,9 +184,8 @@ export function createAuthService({ db, config, mailer, log = silentSecurityLog 
     // Lets an account without a confirmed address (accounts migrated from v1, or a typo at
     // registration) set one. Requires the password, so it reveals nothing to a third party.
     async linkEmail(body, ip) {
-      const { name, secret } = credentials(body, ip, 'correo', ['correo']);
+      const { snapshot, secret } = signIn(body, ip, 'correo', ['correo']);
       const correo = email(body.correo);
-      const snapshot = users.byName(name);
       const valid = await verifyPassword(snapshot?.contrasena_hash, secret);
       if (!valid || !snapshot || snapshot.estado !== 'activo') throw invalidCredentials();
       const alreadyVerified = () => new AuthError(409, 'CUENTA_YA_VERIFICADA', 'La cuenta ya tiene un correo confirmado; inicia sesión.');

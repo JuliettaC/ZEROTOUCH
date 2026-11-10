@@ -878,9 +878,9 @@ mod tests {
             .unwrap_err();
         assert_eq!(dup.code, "USUARIO_DUPLICADO");
 
-        // 3b. An unverified account cannot sign in; the error is the generic one
+        // 3b. An unverified account cannot sign in; with the right password it is told to confirm
         let pending = bridge.login(credentials("tauri_demo_user")).unwrap_err();
-        assert_eq!(pending.code, "CREDENCIALES_INVALIDAS");
+        assert_eq!(pending.code, "CUENTA_NO_VERIFICADA");
         assert!(bridge.session.is_none());
 
         // 3c. Resend and recovery answer generically, even for unknown addresses
@@ -896,6 +896,15 @@ mod tests {
         server.verify_email(&bridge.client, "tauri_demo_user@ejemplo.test");
         let linked = bridge.link_email(registration("tauri_demo_user")).unwrap_err();
         assert_eq!(linked.code, "CUENTA_YA_VERIFICADA");
+
+        // 4b. Sign in with the email instead of the user name
+        let by_email = bridge
+            .login(Credentials {
+                nombre_usuario: "tauri_demo_user@ejemplo.test".into(),
+                contrasena: "Ejemplo ficticio de acceso 2026!".into(),
+            })
+            .unwrap();
+        assert_eq!(by_email["nombre_usuario"], "tauri_demo_user");
 
         // 4. Reject incorrect passwords (401 CREDENCIALES_INVALIDAS)
         let bad_login = bridge

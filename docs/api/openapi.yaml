@@ -3,7 +3,7 @@
   "info": {
     "title": "ZeroTouch Hito 2",
     "version": "1.1.0",
-    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos. v1.1: verificación de correo obligatoria antes de iniciar sesión (cuentas no verificadas reciben el mismo 401 genérico que unas credenciales incorrectas), recuperación de contraseña y respuestas que no revelan si un correo existe. Los enlaces abren /cuenta/verificar y /cuenta/restablecer fuera de /api/v1."
+    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos. v1.1: verificación de correo obligatoria antes de iniciar sesión (el login acepta usuario o correo y, solo con la contraseña correcta, responde 403 CUENTA_NO_VERIFICADA), recuperación de contraseña y respuestas que no revelan si un correo existe. Los enlaces abren /cuenta/verificar y /cuenta/restablecer fuera de /api/v1."
   },
   "servers": [
     {
@@ -172,6 +172,7 @@
     "/auth/login": {
       "post": {
         "summary": "Iniciar sesion",
+        "description": "nombre_usuario acepta el nombre de usuario o el correo de la cuenta. 401 CREDENCIALES_INVALIDAS genérico para usuario, correo o contraseña incorrectos y cuentas suspendidas. 403 CUENTA_NO_VERIFICADA solo tras una contraseña correcta, igual para cuentas sin correo y con correo pendiente; no emite cookie.",
         "operationId": "Iniciar_sesion",
         "security": [],
         "responses": {
@@ -223,7 +224,7 @@
             }
           },
           "403": {
-            "description": "Origen, CSRF o rol denegados",
+            "description": "Origen denegado o CUENTA_NO_VERIFICADA (contraseña correcta, correo sin confirmar)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3234,7 +3235,8 @@
         "properties": {
           "nombre_usuario": {
             "type": "string",
-            "pattern": "^[a-zA-Z0-9_]{3,40}$"
+            "maxLength": 254,
+            "description": "Nombre de usuario (3 a 40 letras ASCII, números o _) o correo de la cuenta."
           },
           "contrasena": {
             "type": "string",

@@ -69,16 +69,16 @@ test('registro: cuenta no verificada, token hasheado, correo enviado y acceso bl
   const hours = (Date.parse(row.expira_en) - Date.parse(row.creado_en)) / 3600000;
   assert.equal(hours, 24);
 
-  // Login: same 401 for an unverified account as for a wrong password or a missing account.
+  // Login: "confirm your email" only after a correct password; otherwise the generic 401.
   const unverified = (await login('ana_demo')).response;
   const wrong = (await login('ana_demo', 'Contrasena equivocada 2026')).response;
   const missing = (await login('no_existe')).response;
-  for (const item of [unverified, wrong, missing]) {
-    assert.equal(item.status, 401);
-    assert.equal(item.headers.get('set-cookie'), null);
-  }
-  assert.deepEqual(unverified.body, wrong.body);
-  assert.deepEqual(unverified.body, missing.body);
+  assert.equal(unverified.status, 403);
+  assert.equal(unverified.body.error, 'CUENTA_NO_VERIFICADA');
+  for (const item of [unverified, wrong, missing]) assert.equal(item.headers.get('set-cookie'), null);
+  for (const item of [wrong, missing]) assert.equal(item.status, 401);
+  assert.deepEqual(wrong.body, missing.body);
+  assert.equal((await login('nadie@ejemplo.test')).response.status, 401);
 
   // A session row for an unverified account (e.g. created before the v2 migration) is rejected.
   const legacy = randomBytes(32).toString('base64url'), now = Date.now();
@@ -96,6 +96,28 @@ test('registro: cuenta no verificada, token hasheado, correo enviado y acceso bl
   assert.equal(session.response.status, 200);
   assert.equal(session.response.body.data.usuario.correo_verificado, true);
   assert.equal((await api('GET', '/perfiles', undefined, session)).status, 200);
+});
+
+test('inicio de sesión con correo o con usuario; reenvío desde el login con el correo como identificador', async t => {
+  const { mailer, api, register, login } = await fixture(t);
+  await register('olga_demo', 'Olga@Ejemplo.test');
+  // A pending account that signed in with its email can resend the link with the same credentials.
+  const pending = await login('OLGA@ejemplo.test');
+  assert.equal(pending.response.body.error, 'CUENTA_NO_VERIFICADA');
+  const before = mailer.messages.length;
+  const resend = await api('POST', '/auth/correo', { nombre_usuario: 'olga@ejemplo.test', contrasena: secret, correo: 'olga@ejemplo.test' });
+  assert.equal(resend.status, 202);
+  assert.equal(mailer.messages.length, before, 'enfriamiento de 60 s: aún no se reenvía');
+  assert.equal((await api('POST', '/auth/verificacion', { token: lastToken(mailer, 'olga@ejemplo.test') })).status, 200);
+  for (const identifier of ['olga_demo', 'OLGA_DEMO', 'olga@ejemplo.test', ' Olga@Ejemplo.TEST ']) {
+    const session = await login(identifier);
+    assert.equal(session.response.status, 200, identifier);
+    assert.equal(session.response.body.data.usuario.nombre_usuario, 'olga_demo');
+  }
+  const wrong = await login('olga@ejemplo.test', 'Contrasena equivocada 2026');
+  assert.equal(wrong.response.status, 401);
+  assert.equal(wrong.response.body.error, 'CREDENCIALES_INVALIDAS');
+  for (const identifier of ['olga@', '@ejemplo.test', "x' OR 1=1 --"]) assert.equal((await login(identifier)).response.status, 400);
 });
 
 test('tokens: un solo uso, expiración, formato y vínculo con el correo', async t => {
@@ -185,7 +207,11 @@ test('registro con un correo ya usado: misma respuesta, sin reasignar y aviso al
   assert.match(notice.text, /ya pertenece a una cuenta/);
   assert.match(notice.text, /hugo_demo/);
   assert.deepEqual(tokensIn(notice.text), [], 'el aviso no contiene tokens');
-  assert.equal((await login('intruso_demo')).response.status, 401);
+  // Same answer for this account (no email) as for any pending account: whoever registered it
+  // cannot learn whether hugo@ejemplo.test was already taken.
+  await register('pendiente_demo', 'pendiente@ejemplo.test');
+  assert.deepEqual((await login('intruso_demo')).response.body, (await login('pendiente_demo')).response.body);
+  assert.equal((await login('intruso_demo')).response.status, 403);
   // The new account can still link an address it controls.
   assert.equal((await api('POST', '/auth/correo', { nombre_usuario: 'intruso_demo', contrasena: secret, correo: 'propio@ejemplo.test' })).status, 202);
   assert.equal((await api('POST', '/auth/verificacion', { token: lastToken(mailer, 'propio@ejemplo.test') })).status, 200);
@@ -199,7 +225,7 @@ test('vincular correo: cuentas heredadas sin correo, contraseña obligatoria y c
   // Simulate an account migrated from schema v1 (no email).
   const hash = db.prepare("SELECT contrasena_hash h FROM usuarios WHERE nombre_usuario='ines_demo'").get().h;
   db.prepare('INSERT INTO usuarios(id,nombre_usuario,contrasena_hash) VALUES(?,?,?)').run(randomUUID(), 'heredada', hash);
-  assert.equal((await login('heredada')).response.status, 401);
+  assert.equal((await login('heredada')).response.body.error, 'CUENTA_NO_VERIFICADA');
   assert.equal((await api('POST', '/auth/correo', { nombre_usuario: 'heredada', contrasena: 'Contrasena equivocada 2026', correo: 'h@ejemplo.test' })).status, 401);
   assert.equal((await api('POST', '/auth/correo', { nombre_usuario: 'heredada', contrasena: secret })).status, 400);
   assert.equal((await api('POST', '/auth/correo', { nombre_usuario: 'heredada', contrasena: secret, correo: 'h@ejemplo.test' })).status, 202);

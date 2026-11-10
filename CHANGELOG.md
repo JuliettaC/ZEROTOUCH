@@ -17,7 +17,7 @@ Rama `codex/h2-seguridad-verificacion`, creada desde `e88547b`. Commits locales,
 ### Seguridad
 - Verificación de correo obligatoria: el login, el middleware de sesión y la administración rechazan cuentas sin correo confirmado (comprobado en el backend, no solo en la interfaz).
 - Tokens de verificación y recuperación aleatorios (32 bytes), guardados solo como SHA-256, de un solo uso, ligados al correo al que se enviaron, con vencimiento de 24 h y 30 min.
-- Sin enumeración de cuentas por correo: registro, reenvío y recuperación responden igual exista o no la dirección; el correo se envía después de responder; una cuenta pendiente recibe el mismo 401 genérico que una contraseña incorrecta.
+- Sin enumeración de cuentas por correo: registro, reenvío y recuperación responden igual exista o no la dirección; el correo se envía después de responder; "Confirma tu correo" (403 `CUENTA_NO_VERIFICADA`) solo se informa tras una contraseña correcta y es igual para cuentas sin correo y con correo pendiente.
 - Límites por IP (429), por correo (silenciosos) y espera de 60 s entre envíos por cuenta.
 - Restablecer la contraseña revoca todas las sesiones de la cuenta y envía un aviso al titular.
 - Registro de eventos de seguridad en `stderr` (JSON por línea) con lista blanca de campos: sin contraseñas, tokens, cookies, hashes, correos, nombres de usuario ni IP.
@@ -29,6 +29,7 @@ Rama `codex/h2-seguridad-verificacion`, creada desde `e88547b`. Commits locales,
 - `POST /api/v1/auth/registro` exige `correo` y responde **202** con un mensaje genérico (antes 201 con el usuario). **Cambio de contrato.**
 - Nuevos endpoints públicos: `POST /auth/verificacion`, `/auth/verificacion/reenviar`, `/auth/correo` (vincular o corregir correo con usuario y contraseña), `/auth/contrasena/olvido`, `/auth/contrasena/restablecer`.
 - El usuario público incluye `correo_verificado` (la dirección no se expone).
+- `POST /auth/login` (y `/auth/correo`) aceptan en `nombre_usuario` el nombre de usuario **o el correo** de la cuenta. Errores: 401 `CREDENCIALES_INVALIDAS` genérico; 403 `CUENTA_NO_VERIFICADA` con contraseña correcta.
 - `bootstrapAdmin` y `npm run admin:bootstrap` piden correo y envían la verificación; el administrador también debe confirmarlo.
 
 ### Base de datos
@@ -55,10 +56,10 @@ Rama `codex/h2-seguridad-verificacion`, creada desde `e88547b`. Commits locales,
 - Pendiente: 4 avisos moderados de `eslint 9`/`minimatch` que exigen eslint 10 (cambio mayor; solo herramienta de desarrollo).
 
 ### Interfaz (pendiente de confirmar)
-- Diálogo de cuenta de React: vistas Entrar, Crear cuenta (con correo), Revisa tu correo (reenvío), Recuperar contraseña y Vincular correo (`src/components/Dialogs.jsx`, `src/App.jsx`, `src/api/client.js`). **No se confirmó en Git** porque esos archivos contienen además cambios preexistentes sin confirmar de otra persona; el cambio propio está aislado en el parche local `.worktrees/seguridad-verificacion-ui.patch` (ver "Pendiente de integración").
+- Diálogo de cuenta de React con el flujo habitual: Entrar ("Correo o usuario" y contraseña, sin textos de ayuda), "¿Olvidaste tu contraseña?", "¿No tienes cuenta? Crear cuenta". Si la cuenta no está confirmada, el propio diálogo muestra "Confirma tu correo" y reenvía el enlace con las credenciales recién escritas (cubre también cuentas antiguas sin correo); se eliminó el enlace "Mi cuenta no tiene correo confirmado" (`src/components/Dialogs.jsx`, `src/App.jsx`, `src/api/client.js`). **No se confirmó en Git** porque esos archivos contienen además cambios preexistentes sin confirmar de otra persona; el cambio propio está aislado en el parche local `.worktrees/seguridad-verificacion-ui.patch` (ver "Pendiente de integración").
 
 ### Pruebas de esta entrega
-Backend 39/39; puente Tauri 5/5 (con backend real); ESLint y build de escritorio correctos; verificación manual en navegador de confirmación, reutilización, recuperación y restablecimiento. No probado: SMTP real y ventana nativa de Tauri con una persona usuaria.
+Backend 40/40; puente Tauri 5/5 (con backend real, incluye entrar con correo); ESLint y build de escritorio correctos; verificación manual en navegador de confirmación, reutilización, recuperación y restablecimiento. No probado: SMTP real y ventana nativa de Tauri con una persona usuaria.
 
 ---
 

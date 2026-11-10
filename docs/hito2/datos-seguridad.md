@@ -127,6 +127,7 @@ Apoyo de IA: Codex ayudó a implementar y probar los módulos. El equipo debe re
 Detalle completo, tabla de vulnerabilidades y resultados en `docs/hito2/auditoria-seguridad.md`; historial en `CHANGELOG.md`.
 
 - Registro con `nombre_usuario`, `correo` y `contrasena`; la cuenta queda sin verificar y la respuesta es 202 genérica. El login, el middleware y la administración rechazan cuentas sin correo confirmado.
+- Login con usuario o correo en `nombre_usuario`. 401 genérico ante datos incorrectos; 403 `CUENTA_NO_VERIFICADA` solo con la contraseña correcta, igual para cuentas sin correo y con correo pendiente.
 - Tabla nueva `tokens_cuenta`: solo SHA-256 de tokens aleatorios de 32 bytes, un solo uso, ligados al correo, 24 h (verificación) y 30 min (recuperación). Columnas nuevas `usuarios.correo` y `usuarios.correo_verificado_en`.
 - Endpoints públicos nuevos: `POST /auth/verificacion`, `/auth/verificacion/reenviar`, `/auth/correo`, `/auth/contrasena/olvido`, `/auth/contrasena/restablecer`. Páginas `/cuenta/verificar` y `/cuenta/restablecer` con CSP estricta; el token viaja en el fragmento de la URL.
 - Registro, reenvío y recuperación no revelan si un correo existe; el correo ajeno no se reasigna y su dueño recibe un aviso.
