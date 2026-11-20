@@ -10,6 +10,71 @@ Convenciones:
 
 ---
 
+## [Sin publicar] — 2026-11-19 — QA de comodidad y reconocimiento del motor
+
+Sin commits. Sin cambios de API ni de esquema SQLite. Informe con mediciones antes/después: [`docs/qa-comodidad-19-11.md`](docs/qa-comodidad-19-11.md).
+
+### Corregido (motor, 2ª iteración tras probarlo)
+- Pinzas reales con el índice muy doblado volvían a fallar (0/10 en el banco): ahora solo se descarta la pinza si índice, medio y anular se cierran a la vez.
+- Aceleración tipo mouse (×0,6 lento, ×1,2 normal, ×2,5 rápido) en lugar de solo reducir; sin cursor asentado con aceleración; la posición ya no se recorta antes de la aceleración (el cursor se congelaba con la mano fuera del área activa). Cruzar la pantalla pasa de ~0,39 a ~0,21 del ancho de la imagen.
+
+### Corregido (motor)
+- Cerrar el puño ya no inicia un arrastre (índice enrollado = no es pinza); cuadros sueltos sin mano o dudosos no reinician el puño; la quietud exigida al puño supera el ruido de la cámara; la pausa llega en ~455 ms (antes ~750).
+- Pinza con la mano lejos: sin umbral absoluto (antes clic -> arrastre); el clic cae donde apuntaba el cursor 90 ms antes.
+- El puntero se desarma tras 8 s sin mano (antes 3 s). Pestañas 🤙: umbral del pulgar 0,4 palmas.
+
+### Modificado
+- **Cursor:** al armar, la posición de la mano pasa a ser el centro de la pantalla (antes, con la mano a la altura natural, quedaba en el borde superior). **Aceleración del puntero** nueva (`pointerAcceleration`, por defecto `true`, ajuste del equipo; interruptor «Cursor con aceleración» en la vista de cámara).
+- **`windowSwipe` apagado por defecto** y más estricto (2 palmas a 5 palmas/s): minimizaba ventanas al mover el cursor rápido.
+- `contracts/capacidades.json` (dos copias): `ajustes_equipo` añade `pointerAcceleration`.
+
+### Agregado
+- `motor-local/tools/banco_qa.py` (banco sintético con ruido de webcam) y `motor-local/tests/test_qa_comodidad.py` (10 regresiones).
+
+---
+
+## [Sin publicar] — 2026-11-19 — Gestos de PC: pestañas (pulgar y meñique) y clic derecho (pinza con el medio)
+
+Sin commits. Sin cambios de API ni de esquema SQLite: son gestos locales del equipo, como los de ventana.
+
+### Agregado
+- **Motor:** postura pulgar + meñique (🤙) que cambia de pestaña al bajar (`NEXT_TAB`, Ctrl+Tab) o subir la mano (`PREV_TAB`, Ctrl+Shift+Tab), una por cada media palma de recorrido; pinza pulgar-medio que hace clic derecho (`RIGHT_CLICK`). Adaptador: `right_click` y teclas `ctrl`, `shift`, `tab`. Pruebas: `motor-local/tests/test_gestos_equipo_pc.py`.
+- **Interfaz:** gestos «Pulgar y meñique» y «Pinza con el medio» en la lista, con telemetría (`PESTANAS`, `PINZA_MEDIO`) y aviso de pestaña. Pruebas: `tests/frontend/gestos-equipo.test.js`.
+
+### Modificado (contrato local)
+- **`contracts/capacidades.json`** (y su copia en el motor): sección nueva `teclas_equipo` (`pestana_siguiente`, `pestana_anterior`); `ajustes_equipo` añade `tabGestures` y `rightClick`.
+- **IPC del motor:** claves nuevas `tabGestures` y `rightClick` (por defecto `true`), incluidas en el ACK. Un motor anterior las ignora.
+- **`tests/frontend/fixtures/engine-applied.json`:** regenerada con el motor nuevo (solo se agregan esas dos claves).
+
+---
+
+## [Sin publicar] — 2026-11-16 — Puntero, gestos de ventana, temporizadores (contrato del motor e interfaz)
+
+Sin commits. Detalle en [`PROGRESO.md`](PROGRESO.md). Sin cambios de API ni de esquema SQLite.
+
+### Modificado (contrato local)
+- **IPC del motor:** clave nueva `windowSwipe` (por defecto `true`): mano abierta rápida hacia abajo minimiza la ventana activa y hacia arriba restaura la última. El ACK de configuración la incluye.
+- **Eventos del motor:** multimedia y ventanas se informan también como `EVENT` (`injected`, y `result` en ventanas) para que la interfaz avise.
+- **`contracts/capacidades.json`:** `ajustes_equipo` añade `windowSwipe` y `timerMinutes`.
+- **Puente Tauri:** `airswipe_window_open` acepta `edge` opcional (`"top"`/`"bottom"`); el teclado es más pequeño.
+
+---
+
+## [Sin publicar] — 2026-11-12 — Borrado condicional, creaciones idempotentes y mutación conjunta (contrato y esquema)
+
+Rama `codex/h2-seguridad-verificacion`, sin commits. Solo se registran aquí los cambios que alteran el contrato de la API o el esquema; el detalle de la interfaz, el motor y las pruebas de estos días está en [`PROGRESO.md`](PROGRESO.md). OpenAPI 1.1.0 → 1.5.0.
+
+### Modificado (cambios de contrato)
+- **Borrado condicional (OpenAPI 1.3.0).** `DELETE /perfiles/{id}` y `DELETE /modos/{id}` exigen `If-Match` con el ETag que el cliente conocía: 428 `PRECONDICION_REQUERIDA` si falta, 400 si no es un único ETag fuerte, 412 `PRECONDICION_FALLIDA` si el recurso cambió. El ETag de un perfil es un agregado con todos sus modos. `GET /perfiles/{id}` y `GET /modos/{id}` entregan la cabecera `ETag`. Un cliente que borraba sin precondición recibe ahora 428.
+- **Creaciones idempotentes (OpenAPI 1.4.0).** `POST /perfiles` y `POST /perfiles/{id}/modos` aceptan `Idempotency-Key` (UUID v7, vigencia de 30 días): repetirla con el mismo cuerpo devuelve la respuesta original con `Idempotent-Replayed: true`; otro cuerpo, 409 `IDEMPOTENCIA_CONFLICTO`; clave inválida, 400; expirada, 422; servidor sin la función, 501 `IDEMPOTENCIA_NO_DISPONIBLE`. Sin la cabecera nada cambia.
+- **Mutación conjunta modo + asignaciones (OpenAPI 1.5.0).** `POST /perfiles/{id}/modos` y `PATCH /modos/{id}` aceptan el campo opcional `gestos` (lista completa de asignaciones, semántica de `PUT /modos/{id}/gestos`): el modo y sus asignaciones se escriben en una transacción y con una sola subida de versión (un modo nace en la versión 1; antes, crear + PUT lo dejaba en 2). Todo o nada; sin `gestos` nada cambia. Sin cambios de esquema.
+- `GET /capacidades` anuncia `servidor.borrado_condicional`, `servidor.idempotencia` y `servidor.modo_con_asignaciones`.
+
+### Base de datos
+- Esquema v3 (`user_version = 3`, nueve tablas): tabla `idempotencia`. Migración aditiva `db/migraciones/002_v2_a_v3.sql` con el mismo comando explícito `npm run db:migrate --prefix backend` (respaldo previo `*.v2-<fecha>.ztbackup`; desde v1 se aplican los dos pasos en una transacción). El backend abre bases v2 (sin idempotencia) y v3. Solo probada con bases temporales; no se migró ninguna base real.
+
+---
+
 ## [Sin publicar] — 2026-11-10 — Auditoría de seguridad y verificación de cuentas
 
 Rama `codex/h2-seguridad-verificacion`, creada desde `e88547b`. Commits locales, sin publicar: `f53e5a4` (dependencias del frontend), `537c215` (backend y base de datos), `ffa1461` (puente Tauri) y el commit de documentación que incorpora este archivo. Detalle técnico y tabla de vulnerabilidades: [`docs/hito2/auditoria-seguridad.md`](docs/hito2/auditoria-seguridad.md).

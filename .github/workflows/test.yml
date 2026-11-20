@@ -1,12 +1,20 @@
-name: Test ZeroTouch backend
+name: Pruebas ZeroTouch
+# Backend, interfaz, motor gestual y puente Tauri. Ninguna prueba abre la cámara ni mueve el ratón:
+# el motor usa datos sintéticos y el adaptador simulado (--mock-os); la prueba física sigue siendo manual
+# (docs/prueba-manual-hardware.md).
 on:
   push:
     branches: [main, 'codex/h2-*']
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
+    name: Backend (API y SQLite)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,3 +25,60 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --prefix backend
       - run: npm test --prefix backend
+      - name: Integración (colección contra procesos reales)
+        run: node --test --test-concurrency=1 backend/test/integration/*.test.js
+
+  frontend:
+    name: Interfaz (lint, pruebas y compilación)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: Pruebas de módulos puros
+        run: node --test "tests/frontend/*.test.js"
+      - name: Compilar la aplicación de escritorio y el prototipo
+        run: |
+          npm run build:app
+          npm run build
+      - run: npm run verify:separation
+
+  motor:
+    name: Motor gestual (Python, sintético)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: motor-local/requirements*.txt
+      - run: python -m pip install -r motor-local/requirements-dev.txt
+      - name: pytest (sin las pruebas marcadas hardware)
+        working-directory: motor-local
+        run: python -m pytest -q
+
+  desktop:
+    name: Puente Tauri (cargo test)
+    runs-on: windows-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix backend
+      # tauri::generate_context! necesita la interfaz compilada (frontendDist = dist-app).
+      - run: npm run build:app
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - name: cargo test (incluye el puente contra un backend real temporal)
+        run: cargo test --manifest-path desktop/Cargo.toml --locked

@@ -1,5 +1,7 @@
 # Continuidad Hito 1 / Hito 2
 
+> **Documento histórico (corte 5-11-2026).** La matriz vigente es [../matriz-hito1.md](../matriz-hito1.md).
+
 Base documental: informe Hito 1 del repositorio, contrato AGENTS.md y aportes I1/I2. Corte: 2 de noviembre de 2026. Una pantalla del prototipo no demuestra persistencia ni reconocimiento real.
 
 Esta actualización (5 de noviembre de 2026) revisa el motor y la aplicación Tauri del commit bfd9dc2 con cambios locales. Las pruebas citadas son sintéticas y se ejecutaron en esta sesión; no certifican funcionamiento físico en Windows.

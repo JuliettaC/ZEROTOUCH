@@ -1,5 +1,8 @@
 # <img width="35" height="35" alt="ICON NEGRO" style="vertical-align: -6px;" src="https://github.com/user-attachments/assets/d52f48df-cfcb-40aa-8178-1989bbdff02e" /> ZEROTOUCH
-Para personas que realizan tareas manuales mientras consultan información digital, ZeroTouch propone una interacción gestual que busca reducir el contacto directo con el dispositivo y las interrupciones durante la actividad, sin requerir sensores gestuales especializados adicionales.
+
+ZeroTouch es para personas que hacen tareas manuales (cocina, taller) mientras consultan información en el computador. Permite controlar Windows con gestos de la mano frente a una cámara web común, sin sensores especiales: mover el cursor, hacer clic, desplazar, pausar, minimizar ventanas, manejar temporizadores y multimedia, y escribir con trazos en el aire.
+
+> **Estado (16-11-2026):** el software está implementado de punta a punta y cubierto por pruebas automáticas, pero **todavía no se ha probado con cámara y manos reales**. Los umbrales de los gestos son hipótesis sin calibrar. No hay instalador. Ver la [matriz de cumplimiento del Hito 1](docs/matriz-hito1.md).
 
 ## Integrantes
 
@@ -7,109 +10,110 @@ Para personas que realizan tareas manuales mientras consultan información digit
 * Adan Mendoza (@Adammm14)
 * Anais Perez (@Youpuipui)
 
-## Prototipo funcional
-[Prototipo](https://juliettac.github.io/ZEROTOUCH/)
+## Enlaces
 
-## Documentos
-### Hito 1
-[Informe](docs/Informe%20Hito%201.pdf)
+- [Prototipo del Hito 1](https://juliettac.github.io/ZEROTOUCH/) (versión web histórica, se conserva sin cambios)
+- [Informe del Hito 1](docs/Informe%20Hito%201.pdf) · [Matriz de cumplimiento](docs/matriz-hito1.md)
+- [Guía de prueba con cámara](docs/prueba-manual-hardware.md) · [Contrato de la API (OpenAPI)](docs/api/openapi.yaml)
+- [Registro de cambios](CHANGELOG.md) · [Progreso técnico](PROGRESO.md)
 
-## Hito 2: backend local
+## Cómo está hecho
 
-API Express `/api/v1`, SQLite de siete tablas, sesiones, roles y CRUD de perfiles/modos. La aplicación Tauri usa esta API mediante un cliente nativo. El motor gestual funciona localmente, sin comunicación HTTP por fotograma.
-
-### Organización
-
-- `backend/` y `db/`: único backend y esquema vigentes. La base real permanece fuera del repositorio, indicada por `DATABASE_PATH`.
-- `src/`: interfaz actual de Tauri; `desktop/`: código Rust, permisos y configuración.
-- `motor-local/motor_local/`: motor Python utilizado por Tauri.
-- `prototype/`: fuentes preservadas del Hito 1; `public/`: recursos visuales compartidos.
-- `docs/`: entregables y contrato API. Las copias de trabajo y archivos temporales no forman parte de la entrega.
-
-`npm run build` sigue generando el prototipo en `dist/` para GitHub Pages. `npm run build:app` genera la aplicación en `dist-app/`. `npm run verify:separation` comprueba la preservación del prototipo y la ausencia del backend antiguo. No se reutiliza `desktop/runtime` ni la API v2.
-
-### Instalación en Windows
-
-Entorno comprobado: Node **24.19.0**, npm y Windows. Desde la raíz del clon:
-
-```powershell
-npm ci --prefix backend
-Copy-Item .env.example .env
+```
+Cámara ─► motor-local (Python) ─► Windows (ratón, teclas, ventanas)
+               ▲   │ JSON-lines (comandos con ACK, telemetría, eventos)
+               │   ▼
+           desktop (Tauri 2, Rust) ◄─► src (React 19): Inicio · Calibrar · Teclado
+               │ HTTP con cookie y CSRF (solo cuentas y sincronización)
+               ▼
+           backend (Node 24, Express 5, SQLite) — /api/v1
 ```
 
-Editar `.env`: reemplazar DATABASE_PATH por una ruta absoluta local, por ejemplo `C:/Users/TU_USUARIO/AppData/Local/ZeroTouch/hito2.sqlite`. Debe quedar fuera del repositorio y OneDrive. Conservar `HOST=127.0.0.1`, `PORT=3000`, `APP_ORIGIN=http://127.0.0.1:3000` y `SESSION_TTL_SECONDS=28800` para la demostración. No subir `.env` ni bases a Git.
+| Carpeta | Qué contiene |
+|---|---|
+| `motor-local/motor_local/` | Motor gestual: captura → detección (MediaPipe, 21 puntos) → interpretación (filtro One-Euro, confirmación por tiempo) → acciones (lista blanca) → adaptador del SO (pynput, Win32) |
+| `desktop/` | Aplicación Tauri: lanza el motor, cliente HTTP nativo, ventana del teclado Air-Swipe |
+| `src/` | Interfaz React (escritorio). Preferencias por cuenta, sincronización, temporizadores y teclado Air-Swipe |
+| `backend/`, `db/` | API de cuentas, perfiles, modos y asignaciones de gestos. SQLite v3 con migraciones explícitas |
+| `contracts/capacidades.json` | Contrato único: qué acciones admite cada gesto y qué teclas puede emitir el motor |
+| `prototype/` | Prototipo del Hito 1 (no se modifica) |
+| `docs/` | Informes, API, guía de prueba manual y matriz de cumplimiento |
+
+El motor nunca depende del servidor: los gestos funcionan sin conexión, y la cuenta solo sirve para sincronizar perfiles y modos entre equipos.
+
+## Gestos
+
+| Gesto | Qué hace | Por defecto |
+|---|---|---|
+| Mano abierta un instante | Activa el puntero; después la mano mueve el cursor | Activo |
+| Pinza (índice + pulgar) | Clic | Activo |
+| Pinza sostenida | Arrastrar (abrir los dedos suelta) | Activo |
+| Dos dedos arriba o abajo | Desplazar | Activo |
+| Puño quieto ~0,5 s | Pausar o reanudar | Activo |
+| Mano abierta rápida hacia abajo / arriba | Minimizar la ventana activa / traerla de vuelta | Activo |
+| Palma quieta ~1 s | Volver a navegación (reasignable: multimedia, temporizador…) | Activo |
+| Índice + meñique | Modo precisión (cursor más lento) | Activo |
+| Barrido a la izquierda / derecha | Atrás / Adelante | Apagado |
+| Pulgar arriba / abajo | Intro / Escape (reasignables) | Apagado |
+| Tres dedos abajo / arriba | Minimizar / restaurar (alternativa) | Apagado |
+| Apuntar con el índice sobre el teclado | Escribir con trazos (Air-Swipe) | Solo con el teclado abierto |
+
+Los gestos «discretos» (palma, barridos, pulgares, precisión) se pueden reasignar por modo en **Calibrar › Qué hace cada gesto**, entre las acciones permitidas por el contrato.
+
+**Seguridad:** el motor arranca en *Observar* y no mueve nada. *Controlar* exige que la cámara esté abierta y que la parada de emergencia **Ctrl+Alt+Z** esté activa. Pausar, perder la mano o cambiar la configuración suelta el botón del ratón. El motor no ejecuta comandos arbitrarios y no guarda vídeo, puntos de la mano ni texto escrito.
+
+## Instalación en Windows (desarrollo)
+
+Requisitos: Node **24.19.0**, Python **3.11**, Rust (MSVC) con las herramientas de compilación C++, y WebView2.
 
 ```powershell
-npm run db:init --prefix backend
-npm run admin:bootstrap --prefix backend
-npm start --prefix backend
-```
-
-La inicialización crea exclusivamente una base nueva y rechaza una existente; no migra ni borra datos. El bootstrap pide nombre y contraseña oculta en una terminal interactiva; no admite contraseña como argumento. Registro público crea solamente usuarios normales. No hay credenciales predeterminadas.
-
-Consultar `http://127.0.0.1:3000/api/v1/health`. Ctrl+C cierra servidor y conexión. `.env` se resuelve desde la raíz aunque el comando se ejecute en otra carpeta. La demo está limitada al equipo local; no se ha realizado despliegue remoto.
-
-### Demostración y pruebas
-
-Importar [colección Postman](docs/api/coleccion.json) y [entorno sin secretos](docs/api/entorno.example.json). Ejecutar sus 24 solicitudes en orden con Collection Runner y cookie jar habilitado. Genera una cuenta ficticia por recorrido, guarda cookie/CSRF durante la ejecución, demuestra ambos CRUD y termina con logout. Usar una base de demostración; las cuentas no se eliminan mediante API.
-
-```powershell
-npm test --prefix backend
-node --test backend/test/integration/collection.test.js
-```
-
-El primer comando ejecuta las pruebas de datos, seguridad y recursos. El segundo ejecuta la integración: colección HTTP real, acceso cruzado, CSRF, cierre de proceso, reinicio y exportación sin credenciales. Solo requiere Node y las dependencias del backend; no Python ni cámara. Juntas son 25 pruebas de backend; en la verificación del 5 de noviembre de 2026 las 25 aprobaron. El contrato OpenAPI documenta 16 rutas y 22 operaciones. Para ejecutar las 25 juntas:
-
-```powershell
-node --test --test-concurrency=1 backend/test/database/*.test.js backend/test/security/*.test.js backend/test/resources/*.test.js backend/test/integration/*.test.js
-```
-
-Para mostrar persistencia manual, detener la colección después de la solicitud 18, cerrar el servidor con Ctrl+C, volver a iniciarlo y repetir la lectura del modo. Guardar únicamente `data` de la solicitud 18 si el equipo del motor necesita configuración; no entregar cookie, CSRF, contraseña ni exportaciones del entorno autenticado.
-
-Al salir del Runner sus variables locales desaparecen: copiar `modo.id` de la respuesta 18 y usarlo directamente en la URL de lectura. Mantener el cookie jar. El [registro de pruebas](docs/hito2/pruebas.md) explica también cómo completar el borrado manual.
-
-### Aplicación Tauri en Windows
-
-Requiere Rust MSVC, herramientas de compilación C++, WebView2 y Python 3.11. Instalar dependencias desde la raíz:
-
-```powershell
+# 1. Dependencias
 npm ci
+npm ci --prefix backend
 python -m venv motor-local/.venv
-motor-local/.venv/Scripts/python.exe -m pip install -r motor-local/requirements.txt
+motor-local/.venv/Scripts/python.exe -m pip install -r motor-local/requirements-dev.txt
+
+# 2. Configuración del backend (solo para cuentas y sincronización)
+Copy-Item .env.example .env
+#    Edita DATABASE_PATH con una ruta absoluta FUERA del repositorio y de OneDrive,
+#    p. ej. C:/Users/TU_USUARIO/AppData/Local/ZeroTouch/zerotouch.sqlite
+npm run db:init --prefix backend          # crea una base nueva (rechaza una existente)
+npm run admin:bootstrap --prefix backend  # opcional: cuenta de administración (pide la contraseña)
+
+# 3. Compilar la aplicación
 npm run desktop:build
 ```
 
-Conservar el `.env` ya configurado. Iniciar el backend en una terminal con `npm start --prefix backend` y abrir `desktop/target/debug/zerotouch-desktop.exe` en otra. Tauri usa `http://127.0.0.1:3000`; si cambias el puerto, establece `ZEROTOUCH_BACKEND_URL` en el entorno desde el que abres Tauri. El cliente conserva cookie y CSRF en memoria nativa. No arranca ni inicializa otra base de datos. El control local puede abrirse sin iniciar sesión; las operaciones de cuenta necesitan el backend.
+Uso diario: `npm start --prefix backend` en una terminal (opcional, solo para cuentas) y `desktop/target/debug/zerotouch-desktop.exe` en otra. En la aplicación, **Inicio › Activar cámara**, luego **Controlar**, y muestra la mano abierta.
 
-Tauri busca primero Python en `motor-local/.venv`. El motor comienza en observación; el usuario habilita el control explícitamente. El control solo se habilita con cámara abierta y con la parada de emergencia **Ctrl+Alt+Z** registrada; si el atajo no queda activo, el motor lo informa y no habilita el control. Compilar no demuestra detección, precisión o seguridad manual: la cámara y las acciones deben comprobarse con el usuario. No hay instalador ni distribución autónoma validada.
+Una base creada con una versión anterior se actualiza **a mano** y con respaldo automático: `node backend/scripts/migrate-db.js`. Nunca se migra al arrancar.
 
-Pruebas del motor (sintéticas, sin cámara):
-
-```powershell
-motor-local/.venv/Scripts/python.exe -m pytest motor-local/tests
-cargo test --manifest-path desktop/Cargo.toml --locked
-```
-
-La primera ejecuta las pruebas sin hardware (la prueba de proceso real va marcada `hardware`). La segunda cubre el cierre cooperativo del motor. Ninguna sustituye la prueba física en Windows.
-
-Comprobaciones adicionales:
+## Pruebas
 
 ```powershell
-npm run verify:separation
-npm run desktop:test
-motor-local/.venv/Scripts/python.exe -m pip install -r motor-local/requirements-dev.txt
-motor-local/.venv/Scripts/python.exe -m pytest motor-local/tests
+npm test --prefix backend                                         # API, seguridad y datos
+node --test --test-concurrency=1 backend/test/integration/*.test.js  # colección contra procesos reales
+node --test "tests/frontend/*.test.js"                            # interfaz (módulos puros)
+motor-local/.venv/Scripts/python.exe -m pytest motor-local/tests  # motor (sintético, sin cámara)
+cargo test --manifest-path desktop/Cargo.toml --locked            # puente Tauri
+npm run lint; npm run verify:separation
+npm run desktop:build; npm run verify:tauri                       # .exe real con backend temporal (abre ventanas)
 ```
 
-### Documentación y límites
+GitHub Actions ejecuta las cinco primeras, además de lint y compilación, en cada push a `main` o `codex/h2-*` (`.github/workflows/test.yml`). Ninguna prueba automática abre la cámara ni mueve el ratón. Lo que necesita manos reales está en la [guía de prueba manual](docs/prueba-manual-hardware.md).
 
-- [Contrato OpenAPI](docs/api/openapi.yaml): rutas, DTO, validación y respuestas.
-- [Datos y seguridad - I1](docs/hito2/datos-seguridad.md).
-- [API y arquitectura - I2](docs/hito2/api-arquitectura.md).
-- [Pruebas y guion - I3](docs/hito2/pruebas.md).
-- [Trazabilidad Hito 1](docs/hito2/trazabilidad.md).
-- [Informe consolidado del backend](docs/hito2/informe.md).
+## Lo que falta
 
-Las notas I1/I2 describen sus entregas históricas; el registro I3 consolida la integración actual. Falta revisión cruzada, instalación en otro equipo y ensayo de la demo. La prueba automática ejecuta las solicitudes de la colección, pero no valida la interfaz de Postman. El motor no forma parte de la comprobación del backend.
+- **Prueba física** con cámara y manos (guía M1–M9), y calibrar los umbrales con esos resultados.
+- **Instalador** (empaquetado de Tauri con Python y el motor incluidos).
+- **Servidor remoto** (HTTPS, correo, respaldos, despliegue). Hoy el backend es local.
+- **Interfaz móvil** (solo interfaz, sin motor).
+- Medir precisión, latencia y usabilidad. No hay cifras medidas.
 
-Problemas frecuentes: base existente al inicializar (usar la ya creada y arrancar servidor); ruta dentro de OneDrive (usar AppData local); 403 en mutación (usar CSRF de la sesión actual); 409 al editar (volver a leer version); 503 (cerrar el proceso que mantiene bloqueada SQLite); 429 (esperar el límite de autenticación, sin desactivar protección). Los errores genéricos no exponen SQL ni secretos.
+## Documentación
+
+- [Matriz de cumplimiento del Hito 1](docs/matriz-hito1.md)
+- [Contrato OpenAPI](docs/api/openapi.yaml), [colección Postman](docs/api/coleccion.json) y [entorno sin secretos](docs/api/entorno.example.json)
+- Hito 2: [informe](docs/hito2/informe.md), [datos y seguridad](docs/hito2/datos-seguridad.md), [API y arquitectura](docs/hito2/api-arquitectura.md), [motor local](docs/hito2/motor-local.md), [pruebas](docs/hito2/pruebas.md), [auditoría de seguridad](docs/hito2/auditoria-seguridad.md)
+
+Problemas frecuentes del backend: si la base ya existe al inicializar, usa la que hay y arranca el servidor. Si la ruta está dentro de OneDrive, usa AppData local. 403 al modificar: falta el CSRF de la sesión actual. 409 al editar: vuelve a leer la versión. 503: otro proceso tiene bloqueada la base. 429: espera el límite de autenticación.

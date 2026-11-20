@@ -10,7 +10,19 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-app
 *.local
+
+# Copias de trabajo, archivos internos y resultados locales.
+/.worktrees/
+/codex-interno/
+/tmp/
+/output/
+**/.pytest_cache/
+**/__pycache__/
+**/.venv/
+*.pyc
+*.ztbackup
 
 # Environment files
 .env
@@ -23,6 +35,7 @@ dist-ssr
 *.sqlite3
 *.sqlite3-*
 *.db
+*.db-*
 *.db-wal
 *.db-shm
 *.key
