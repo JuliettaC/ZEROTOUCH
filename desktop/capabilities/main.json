@@ -1,13 +1,15 @@
 {
   "identifier": "main",
-  "description": "API Hito 2 y motor gestual local para la única ventana autorizada.",
-  "windows": ["main"],
+  "description": "API Hito 2, motor gestual local y teclado Air-Swipe para las dos ventanas de la aplicación.",
+  "windows": ["main", "airswipe"],
   "permissions": [
-    "allow-register", "allow-resend-verification", "allow-forgot-password", "allow-link-email", "allow-login", "allow-account", "allow-logout",
+    "allow-register", "allow-resend-verification", "allow-forgot-password", "allow-link-email", "allow-login", "allow-account", "allow-logout", "allow-backend-info",
     "allow-profiles", "allow-create-profile", "allow-update-profile", "allow-delete-profile",
     "allow-contexts", "allow-create-context", "allow-update-context", "allow-delete-context",
+    "allow-mode-gestures", "allow-set-mode-gestures", "allow-capabilities",
     "allow-engine-start", "allow-engine-stop", "allow-engine-status",
     "allow-engine-update-config", "allow-engine-set-mode", "allow-engine-set-paused",
-    "allow-engine-load-export"
+    "allow-engine-load-export", "allow-engine-airswipe", "allow-engine-type-text", "allow-engine-press-key", "allow-engine-gaze-calibrate",
+    "allow-airswipe-window-open", "allow-airswipe-window-close", "allow-airswipe-window-rect"
   ]
 }

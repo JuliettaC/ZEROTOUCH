@@ -17,8 +17,10 @@ use std::{
 /// bloque `finally` de Python libere la cámara ni los botones.
 pub const STOP_TIMEOUT: Duration = Duration::from_secs(3);
 /// Plazo para recibir el ACK de un comando antes de considerarlo no confirmado.
-pub const ACK_TIMEOUT: Duration = Duration::from_secs(2);
+pub const ACK_TIMEOUT: Duration = Duration::from_secs(3);
 const STOP_POLL: Duration = Duration::from_millis(25);
+/// Eventos de aplicación conservados para que la interfaz los consuma por secuencia.
+const RECENT_EVENTS: usize = 32;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,11 +34,18 @@ pub struct EngineStatus {
     pub mode: String, // "OBSERVATION" | "CONTROL"
     pub paused: bool,
     pub emergency_stopped: bool,
+    pub hotkey_active: bool,
     pub hand_detected: bool,
     pub handedness: String,
     pub confidence: u32,
     pub gesture: String,
     pub last_event: String,
+    pub pointer_armed: bool,
+    pub precision: bool,
+    pub airswipe: bool,
+    pub tracing: bool,
+    pub gaze: Value,
+    pub window_result: String,
     pub pinch_distance_px: u32,
     pub pinch_ratio: f64,
     pub cursor_x: f64,
@@ -48,6 +57,12 @@ pub struct EngineStatus {
     pub latency_ms: f64,
     pub total_clicks: u32,
     pub total_scrolls: u32,
+    /// Última configuración que el motor confirmó haber aplicado (READY o ACK de SET_CONFIG/LOAD_EXPORT).
+    pub applied_config: Value,
+    /// Secuencia del último evento de aplicación recibido y los últimos eventos (TIMER, PRECISION,
+    /// NAVIGATION, AIRSWIPE_TRACE, CONFIRM/CANCEL/BACK/FORWARD con el teclado abierto, GAZE_CALIBRATED).
+    pub event_seq: u64,
+    pub recent_events: Vec<Value>,
     pub message: String,
 }
 
@@ -63,11 +78,18 @@ impl Default for EngineStatus {
             mode: "OBSERVATION".into(),
             paused: false,
             emergency_stopped: false,
+            hotkey_active: false,
             hand_detected: false,
             handedness: "NINGUNA".into(),
             confidence: 0,
             gesture: "NONE".into(),
             last_event: "NONE".into(),
+            pointer_armed: false,
+            precision: false,
+            airswipe: false,
+            tracing: false,
+            gaze: json!({ "state": "desactivado", "holding": false }),
+            window_result: "NONE".into(),
             pinch_distance_px: 0,
             pinch_ratio: 1.0,
             cursor_x: 0.5,
@@ -79,6 +101,9 @@ impl Default for EngineStatus {
             latency_ms: 0.0,
             total_clicks: 0,
             total_scrolls: 0,
+            applied_config: Value::Null,
+            event_seq: 0,
+            recent_events: Vec::new(),
             message: "Motor gestual detenido. Cámara apagada.".into(),
         }
     }
@@ -164,14 +189,21 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
     }
 }
 
-fn find_python_binary(motor_dir: &Path) -> PathBuf {
+/// Orden de búsqueda del motor: ejecutable empaquetado (distribución), entorno virtual del clon,
+/// Python 3.11 del usuario y, por último, `python` en el PATH.
+pub fn find_engine_launcher(motor_dir: &Path) -> (PathBuf, Vec<String>) {
+    let bundled = motor_dir.join("zerotouch-motor").join(if cfg!(windows) { "zerotouch-motor.exe" } else { "zerotouch-motor" });
+    if bundled.is_file() {
+        return (bundled, Vec::new());
+    }
+    let module_args = vec!["-u".to_string(), "-m".to_string(), "motor_local.main".to_string()];
     let local = motor_dir.join(".venv").join(if cfg!(windows) {
         "Scripts/python.exe"
     } else {
         "bin/python"
     });
     if local.is_file() {
-        return local;
+        return (local, module_args);
     }
     if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
         let candidate = PathBuf::from(local_app_data)
@@ -180,10 +212,133 @@ fn find_python_binary(motor_dir: &Path) -> PathBuf {
             .join("Python311")
             .join("python.exe");
         if candidate.exists() {
-            return candidate;
+            return (candidate, module_args);
         }
     }
-    PathBuf::from("python")
+    (PathBuf::from("python"), module_args)
+}
+
+fn apply_telemetry(st: &mut EngineStatus, val: &Value) {
+    st.running = val["running"].as_bool().unwrap_or(true);
+    st.camera_open = val["cameraOpen"].as_bool().unwrap_or(st.camera_open);
+    if let Some(ci) = val["cameraIndex"].as_u64() {
+        st.camera_index = ci as u32;
+    }
+    if let Some(ph) = val["preferredHand"].as_str() {
+        st.preferred_hand = ph.to_string();
+    }
+    if let Some(mc) = val["mirrorCamera"].as_bool() {
+        st.mirror_camera = mc;
+    }
+    if let Some(ab) = val["activeBounds"].as_array() {
+        let bounds: Vec<f64> = ab.iter().filter_map(|v| v.as_f64()).collect();
+        if bounds.len() == 4 {
+            st.active_bounds = bounds;
+        }
+    }
+    if let Some(m) = val["mode"].as_str() {
+        st.mode = m.to_string();
+    }
+    if let Some(p) = val["paused"].as_bool() {
+        st.paused = p;
+    }
+    if let Some(es) = val["emergencyStopped"].as_bool() {
+        st.emergency_stopped = es;
+    }
+    if let Some(h) = val["hotkeyActive"].as_bool() {
+        st.hotkey_active = h;
+    }
+    if let Some(hd) = val["handDetected"].as_bool() {
+        st.hand_detected = hd;
+        if !hd {
+            st.landmarks.clear();
+        }
+    }
+    if let Some(h) = val["handedness"].as_str() {
+        st.handedness = h.to_string();
+    }
+    if let Some(c) = val["confidence"].as_u64() {
+        st.confidence = c as u32;
+    }
+    if let Some(g) = val["gesture"].as_str() {
+        st.gesture = g.to_string();
+    }
+    if let Some(le) = val["lastEvent"].as_str() {
+        st.last_event = le.to_string();
+    }
+    if let Some(v) = val["pointerArmed"].as_bool() {
+        st.pointer_armed = v;
+    }
+    if let Some(v) = val["precision"].as_bool() {
+        st.precision = v;
+    }
+    if let Some(v) = val["airswipe"].as_bool() {
+        st.airswipe = v;
+    }
+    if let Some(v) = val["tracing"].as_bool() {
+        st.tracing = v;
+    }
+    if val["gaze"].is_object() {
+        st.gaze = val["gaze"].clone();
+    }
+    if let Some(w) = val["windowResult"].as_str() {
+        st.window_result = w.to_string();
+    }
+    if let Some(pd) = val["pinchDistancePx"].as_u64() {
+        st.pinch_distance_px = pd as u32;
+    }
+    if let Some(pr) = val["pinchRatio"].as_f64() {
+        st.pinch_ratio = pr;
+    }
+    if let Some(cx) = val["cursorX"].as_f64() {
+        st.cursor_x = cx;
+    }
+    if let Some(cy) = val["cursorY"].as_f64() {
+        st.cursor_y = cy;
+    }
+    if let Some(rax) = val["rawAnchorX"].as_f64() {
+        st.raw_anchor_x = rax;
+    }
+    if let Some(ray) = val["rawAnchorY"].as_f64() {
+        st.raw_anchor_y = ray;
+    }
+    if let Some(lms_arr) = val["landmarks"].as_array() {
+        let mut parsed = Vec::with_capacity(lms_arr.len());
+        for pt in lms_arr {
+            if let Some(coords) = pt.as_array() {
+                if coords.len() >= 2 {
+                    if let (Some(x), Some(y)) = (coords[0].as_f64(), coords[1].as_f64()) {
+                        parsed.push(vec![x, y]);
+                    }
+                }
+            }
+        }
+        st.landmarks = parsed;
+    }
+    if let Some(fps) = val["fps"].as_f64() {
+        st.fps = fps;
+    }
+    if let Some(lat) = val["latencyMs"].as_f64() {
+        st.latency_ms = lat;
+    }
+    if let Some(tc) = val["totalClicks"].as_u64() {
+        st.total_clicks = tc as u32;
+    }
+    if let Some(ts) = val["totalScrolls"].as_u64() {
+        st.total_scrolls = ts as u32;
+    }
+    if val["config"].is_object() {
+        st.applied_config = val["config"].clone();
+    }
+    if let Some(msg) = val["message"].as_str() {
+        st.message = msg.to_string();
+    } else if st.camera_open {
+        st.message = if st.mode == "CONTROL" {
+            "Control real del SO activo (Parada rápida: Ctrl+Alt+Z)".into()
+        } else {
+            "Modo Simulación activo (sin mover el cursor del SO)".into()
+        };
+    }
 }
 
 impl GestureEngineManager {
@@ -206,6 +361,9 @@ impl GestureEngineManager {
                     st.hand_detected = false;
                     st.landmarks.clear();
                     st.mode = "OBSERVATION".into();
+                    st.airswipe = false;
+                    st.tracing = false;
+                    st.pointer_armed = false;
                 }
             }
         }
@@ -231,19 +389,22 @@ impl GestureEngineManager {
         if !self.motor_dir.exists() {
             return Err(BridgeError {
                 code: "ENGINE_MISSING".into(),
-                message: "No se encontró el directorio motor-local.".into(),
+                message: "No se encontró el motor gestual (carpeta motor-local o ejecutable empaquetado).".into(),
             });
         }
 
-        let python_bin = find_python_binary(&self.motor_dir);
-        let mut cmd = Command::new(python_bin);
-        cmd.arg("-u")
-            .arg("-m")
-            .arg("motor_local.main")
+        let (launcher, args) = find_engine_launcher(&self.motor_dir);
+        let mut cmd = Command::new(launcher);
+        cmd.args(args)
             .current_dir(&self.motor_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
+
+        // La configuración inicial viaja como argumento: el motor la aplica al arrancar, sin esperar un ACK.
+        if let Some(cfg) = config.as_ref() {
+            cmd.arg("--config-json").arg(cfg.to_string());
+        }
 
         #[cfg(windows)]
         {
@@ -253,7 +414,7 @@ impl GestureEngineManager {
 
         let mut child = cmd.spawn().map_err(|_| BridgeError {
             code: "ENGINE_START".into(),
-            message: "No se pudo iniciar Python para el motor gestual local.".into(),
+            message: "No se pudo iniciar el motor gestual local (Python o ejecutable empaquetado ausente).".into(),
         })?;
 
         let job = match Job::attach(&child) {
@@ -291,108 +452,22 @@ impl GestureEngineManager {
             let reader = BufReader::new(stdout);
             for line in reader.lines().map_while(Result::ok) {
                 if let Ok(val) = serde_json::from_str::<Value>(&line) {
-                    if val["type"].as_str() == Some("ACK") {
+                    let msg_type = val["type"].as_str().unwrap_or("");
+                    if msg_type == "ACK" {
                         let _ = ack_tx.send(val);
                         continue;
                     }
                     if let Ok(mut st) = shared_status.lock() {
-                        let msg_type = val["type"].as_str().unwrap_or("");
                         if msg_type == "READY" || msg_type == "TELEMETRY" {
-                            st.running = val["running"].as_bool().unwrap_or(true);
-                            st.camera_open = val["cameraOpen"].as_bool().unwrap_or(st.camera_open);
-                            if let Some(ci) = val["cameraIndex"].as_u64() {
-                                st.camera_index = ci as u32;
+                            apply_telemetry(&mut st, &val);
+                        } else if msg_type == "EVENT" {
+                            if let Some(seq) = val["seq"].as_u64() {
+                                st.event_seq = seq;
                             }
-                            if let Some(ph) = val["preferredHand"].as_str() {
-                                st.preferred_hand = ph.to_string();
-                            }
-                            if let Some(mc) = val["mirrorCamera"].as_bool() {
-                                st.mirror_camera = mc;
-                            }
-                            if let Some(ab) = val["activeBounds"].as_array() {
-                                let bounds: Vec<f64> = ab.iter().filter_map(|v| v.as_f64()).collect();
-                                if bounds.len() == 4 {
-                                    st.active_bounds = bounds;
-                                }
-                            }
-                            if let Some(m) = val["mode"].as_str() {
-                                st.mode = m.to_string();
-                            }
-                            if let Some(p) = val["paused"].as_bool() {
-                                st.paused = p;
-                            }
-                            if let Some(es) = val["emergencyStopped"].as_bool() {
-                                st.emergency_stopped = es;
-                            }
-                            if let Some(hd) = val["handDetected"].as_bool() {
-                                st.hand_detected = hd;
-                                if !hd {
-                                    st.landmarks.clear();
-                                }
-                            }
-                            if let Some(h) = val["handedness"].as_str() {
-                                st.handedness = h.to_string();
-                            }
-                            if let Some(c) = val["confidence"].as_u64() {
-                                st.confidence = c as u32;
-                            }
-                            if let Some(g) = val["gesture"].as_str() {
-                                st.gesture = g.to_string();
-                            }
-                            if let Some(le) = val["lastEvent"].as_str() {
-                                st.last_event = le.to_string();
-                            }
-                            if let Some(pd) = val["pinchDistancePx"].as_u64() {
-                                st.pinch_distance_px = pd as u32;
-                            }
-                            if let Some(pr) = val["pinchRatio"].as_f64() {
-                                st.pinch_ratio = pr;
-                            }
-                            if let Some(cx) = val["cursorX"].as_f64() {
-                                st.cursor_x = cx;
-                            }
-                            if let Some(cy) = val["cursorY"].as_f64() {
-                                st.cursor_y = cy;
-                            }
-                            if let Some(rax) = val["rawAnchorX"].as_f64() {
-                                st.raw_anchor_x = rax;
-                            }
-                            if let Some(ray) = val["rawAnchorY"].as_f64() {
-                                st.raw_anchor_y = ray;
-                            }
-                            if let Some(lms_arr) = val["landmarks"].as_array() {
-                                let mut parsed = Vec::with_capacity(lms_arr.len());
-                                for pt in lms_arr {
-                                    if let Some(coords) = pt.as_array() {
-                                        if coords.len() >= 2 {
-                                            if let (Some(x), Some(y)) = (coords[0].as_f64(), coords[1].as_f64()) {
-                                                parsed.push(vec![x, y]);
-                                            }
-                                        }
-                                    }
-                                }
-                                st.landmarks = parsed;
-                            }
-                            if let Some(fps) = val["fps"].as_f64() {
-                                st.fps = fps;
-                            }
-                            if let Some(lat) = val["latencyMs"].as_f64() {
-                                st.latency_ms = lat;
-                            }
-                            if let Some(tc) = val["totalClicks"].as_u64() {
-                                st.total_clicks = tc as u32;
-                            }
-                            if let Some(ts) = val["totalScrolls"].as_u64() {
-                                st.total_scrolls = ts as u32;
-                            }
-                            if let Some(msg) = val["message"].as_str() {
-                                st.message = msg.to_string();
-                            } else if st.camera_open {
-                                st.message = if st.mode == "CONTROL" {
-                                    "Control real del SO activo (Parada rápida: Ctrl+Alt+Z)".into()
-                                } else {
-                                    "Modo Simulación activo (sin mover el cursor del SO)".into()
-                                };
+                            st.recent_events.push(val.clone());
+                            if st.recent_events.len() > RECENT_EVENTS {
+                                let excess = st.recent_events.len() - RECENT_EVENTS;
+                                st.recent_events.drain(0..excess);
                             }
                         } else if msg_type == "MODE_CHANGED" {
                             if let Some(m) = val["mode"].as_str() {
@@ -410,6 +485,9 @@ impl GestureEngineManager {
                             st.hand_detected = false;
                             st.landmarks.clear();
                             st.mode = "OBSERVATION".into();
+                            st.airswipe = false;
+                            st.tracing = false;
+                            st.pointer_armed = false;
                             if let Some(msg) = val["message"].as_str() {
                                 st.message = msg.to_string();
                             }
@@ -423,6 +501,9 @@ impl GestureEngineManager {
                 st.hand_detected = false;
                 st.landmarks.clear();
                 st.mode = "OBSERVATION".into();
+                st.airswipe = false;
+                st.tracing = false;
+                st.pointer_armed = false;
             }
         });
 
@@ -432,14 +513,6 @@ impl GestureEngineManager {
             acks: ack_rx,
             _job: job,
         });
-
-        if let Some(cfg) = config {
-            // La configuración inicial solo cuenta si el motor la confirma con ACK.
-            if let Err(err) = self.send_cmd(json!({ "cmd": "SET_CONFIG", "config": cfg })) {
-                let _ = self.stop();
-                return Err(err);
-            }
-        }
 
         Ok(self.get_status())
     }
@@ -495,9 +568,18 @@ impl GestureEngineManager {
         }
     }
 
+    fn remember_applied(&self, ack: &Value) {
+        if ack["config"].is_object() {
+            if let Ok(mut st) = self.status.lock() {
+                st.applied_config = ack["config"].clone();
+            }
+        }
+    }
+
     pub fn update_config(&mut self, config: Value) -> Result<EngineStatus, BridgeError> {
         if self.process.is_some() {
-            self.send_cmd(json!({ "cmd": "SET_CONFIG", "config": config }))?;
+            let ack = self.send_cmd(json!({ "cmd": "SET_CONFIG", "config": config }))?;
+            self.remember_applied(&ack);
         }
         Ok(self.get_status())
     }
@@ -505,7 +587,9 @@ impl GestureEngineManager {
     /// Carga una exportación de la API (formato 1). El motor valida todo el documento y solo
     /// devuelve su ACK si lo aplicó; un rechazo llega con el código que indica el motor.
     pub fn load_export(&mut self, document: Value, runtime: Option<Value>) -> Result<Value, BridgeError> {
-        self.send_cmd(json!({ "cmd": "LOAD_EXPORT", "document": document, "runtime": runtime }))
+        let ack = self.send_cmd(json!({ "cmd": "LOAD_EXPORT", "document": document, "runtime": runtime }))?;
+        self.remember_applied(&ack);
+        Ok(ack)
     }
 
     pub fn set_mode(&mut self, mode: String) -> Result<EngineStatus, BridgeError> {
@@ -533,6 +617,41 @@ impl GestureEngineManager {
         Ok(self.get_status())
     }
 
+    /// Abre o cierra el modo teclado Air-Swipe en el motor (trazo con el índice, escritura permitida).
+    pub fn set_airswipe(&mut self, active: bool) -> Result<EngineStatus, BridgeError> {
+        self.send_cmd(json!({ "cmd": "AIRSWIPE", "active": active }))?;
+        if let Ok(mut st) = self.status.lock() {
+            st.airswipe = active;
+        }
+        Ok(self.get_status())
+    }
+
+    /// Escribe texto en la aplicación activa. El motor exige CONTROL y teclado abierto; el texto
+    /// no se registra en ningún sitio.
+    pub fn type_text(&mut self, text: String) -> Result<Value, BridgeError> {
+        if text.is_empty() || text.chars().count() > 64 || text.chars().any(|c| c.is_control()) {
+            return Err(BridgeError {
+                code: "TEXT_INVALID".into(),
+                message: "El texto debe ser imprimible y de hasta 64 caracteres.".into(),
+            });
+        }
+        self.send_cmd(json!({ "cmd": "TYPE_TEXT", "text": text })).map(|_| json!({ "ok": true }))
+    }
+
+    pub fn press_key(&mut self, key: String) -> Result<Value, BridgeError> {
+        if !matches!(key.as_str(), "backspace" | "enter" | "space") {
+            return Err(BridgeError {
+                code: "KEY_NOT_ALLOWED".into(),
+                message: "Tecla no permitida.".into(),
+            });
+        }
+        self.send_cmd(json!({ "cmd": "PRESS_KEY", "key": key })).map(|_| json!({ "ok": true }))
+    }
+
+    pub fn gaze_calibrate(&mut self) -> Result<Value, BridgeError> {
+        self.send_cmd(json!({ "cmd": "GAZE_CALIBRATE" }))
+    }
+
     /// Cierre cooperativo: envía STOP y espera hasta `STOP_TIMEOUT` a que el motor libere cámara y
     /// botones y termine. Solo si no termina a tiempo se fuerza la terminación del proceso.
     pub fn stop(&mut self) -> EngineStatus {
@@ -557,7 +676,15 @@ impl Drop for GestureEngineManager {
     }
 }
 
+/// Directorio del motor: en desarrollo, `motor-local/` junto a `desktop/`; en una instalación,
+/// la carpeta de recursos indicada por `ZEROTOUCH_MOTOR_DIR` (la establece main.rs).
 pub fn resolve_motor_dir(manifest_dir: &Path) -> PathBuf {
+    if let Some(configured) = std::env::var_os("ZEROTOUCH_MOTOR_DIR") {
+        let candidate = PathBuf::from(configured);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
     if let Some(parent) = manifest_dir.parent() {
         let candidate = parent.join("motor-local");
         if candidate.exists() {
@@ -588,5 +715,23 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(5));
         let _ = child.kill();
         let _ = child.wait();
+    }
+
+    #[test]
+    fn telemetry_events_and_applied_config_are_parsed() {
+        let mut st = EngineStatus::default();
+        apply_telemetry(&mut st, &json!({
+            "type": "TELEMETRY", "running": true, "cameraOpen": true, "mode": "CONTROL", "pointerArmed": true,
+            "precision": true, "airswipe": true, "tracing": false, "gaze": {"state": "presente", "holding": false},
+            "hotkeyActive": true, "windowResult": "MINIMIZED"
+        }));
+        assert!(st.pointer_armed && st.precision && st.airswipe && st.hotkey_active);
+        assert_eq!(st.gaze["state"], "presente");
+        apply_telemetry(&mut st, &json!({ "type": "READY", "running": true, "config": {"sensitivity": 70, "gestos": {}} }));
+        assert_eq!(st.applied_config["sensitivity"], 70);
+        let mut mgr = GestureEngineManager::new(PathBuf::from("."));
+        assert_eq!(mgr.type_text("con\nsalto".into()).unwrap_err().code, "TEXT_INVALID");
+        assert_eq!(mgr.press_key("f4".into()).unwrap_err().code, "KEY_NOT_ALLOWED");
+        assert_eq!(mgr.press_key("enter".into()).unwrap_err().code, "ENGINE_NOT_RUNNING");
     }
 }

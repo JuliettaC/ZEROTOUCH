@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-airswipe-window-rect"
+description = "Enables the airswipe_window_rect command without any pre-configured scope."
+commands.allow = ["airswipe_window_rect"]
+
+[[permission]]
+identifier = "deny-airswipe-window-rect"
+description = "Denies the airswipe_window_rect command without any pre-configured scope."
+commands.deny = ["airswipe_window_rect"]

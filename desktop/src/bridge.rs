@@ -115,8 +115,35 @@ pub struct ContextInput {
     #[serde(default = "default_true")]
     #[allow(dead_code)]
     pub scroll: bool,
+    /// manual | oficina | accesibilidad | personalizado (se valida en el backend).
+    #[serde(default)]
+    pub categoria: Option<String>,
+    /// asistencia_mirada_habilitada del modo (la asistencia real depende además del equipo).
+    #[serde(default, alias = "asistencia_mirada_habilitada")]
+    pub gaze_assist: bool,
+    /// Lista completa de asignaciones gesto -> acción (semántica de PUT /modos/:id/gestos). Con ella la creación o
+    /// la edición del modo y de sus asignaciones es UNA sola solicitud atómica con una sola subida de versión.
+    /// Solo debe enviarse a un servidor que anuncie `servidor.modo_con_asignaciones`.
+    #[serde(default)]
+    pub gestos: Option<Vec<GestureAssignment>>,
     #[serde(default)]
     pub version: Option<u64>,
+}
+
+/// Asignación gesto -> acción tal como la recibe PUT /modos/:id/gestos.
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GestureAssignment {
+    pub gesto_codigo: String,
+    pub accion_codigo: String,
+    pub habilitado: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GesturesInput {
+    pub version: u64,
+    pub gestos: Vec<GestureAssignment>,
 }
 
 struct Session {
@@ -132,40 +159,56 @@ pub struct Bridge {
     session: Option<Session>,
 }
 
+/// Destinos permitidos del transporte nativo:
+/// - `http://` únicamente hacia loopback (desarrollo local);
+/// - `https://` hacia un nombre de host o dirección con puerto opcional (servicio remoto), con
+///   validación de certificados por las raíces de Mozilla incorporadas (webpki-roots).
+/// Nunca rutas, consultas, fragmentos ni credenciales en la dirección base.
 pub fn validate_loopback_base(raw: &str) -> Result<String> {
     let trimmed = raw.trim().trim_end_matches('/');
-    let rest = if let Some(r) = trimmed.strip_prefix("http://") {
-        r
+    let (secure, rest) = if let Some(r) = trimmed.strip_prefix("http://") {
+        (false, r)
     } else if let Some(r) = trimmed.strip_prefix("https://") {
-        r
+        (true, r)
     } else {
         return Err(error(
             "INVALID_CONFIG",
-            "El servidor local debe usar protocolo http:// o https://.",
+            "El servidor debe usar protocolo http:// (solo local) o https://.",
         ));
     };
-    if rest.contains('/') || rest.contains('?') || rest.contains('#') || rest.contains('@') {
+    if rest.is_empty() || rest.contains('/') || rest.contains('?') || rest.contains('#') || rest.contains('@') || rest.contains(char::is_whitespace) {
         return Err(error(
             "INVALID_CONFIG",
             "La dirección base del servidor no debe contener rutas ni credenciales.",
         ));
     }
-    let (host, port_opt) = match rest.rsplit_once(':') {
-        Some((h, p)) => (h, Some(p)),
-        None => (rest, None),
+    let (host, port_opt) = if rest.starts_with('[') {
+        match rest.rsplit_once("]:") {
+            Some((h, p)) => (format!("{h}]"), Some(p)),
+            None => (rest.to_string(), None),
+        }
+    } else {
+        match rest.rsplit_once(':') {
+            Some((h, p)) => (h.to_string(), Some(p)),
+            None => (rest.to_string(), None),
+        }
     };
-    if host != "127.0.0.1" && host != "localhost" && host != "[::1]" {
+    let loopback = host == "127.0.0.1" || host == "localhost" || host == "[::1]";
+    if !secure && !loopback {
         return Err(error(
             "INVALID_CONFIG",
-            "El transporte nativo solo permite conexión local (loopback).",
+            "Sin HTTPS, el transporte nativo solo permite conexión local (loopback).",
         ));
+    }
+    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '[' | ']' | ':')) {
+        return Err(error("INVALID_CONFIG", "Nombre de host inválido."));
     }
     if let Some(p) = port_opt {
         let port: u16 = p
             .parse()
-            .map_err(|_| error("INVALID_CONFIG", "Puerto local inválido."))?;
+            .map_err(|_| error("INVALID_CONFIG", "Puerto inválido."))?;
         if port == 0 {
-            return Err(error("INVALID_CONFIG", "Puerto local inválido."));
+            return Err(error("INVALID_CONFIG", "Puerto inválido."));
         }
     }
     Ok(trimmed.to_string())
@@ -277,6 +320,18 @@ impl Bridge {
         body: Option<Value>,
         authenticated: bool,
     ) -> Result<(Value, Option<String>)> {
+        self.request_with_headers(method, route, body, authenticated, &[])
+    }
+
+    /// Igual que `request`, con encabezados fijos adicionales (p. ej. `If-Match` del borrado condicional).
+    fn request_with_headers(
+        &mut self,
+        method: Method,
+        route: &str,
+        body: Option<Value>,
+        authenticated: bool,
+        extra_headers: &[(&str, &str)],
+    ) -> Result<(Value, Option<String>)> {
         let mut req = self
             .client
             .request(method.clone(), format!("{}{}", self.base, route));
@@ -301,6 +356,10 @@ impl Bridge {
             }
         }
 
+        for (name, value) in extra_headers {
+            req = req.header(*name, *value);
+        }
+
         if let Some(value) = body {
             let text = value.to_string();
             if text.len() > 16384 {
@@ -322,6 +381,12 @@ impl Bridge {
             .get("set-cookie")
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
+        // `Idempotent-Replayed: true`: el servidor devolvió el resultado original de una creación ya hecha.
+        let replayed = response
+            .headers()
+            .get("idempotent-replayed")
+            .and_then(|v| v.to_str().ok())
+            == Some("true");
 
         let mut bytes = Vec::new();
         use std::io::Read;
@@ -336,12 +401,17 @@ impl Bridge {
             ));
         }
 
-        let value = if bytes.is_empty() {
+        let mut value = if bytes.is_empty() {
             Value::Null
         } else {
             serde_json::from_slice(&bytes)
                 .map_err(|_| error("SERVICE_RESPONSE", "Respuesta JSON inválida del servidor."))?
         };
+        if replayed && status.is_success() {
+            if let Some(object) = value.as_object_mut() {
+                object.insert("repetida".into(), Value::Bool(true));
+            }
+        }
 
         if !status.is_success() {
             if status.as_u16() == 401 {
@@ -478,12 +548,21 @@ impl Bridge {
         .map(|r| r.0)
     }
 
-    pub fn create_profile(&mut self, p: ProfileInput) -> Result<Value> {
-        self.request(
+    /// Crea un perfil. Con `idempotency_key` (UUID v7) la creación es idempotente: repetirla con el mismo
+    /// cuerpo devuelve el resultado original (con `repetida: true`) sin crear otro perfil.
+    pub fn create_profile(
+        &mut self,
+        p: ProfileInput,
+        idempotency_key: Option<String>,
+    ) -> Result<Value> {
+        let key = idempotency_key.as_deref().map(valid_idempotency_key).transpose()?;
+        let headers = idempotency_headers(key.as_deref());
+        self.request_with_headers(
             Method::POST,
             "/api/v1/perfiles",
             Some(profile_payload(&p, None)),
             true,
+            &headers,
         )
         .map(|r| r.0)
     }
@@ -511,13 +590,17 @@ impl Bridge {
         .map(|r| r.0)
     }
 
-    pub fn delete_profile(&mut self, id: String) -> Result<Value> {
+    /// Borrado condicional: el backend solo borra (con sus modos y asignaciones) si `if_match` coincide con
+    /// el ETag de agregado del perfil; si cambió responde 412 PRECONDICION_FALLIDA y no toca nada.
+    pub fn delete_profile(&mut self, id: String, if_match: String) -> Result<Value> {
         let clean_id = valid_id(&id)?;
-        self.request(
+        let etag = valid_etag(&if_match)?;
+        self.request_with_headers(
             Method::DELETE,
             &format!("/api/v1/perfiles/{clean_id}"),
             None,
             true,
+            &[("If-Match", etag.as_str())],
         )
         .map(|r| r.0)
     }
@@ -533,19 +616,30 @@ impl Bridge {
         .map(|r| r.0)
     }
 
-    pub fn create_context(&mut self, profile_id: String, c: ContextInput) -> Result<Value> {
+    /// Crea un modo bajo el perfil. La clave de idempotencia queda ligada también al perfil padre.
+    pub fn create_context(
+        &mut self,
+        profile_id: String,
+        c: ContextInput,
+        idempotency_key: Option<String>,
+    ) -> Result<Value> {
         let clean_id = valid_id(&profile_id)?;
-        self.request(
+        check_assignments(&c)?;
+        let key = idempotency_key.as_deref().map(valid_idempotency_key).transpose()?;
+        let headers = idempotency_headers(key.as_deref());
+        self.request_with_headers(
             Method::POST,
             &format!("/api/v1/perfiles/{clean_id}/modos"),
             Some(context_payload(&c, None)),
             true,
+            &headers,
         )
         .map(|r| r.0)
     }
 
     pub fn update_context(&mut self, id: String, c: ContextInput) -> Result<Value> {
         let clean_id = valid_id(&id)?;
+        check_assignments(&c)?;
         let version = match c.version {
             Some(v) => v,
             None => {
@@ -567,15 +661,58 @@ impl Bridge {
         .map(|r| r.0)
     }
 
-    pub fn delete_context(&mut self, id: String) -> Result<Value> {
+    /// Borrado condicional del modo: solo procede si `if_match` coincide con su ETag actual (412 si cambió).
+    pub fn delete_context(&mut self, id: String, if_match: String) -> Result<Value> {
         let clean_id = valid_id(&id)?;
-        self.request(
+        let etag = valid_etag(&if_match)?;
+        self.request_with_headers(
             Method::DELETE,
             &format!("/api/v1/modos/{clean_id}"),
             None,
             true,
+            &[("If-Match", etag.as_str())],
         )
         .map(|r| r.0)
+    }
+
+    /// Configuración efectiva del modo (GET /modos/:id/gestos): exportación formato 1 sin credenciales.
+    pub fn mode_gestures(&mut self, id: String) -> Result<Value> {
+        let clean_id = valid_id(&id)?;
+        self.request(
+            Method::GET,
+            &format!("/api/v1/modos/{clean_id}/gestos"),
+            None,
+            true,
+        )
+        .map(|r| r.0)
+    }
+
+    /// Reemplaza las asignaciones del modo (PUT /modos/:id/gestos) con la versión conocida.
+    pub fn set_mode_gestures(&mut self, id: String, g: GesturesInput) -> Result<Value> {
+        let clean_id = valid_id(&id)?;
+        if g.gestos.len() > 13 {
+            return Err(error("DATOS_INVALIDOS", "Demasiadas asignaciones."));
+        }
+        self.request(
+            Method::PUT,
+            &format!("/api/v1/modos/{clean_id}/gestos"),
+            Some(json!({ "version": g.version, "gestos": g.gestos })),
+            true,
+        )
+        .map(|r| r.0)
+    }
+
+    /// Contrato de capacidades publicado por el backend (GET /capacidades).
+    pub fn capabilities(&mut self) -> Result<Value> {
+        self.request(Method::GET, "/api/v1/capacidades", None, true).map(|r| r.0)
+    }
+
+    /// Describe el destino configurado (sin secretos): local o remoto, y si usa HTTPS.
+    pub fn backend_info(&mut self) -> Result<Value> {
+        let secure = self.base.starts_with("https://");
+        let host = self.base.trim_start_matches("https://").trim_start_matches("http://");
+        let local = host.starts_with("127.0.0.1") || host.starts_with("localhost") || host.starts_with("[::1]");
+        Ok(json!({ "base": self.base, "https": secure, "local": local, "sesion": self.session.is_some() }))
     }
 }
 
@@ -586,6 +723,47 @@ fn valid_id(id: &str) -> Result<String> {
         return Err(error("DATOS_INVALIDOS", "Se requiere UUID v4."));
     }
     Ok(u.to_string())
+}
+
+/// ETag fuerte del backend para el borrado condicional: una sola cadena entre comillas dobles de 16 a 64
+/// caracteres base64url. Sin ella no se envía ningún DELETE: la interfaz nunca borra sin precondición.
+fn valid_etag(value: &str) -> Result<String> {
+    let inner = value
+        .strip_prefix('"')
+        .and_then(|v| v.strip_suffix('"'))
+        .unwrap_or("");
+    if (16..=64).contains(&inner.len())
+        && inner
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        Ok(value.to_string())
+    } else {
+        Err(error(
+            "DATOS_INVALIDOS",
+            "Se requiere el ETag (If-Match) del recurso que se va a borrar.",
+        ))
+    }
+}
+
+/// Clave de idempotencia: UUID v7 canónico (minúsculas y con guiones). Cualquier otra forma se rechaza antes de
+/// enviar nada: el servidor la rechazaría igual y una clave mal formada nunca debe viajar como si protegiera.
+fn valid_idempotency_key(key: &str) -> Result<String> {
+    let invalid = || {
+        error(
+            "DATOS_INVALIDOS",
+            "La clave de idempotencia debe ser un UUID v7 en minúsculas.",
+        )
+    };
+    let parsed = uuid::Uuid::parse_str(key).map_err(|_| invalid())?;
+    if parsed.get_version_num() != 7 || parsed.hyphenated().to_string() != key {
+        return Err(invalid());
+    }
+    Ok(key.to_string())
+}
+
+fn idempotency_headers(key: Option<&str>) -> Vec<(&'static str, &str)> {
+    key.map(|k| vec![("Idempotency-Key", k)]).unwrap_or_default()
 }
 
 fn profile_payload(p: &ProfileInput, version: Option<u64>) -> Value {
@@ -600,21 +778,36 @@ fn profile_payload(p: &ProfileInput, version: Option<u64>) -> Value {
 }
 
 fn context_payload(c: &ContextInput, version: Option<u64>) -> Value {
+    let categoria = match c.categoria.as_deref() {
+        Some(value @ ("manual" | "oficina" | "accesibilidad" | "personalizado")) => value,
+        _ => "personalizado",
+    };
     let mut obj = json!({
         "nombre": c.name,
-        "categoria": "personalizado",
+        "categoria": categoria,
         "plataforma": "pc",
         "sensibilidad_puntero": c.sensitivity.min(100),
         "estabilizacion_puntero": c.stability.min(100),
         "tolerancia_micro_pinza": c.pinch_tolerance.min(100),
         "desk_rest_habilitado": c.desk_rest,
-        "asistencia_mirada_habilitada": false,
+        "asistencia_mirada_habilitada": c.gaze_assist,
         "activacion_contextual_movil": false,
     });
     if let Some(v) = version {
         obj["version"] = json!(v);
     }
+    if let Some(gestos) = &c.gestos {
+        obj["gestos"] = json!(gestos);
+    }
     obj
+}
+
+/// Como en `set_mode_gestures`: nunca más de 13 asignaciones (una por gesto); el backend valida el resto.
+fn check_assignments(c: &ContextInput) -> Result<()> {
+    if c.gestos.as_ref().is_some_and(|g| g.len() > 13) {
+        return Err(error("DATOS_INVALIDOS", "Demasiadas asignaciones."));
+    }
+    Ok(())
 }
 
 impl Drop for Bridge {
@@ -788,6 +981,121 @@ mod tests {
         }
     }
 
+    /// ETag vigente de un recurso, leído directamente (el puente no expone encabezados de respuesta).
+    fn etag_of(bridge: &Bridge, route: &str) -> String {
+        let session = bridge.session.as_ref().unwrap();
+        let response = bridge
+            .client
+            .get(format!("{}{}", bridge.base, route))
+            .header("Cookie", session.cookie.as_str())
+            .send()
+            .unwrap();
+        assert!(response.status().is_success(), "GET {route}");
+        response
+            .headers()
+            .get("etag")
+            .expect("el backend debe entregar ETag")
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
+    /// UUID v7 con la hora actual en los 48 bits altos, como el que genera la interfaz (el crate no activa `v7`).
+    fn uuid_v7_now() -> String {
+        let ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let hex = format!("{ms:012x}");
+        let random = uuid::Uuid::new_v4().simple().to_string();
+        format!(
+            "{}-{}-7{}-8{}-{}",
+            &hex[..8],
+            &hex[8..12],
+            &random[..3],
+            &random[3..6],
+            &random[6..18]
+        )
+    }
+
+    fn sample_profile(name: &str) -> ProfileInput {
+        ProfileInput {
+            name: name.into(),
+            description: "Prueba de idempotencia".into(),
+            version: None,
+            gaze: None,
+            proximity: None,
+        }
+    }
+
+    fn sample_context(name: &str) -> ContextInput {
+        ContextInput {
+            name: name.into(),
+            sensitivity: 60,
+            stability: 40,
+            pinch_tolerance: 50,
+            desk_rest: false,
+            pinch: true,
+            scroll: true,
+            categoria: None,
+            gaze_assist: false,
+            gestos: None,
+            version: None,
+        }
+    }
+
+    #[test]
+    fn idempotency_key_must_be_a_canonical_uuid_v7() {
+        let good = uuid_v7_now();
+        assert_eq!(valid_idempotency_key(&good).unwrap(), good);
+        assert_eq!(good.len(), 36);
+        for bad in [
+            uuid::Uuid::new_v4().to_string(),
+            good.to_uppercase(),
+            good.replace('-', ""),
+            format!("{good}x"),
+            format!("{good}\r\nX-Inyectado: 1"),
+            String::new(),
+            "no-es-uuid".to_string(),
+        ] {
+            assert_eq!(
+                valid_idempotency_key(&bad).unwrap_err().code,
+                "DATOS_INVALIDOS",
+                "{bad:?}"
+            );
+        }
+        assert!(idempotency_headers(None).is_empty());
+        assert_eq!(idempotency_headers(Some(&good)), vec![("Idempotency-Key", good.as_str())]);
+    }
+
+    #[test]
+    fn conditional_delete_requires_a_strong_etag() {
+        let valid = "\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"";
+        assert_eq!(valid_etag(valid).unwrap(), valid);
+        for bad in [
+            "",
+            "*",
+            "sin-comillas-sin-comillas-sin-comillas",
+            "W/\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"",
+            "\"corto\"",
+            "\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\"",
+            "\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\r\nX-Inyectado: 1\"",
+        ] {
+            assert_eq!(valid_etag(bad).unwrap_err().code, "DATOS_INVALIDOS", "{bad:?}");
+        }
+        // Sin sesión ni ETag válido no se llega a enviar nada.
+        let mut bridge = Bridge::with_base("http://127.0.0.1:9").unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        assert_eq!(
+            bridge.delete_profile(id.clone(), "x".into()).unwrap_err().code,
+            "DATOS_INVALIDOS"
+        );
+        assert_eq!(
+            bridge.delete_context(id, "x".into()).unwrap_err().code,
+            "DATOS_INVALIDOS"
+        );
+    }
+
     #[test]
     fn command_bodies_and_loopback_restrictions_are_enforced() {
         assert!(serde_json::from_value::<Credentials>(
@@ -811,9 +1119,17 @@ mod tests {
         assert_eq!(notice["mensaje"].as_str().unwrap().len(), 300);
         assert!(notice.get("token").is_none());
         assert!(valid_id("https://example.com").is_err());
-        assert!(validate_loopback_base("https://example.com").is_err());
+        assert!(validate_loopback_base("http://example.com").is_err(), "sin HTTPS solo loopback");
+        assert!(validate_loopback_base("https://example.com").is_ok(), "remoto solo con HTTPS");
+        assert!(validate_loopback_base("https://api.ejemplo.test:8443").is_ok());
+        assert!(validate_loopback_base("https://user:pw@example.com").is_err());
+        assert!(validate_loopback_base("https://example.com/api/v1").is_err());
+        assert!(validate_loopback_base("ftp://example.com").is_err());
         assert!(validate_loopback_base("http://127.0.0.1:3000/api/v1").is_err());
         assert!(validate_loopback_base("http://127.0.0.1:3000").is_ok());
+        assert!(validate_loopback_base("http://[::1]:3000").is_ok());
+        assert!(serde_json::from_value::<GesturesInput>(json!({"version": 1, "gestos": [{"gesto_codigo": "micro_pinza", "accion_codigo": "clic", "habilitado": true, "shell": "calc"}]})).is_err());
+        assert!(serde_json::from_value::<ContextInput>(json!({"name": "x", "categoria": "manual", "gazeAssist": true})).is_ok());
     }
 
     #[test]
@@ -931,20 +1247,82 @@ mod tests {
 
         // 7. Verify CSRF protection and profile/mode synchronization in SQLite
         let created_profile = bridge
-            .create_profile(ProfileInput {
-                name: "Perfil Tauri".into(),
-                description: "Sincronizado desde Tauri".into(),
-                version: None,
-                gaze: None,
-                proximity: None,
-            })
+            .create_profile(
+                ProfileInput {
+                    name: "Perfil Tauri".into(),
+                    description: "Sincronizado desde Tauri".into(),
+                    version: None,
+                    gaze: None,
+                    proximity: None,
+                },
+                None,
+            )
             .unwrap();
         let profile_id = created_profile["data"]["id"].as_str().unwrap().to_string();
+        assert!(created_profile.get("repetida").is_none(), "sin clave no hay repetición");
+
+        // 7b. Creación idempotente de un perfil y de un modo, de extremo a extremo contra el backend real.
+        let key = uuid_v7_now();
+        let idem_profile = bridge
+            .create_profile(sample_profile("Perfil idempotente"), Some(key.clone()))
+            .unwrap();
+        assert!(idem_profile.get("repetida").is_none(), "la primera vez se crea");
+        let idem_id = idem_profile["data"]["id"].as_str().unwrap().to_string();
+        let replay = bridge
+            .create_profile(sample_profile("Perfil idempotente"), Some(key.clone()))
+            .unwrap();
+        assert_eq!(replay["repetida"], true, "la repetición se marca");
+        assert_eq!(replay["data"]["id"], idem_profile["data"]["id"]);
+        assert_eq!(replay["data"]["version"], idem_profile["data"]["version"]);
+        let clash = bridge
+            .create_profile(sample_profile("Otro nombre"), Some(key.clone()))
+            .unwrap_err();
+        assert_eq!(clash.code, "IDEMPOTENCIA_CONFLICTO");
+        let listed = bridge.profiles(0).unwrap();
+        assert_eq!(listed["data"].as_array().unwrap().len(), 2, "no se creó un tercer perfil");
+
+        let mode_key = uuid_v7_now();
+        let idem_mode = bridge
+            .create_context(idem_id.clone(), sample_context("Modo idempotente"), Some(mode_key.clone()))
+            .unwrap();
+        let mode_replay = bridge
+            .create_context(idem_id.clone(), sample_context("Modo idempotente"), Some(mode_key.clone()))
+            .unwrap();
+        assert_eq!(mode_replay["repetida"], true);
+        assert_eq!(mode_replay["data"]["id"], idem_mode["data"]["id"]);
+        assert_eq!(
+            bridge.contexts(idem_id.clone(), 0).unwrap()["data"].as_array().unwrap().len(),
+            1,
+            "un solo modo pese a la repetición"
+        );
+        // La clave del modo queda ligada a su perfil padre: usarla en otro perfil es un conflicto.
+        let wrong_parent = bridge
+            .create_context(profile_id.clone(), sample_context("Modo idempotente"), Some(mode_key))
+            .unwrap_err();
+        assert_eq!(wrong_parent.code, "IDEMPOTENCIA_CONFLICTO");
+
+        // Una clave mal formada ni siquiera se envía (el contador de perfiles no cambia).
+        for bad in [uuid::Uuid::new_v4().to_string(), key.to_uppercase(), "no-es-uuid".into(), String::new()] {
+            assert_eq!(
+                bridge
+                    .create_profile(sample_profile("No debe crearse"), Some(bad))
+                    .unwrap_err()
+                    .code,
+                "DATOS_INVALIDOS"
+            );
+        }
+        assert_eq!(bridge.profiles(0).unwrap()["data"].as_array().unwrap().len(), 2);
+        // Limpieza del perfil idempotente (borra también su modo) con el ETag vigente.
+        let idem_tag = etag_of(&bridge, &format!("/api/v1/perfiles/{idem_id}"));
+        bridge.delete_profile(idem_id, idem_tag).unwrap();
 
         // Tamper with CSRF token in memory -> mutation must fail with 403 CSRF_INVALIDO
         let valid_csrf = bridge.session.as_ref().unwrap().csrf.clone();
         bridge.session.as_mut().unwrap().csrf = Zeroizing::new("token_csrf_invalido".into());
-        let csrf_err = bridge.delete_profile(profile_id.clone()).unwrap_err();
+        let profile_tag = etag_of(&bridge, &format!("/api/v1/perfiles/{profile_id}"));
+        let csrf_err = bridge
+            .delete_profile(profile_id.clone(), profile_tag)
+            .unwrap_err();
         assert_eq!(csrf_err.code, "CSRF_INVALIDO");
         bridge.session.as_mut().unwrap().csrf = valid_csrf;
 
@@ -960,8 +1338,12 @@ mod tests {
                     desk_rest: true,
                     pinch: true,
                     scroll: true,
+                    categoria: None,
+                    gaze_assist: false,
+                    gestos: None,
                     version: None,
                 },
+                None,
             )
             .unwrap();
         let mode_id = created_mode["data"]["id"].as_str().unwrap().to_string();
@@ -981,6 +1363,9 @@ mod tests {
                     desk_rest: false,
                     pinch: true,
                     scroll: true,
+                    categoria: None,
+                    gaze_assist: false,
+                    gestos: None,
                     version: None,
                 },
             )
@@ -998,9 +1383,128 @@ mod tests {
             )
             .unwrap();
 
-        // Clean up mode and profile
-        bridge.delete_context(mode_id).unwrap();
-        bridge.delete_profile(profile_id).unwrap();
+        // 7c. Mutación conjunta: el modo y sus asignaciones en UNA solicitud atómica y UNA sola subida de versión.
+        let caps = bridge.capabilities().unwrap();
+        assert_eq!(caps["data"]["servidor"]["modo_con_asignaciones"], true);
+        let catalog = caps["data"]["gestos"].as_object().unwrap().clone();
+        let assignments = |disabled: &str| -> Vec<GestureAssignment> {
+            let mut codes: Vec<&String> = catalog.keys().collect();
+            codes.sort();
+            codes
+                .into_iter()
+                .map(|code| GestureAssignment {
+                    gesto_codigo: code.clone(),
+                    accion_codigo: catalog[code]["predeterminada"].as_str().unwrap().to_string(),
+                    habilitado: code != disabled,
+                })
+                .collect()
+        };
+        let joint = bridge
+            .create_context(
+                profile_id.clone(),
+                ContextInput {
+                    gestos: Some(assignments("micro_pinza")),
+                    ..sample_context("Modo conjunto")
+                },
+                None,
+            )
+            .unwrap();
+        let joint_id = joint["data"]["id"].as_str().unwrap().to_string();
+        assert_eq!(joint["data"]["version"], 1, "creado con sus asignaciones: versión 1");
+        let effective = bridge.mode_gestures(joint_id.clone()).unwrap();
+        assert_eq!(effective["data"]["modo"]["version"], 1);
+        let micro = effective["data"]["gestos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["gesto_codigo"] == "micro_pinza")
+            .unwrap()
+            .clone();
+        assert_eq!(micro["habilitado"], false);
+        assert_eq!(micro["asignacion_version"], 1);
+        // Edición conjunta: campos y asignaciones juntos, una sola subida de versión.
+        let edited = bridge
+            .update_context(
+                joint_id.clone(),
+                ContextInput {
+                    version: Some(1),
+                    gestos: Some(assignments("pulgar_arriba")),
+                    ..sample_context("Modo conjunto editado")
+                },
+            )
+            .unwrap();
+        assert_eq!(edited["data"]["version"], 2, "antes eran dos solicitudes y dos subidas");
+        // Una asignación inválida rechaza TODO: ni el nombre ni las asignaciones ni la versión cambian.
+        let mut invalid_list = assignments("micro_pinza");
+        invalid_list[0].accion_codigo = "no_existe".into();
+        let rejected = bridge
+            .update_context(
+                joint_id.clone(),
+                ContextInput {
+                    version: Some(2),
+                    gestos: Some(invalid_list),
+                    ..sample_context("No debe aplicarse")
+                },
+            )
+            .unwrap_err();
+        assert_eq!(rejected.code, "DATOS_INVALIDOS");
+        let unchanged = bridge.mode_gestures(joint_id.clone()).unwrap();
+        assert_eq!(unchanged["data"]["modo"]["version"], 2);
+        assert_eq!(unchanged["data"]["modo"]["nombre"], "Modo conjunto editado");
+        // Más de 13 asignaciones ni siquiera se envían.
+        let mut too_many = assignments("micro_pinza");
+        too_many.push(GestureAssignment {
+            gesto_codigo: "extra".into(),
+            accion_codigo: "sin_accion".into(),
+            habilitado: true,
+        });
+        assert_eq!(
+            bridge
+                .update_context(
+                    joint_id.clone(),
+                    ContextInput {
+                        version: Some(2),
+                        gestos: Some(too_many),
+                        ..sample_context("Tampoco")
+                    },
+                )
+                .unwrap_err()
+                .code,
+            "DATOS_INVALIDOS"
+        );
+        let joint_tag = etag_of(&bridge, &format!("/api/v1/modos/{joint_id}"));
+        bridge.delete_context(joint_id, joint_tag).unwrap();
+
+        // Borrado condicional: sin ETag válido no se envía nada y un ETag obsoleto no borra.
+        let bogus = "\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"".to_string();
+        assert_eq!(
+            bridge
+                .delete_profile(profile_id.clone(), "sin-etag".into())
+                .unwrap_err()
+                .code,
+            "DATOS_INVALIDOS"
+        );
+        assert_eq!(
+            bridge
+                .delete_profile(profile_id.clone(), bogus.clone())
+                .unwrap_err()
+                .code,
+            "PRECONDICION_FALLIDA"
+        );
+        assert_eq!(
+            bridge
+                .delete_context(mode_id.clone(), bogus)
+                .unwrap_err()
+                .code,
+            "PRECONDICION_FALLIDA"
+        );
+        assert!(etag_of(&bridge, &format!("/api/v1/modos/{mode_id}")).starts_with('"'));
+
+        // Clean up mode and profile con el ETag vigente
+        let mode_tag = etag_of(&bridge, &format!("/api/v1/modos/{mode_id}"));
+        bridge.delete_context(mode_id, mode_tag).unwrap();
+        let profile_tag = etag_of(&bridge, &format!("/api/v1/perfiles/{profile_id}"));
+        bridge.delete_profile(profile_id, profile_tag).unwrap();
 
         // 8. Log out successfully (POST /api/v1/auth/logout with Cookie + X-CSRF-Token)
         bridge.logout().unwrap();
