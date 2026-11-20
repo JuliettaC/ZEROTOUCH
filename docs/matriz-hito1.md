@@ -66,8 +66,9 @@ Todos están en el contrato `contracts/capacidades.json` y se pueden reasignar p
 | Air-Swipe con predicción local (§5.1: modelo compacto, sin Internet) | Ventana teclado no activable (`src/airswipe/`), decodificador de trazos tipo SHARK² con léxico local en español (~40 000 palabras, MIT). Escribe solo al confirmar y no guarda el texto | Hecho, falta prueba física. Es un decodificador léxico, no un modelo de lenguaje. **Precisión sin medir** (protocolo de 20 palabras en la guía manual) |
 | Desk-Rest | Área activa más pequeña y más baja, en la configuración del modo | Hecho. **Beneficio ergonómico sin medir** |
 | Asistencia por mirada (Futuro en el Informe) | `gaze.py`: orientación aproximada de la cabeza con la detección facial de MediaPipe; retiene la interacción al mirar fuera. No sigue los ojos | Parcial: es una aproximación, sin validar |
-| Móvil: activación contextual (Futuro en el Informe) | — | Pendiente. El alcance acordado es solo una interfaz adaptable, sin motor |
-| HUD que informa la acción (§4.3 paso 5) | Avisos y telemetría dentro de la ventana de ZeroTouch | Parcial: no hay un indicador superpuesto sobre otras aplicaciones |
+| Móvil (cambio de alcance del 20-11, [nota](cambio-alcance-movil.md)) | App Android nativa en Java (`android/`): cámara frontal, MediaPipe local, acciones por accesibilidad (Volver, desplazar, multimedia) y lectura del modo móvil desde la API por la red local ([contrato](movil-contrato.md)). Sin web móvil | Compila con el SDK; lógica pura y cliente con pruebas JVM; cliente probado contra el backend real en el PC. **Sin instalar ni probar en un teléfono** |
+| Móvil: activación contextual (Futuro en el Informe) | Campo `activacion_contextual_movil` en la API | Pendiente: el teléfono no lo aplica |
+| HUD que informa la acción (§4.3 paso 5) | Indicador flotante en Windows (`src/hud/`, ventana `#hud`): estado del motor y última acción; siempre encima, no activable, transparente a los clics, solo lectura | Implementado en Windows, con pruebas del modelo y comprobaciones en `npm run verify:tauri` (resultado en `PROGRESO.md`). Falta verlo con manos reales. En Android no hay HUD superpuesto |
 
 ## 5. Tecnología (Informe §5, Tabla 4)
 
@@ -80,7 +81,7 @@ Todos están en el contrato `contracts/capacidades.json` y se pueden reasignar p
 | Predicción Air-Swipe local | Hecho (ver §4) |
 | *(añadido)* Tauri 2 como aplicación de escritorio | Hecho. **Sin instalador**: `bundle.active: false` y Python no se empaqueta todavía |
 | Identidad visual: tipografía Outfit | Hecho |
-| Identidad visual: paleta #F9F8F7, #5F4D47, #69564F, #BDB3AA | Parcial: la interfaz actual usa otra paleta neutra |
+| Identidad visual: paleta #F9F8F7, #5F4D47, #69564F, #BDB3AA | Hecho en la interfaz de escritorio (`src/index.css`), con contraste de texto ≥ 6,5:1. El prototipo del Hito 1 no se modifica |
 
 ## 6. Validación y entrega
 
@@ -90,6 +91,6 @@ Todos están en el contrato `contracts/capacidades.json` y se pueden reasignar p
 | Prueba física con cámara y manos | **Pendiente.** Guía paso a paso en [prueba-manual-hardware.md](prueba-manual-hardware.md) |
 | Medir rendimiento, precisión y usabilidad | Pendiente. El Informe pide no presentar indicadores no medidos |
 | Instalación en otro equipo | Pendiente (sin instalador) |
-| Servidor remoto | Pendiente |
+| Servidor remoto | Pendiente. Para la demo, la API corre en el PC y el teléfono la usa por la red local (`LAN_HOST`, HTTP en claro) |
 
 La trazabilidad detallada del Hito 2 (backend) sigue en [hito2/trazabilidad.md](hito2/trazabilidad.md). Su corte es el 5 de noviembre y varias filas ya quedaron superadas por esta matriz.

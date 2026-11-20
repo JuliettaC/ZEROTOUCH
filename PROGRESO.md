@@ -380,3 +380,54 @@ Contexto: entrega y presentación el **martes 24-11-2026**; la demo es el softwa
 **No ejecutado**: suites en Windows, `cargo test`, `desktop:build`, `verify:tauri`, compilación de la APK, prueba física de escritorio y del A26.
 
 Implementación asistida por Claude; revisión humana pendiente.
+
+## Bloque Claude — verificación en Windows, APK, contrato móvil, modo desde la API, HUD y paleta (20-11-2026, tarde)
+
+Rama `codex/h2-seguridad-verificacion`. **Sin push**: la rama no tiene upstream (los 9 commits previos y los de este bloque siguen solo en local).
+
+**Verificación en Windows del estado recibido (antes de tocar nada)**
+
+| Comando | Resultado |
+|---|---|
+| `npm test --prefix backend` | 92/92 |
+| `node --test --test-concurrency=1 backend/test/integration/*.test.js` | 1/1 |
+| `node --test "tests/frontend/*.test.js"` | 140/140 |
+| `motor-local/.venv/Scripts/python.exe -m pytest motor-local/tests -q` | 180 pasan, 1 deseleccionada |
+| `cargo test --manifest-path desktop/Cargo.toml --locked` | 8/8 |
+| `npm run lint` | 0 errores; 1 aviso previo en `prototype/src/App.jsx` (no se modifica) |
+| `npm run verify:separation` | pasa |
+| `./android/test-core.ps1` | 95 + 38 |
+| `./android/prepare-model.ps1` | modelo existente verificado (SHA-256) |
+| `assembleDebug` | **fallaba**: `validateSigningDebug`, faltaba el keystore de depuración → corregido (2f7d7f9) |
+
+**Commits**
+- `2f7d7f9` fix(android): `createDebugKeystore` genera con `keytool` la clave de depuración en el directorio de build. Primera compilación real de la APK con `GestureActions`: sin errores en `GestureAccessibilityService` ni `CameraGestureService`.
+- `92b89b5` T11: el teléfono lee el modo móvil (solo lectura). `ApiClient`/`ModeLoader`/`MiniJson` en Java estándar; `GestureGate.reconfigure` rechazado en CONTROL (el servicio pausa antes y sube la época); `INTERNET`; HTTP en claro solo hacia la IP de `-PztLanHost` (`network_security_config` generado y validado en Gradle); botón «Actualizar modo». Sin conexión: se mantiene lo anterior con el motivo, nunca un éxito simulado.
+- `7c4c4e5` T3: `docs/movil-contrato.md` con respuestas reales; `scripts/probar-contrato-movil.sh` (backend real + base temporal + curl + cliente Java `RealApiCheck`).
+- `bc49fdd` T26: paleta del Informe en `src/index.css` y grises fijos de `src/` sustituidos por variables (contrastes en el commit y en el CSS).
+- `9ef809c` T24: HUD `#hud` (400×60, esquina superior derecha, siempre encima, no activable, transparente a los clics). Capacidad propia: solo `engine_status`. Se abre con el motor en marcha; interruptor por equipo en la tarjeta del motor.
+- (este commit) T15: `docs/cambio-alcance-movil.md`; `AGENTS.md` línea 20, `README.md`, `docs/matriz-hito1.md`, `android/README.md` y `CLAUDE.md` alineados.
+
+**Verificación tras los cambios**
+
+| Comando | Resultado |
+|---|---|
+| `./android/test-core.ps1 -JavaHome …jbr-21.0.11` | 95 + 38 + **66** (`ModeLoaderTest`) |
+| `assembleDebug` con `'-PztLanHost=192.168.1.20'` | compila; la APK lleva `res/xml/network_security_config.xml` (solo esa IP en claro) y el manifiesto `INTERNET` + `networkSecurityConfig` |
+| `bash scripts/probar-contrato-movil.sh <JDK>` | login, perfiles, modos, gestos y errores 401 por curl; cliente Java contra el backend real: modo aplicado, refresco con la cookie sin contraseña, contraseña incorrecta rechazada |
+| `node --test "tests/frontend/*.test.js"` | 147/147 (+7 `hud.test.js`) |
+| `npm run lint` · `verify:separation` · `npm run build` (prototipo) | sin cambios en el aviso previo · pasa · pasa |
+| `npm run desktop:build` · `cargo test` | compila · 8/8 |
+| Navegador integrado con puente falso (`vite --mode desktop`) | la tarjeta del motor abre/cierra el HUD con el interruptor y guarda la preferencia; la vista `#hud` muestra «Sin conexión con el motor», «Observando · … (no se envió)» y «Controlando el cursor · Clic»; el texto más largo cabe en 400 px. Probado manualmente con puente falso |
+
+**No ejecutado**
+- `npm run verify:tauri` con las nuevas comprobaciones del HUD (abre ventanas reales: pendiente de la autorización de la persona usuaria).
+- La APK en el teléfono (instalación, red del hotspot, política de HTTP en claro de Android, interfaz), la prueba física del escritorio y la mini prueba con personas.
+- T27 (activación contextual con acelerómetro) y T23 (API con HTTPS): no empezados.
+
+**Notas**
+- PowerShell 5.1 parte `-PztLanHost=192.168.1.20` en el primer punto; va entre comillas simples (documentado). La validación de Gradle rechazó el `192` recortado, como debía.
+- El JDK no entrega el cuerpo de un 401 si la petición usa `setFixedLengthStreamingMode`; se quitó (el cuerpo de login es mínimo) para leer `CREDENCIALES_INVALIDAS`.
+- En Git Bash, curl.exe recibe los argumentos en la página de códigos ANSI: el cuerpo con «é» se envía desde un archivo UTF-8.
+
+Implementación asistida por Claude; revisión humana pendiente.

@@ -32,10 +32,11 @@ Cámara ─► motor-local (Python) ─► Windows (ratón, teclas, ventanas)
 | Carpeta | Qué contiene |
 |---|---|
 | `motor-local/motor_local/` | Motor gestual: captura → detección (MediaPipe, 21 puntos) → interpretación (filtro One-Euro, confirmación por tiempo) → acciones (lista blanca) → adaptador del SO (pynput, Win32) |
-| `desktop/` | Aplicación Tauri: lanza el motor, cliente HTTP nativo, ventana del teclado Air-Swipe |
+| `desktop/` | Aplicación Tauri: lanza el motor, cliente HTTP nativo, ventana del teclado Air-Swipe e indicador flotante (HUD) |
 | `src/` | Interfaz React (escritorio). Preferencias por cuenta, sincronización, temporizadores y teclado Air-Swipe |
 | `backend/`, `db/` | API de cuentas, perfiles, modos y asignaciones de gestos. SQLite v3 con migraciones explícitas |
 | `contracts/capacidades.json` | Contrato único: qué acciones admite cada gesto y qué teclas puede emitir el motor |
+| `android/` | App Android nativa (Java): cámara frontal, MediaPipe local, lista blanca de acciones por accesibilidad y lectura del modo móvil desde la API ([contrato](docs/movil-contrato.md)) |
 | `prototype/` | Prototipo del Hito 1 (no se modifica) |
 | `docs/` | Informes, API, guía de prueba manual y matriz de cumplimiento |
 
@@ -106,8 +107,11 @@ GitHub Actions ejecuta las cinco primeras, además de lint y compilación, en ca
 
 - **Prueba física** con cámara y manos (guía M1–M9), y calibrar los umbrales con esos resultados.
 - **Instalador** (empaquetado de Tauri con Python y el motor incluidos).
-- **Servidor remoto** (HTTPS, correo, respaldos, despliegue). Hoy el backend es local.
-- **Interfaz móvil** (solo interfaz, sin motor).
+- **Servidor remoto** (HTTPS, correo, respaldos, despliegue). Hoy el backend corre en el PC; el teléfono lo
+  alcanza por la red local con `LAN_HOST` (HTTP en claro, solo para la demo).
+- **App Android en el teléfono**: compila y su lógica pasa pruebas JVM, pero **no se ha instalado ni probado en
+  un teléfono**. Activación contextual móvil (acelerómetro): pendiente.
+- La **web móvil** queda fuera de alcance ([nota de cambio de alcance](docs/cambio-alcance-movil.md)).
 - Medir precisión, latencia y usabilidad. No hay cifras medidas.
 
 ## Documentación

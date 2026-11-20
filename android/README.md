@@ -1,8 +1,44 @@
 # ZeroTouch Android — primer flujo nativo
 
 Módulo independiente de la app Tauri/React y del motor Windows. El usuario autorizó
-ampliar móvil a control nativo por cámara frontal. Equipo previsto: Samsung A26.
-No existe todavía validación física ni integración de cuentas/perfiles con escritorio.
+ampliar móvil a control nativo por cámara frontal ([nota de cambio de alcance](../docs/cambio-alcance-movil.md)):
+APK nativa en Java, **sin web móvil** y sin interfaz compartida con React. Equipo previsto: Samsung A26.
+**No existe todavía validación física**: la APK no se ha instalado en ningún teléfono.
+
+## Actualización 20-11-2026 (2): modo desde la cuenta y compilación verificada
+
+- **La APK compila con el SDK** (`assembleDebug`, 20-11-2026). La firma de depuración faltaba: ahora
+  `createDebugKeystore` la genera con `keytool` en el directorio de build (nunca en Git).
+- **Lee el modo móvil desde la API (solo lectura)**: sección «Modo desde la cuenta» con servidor, usuario y
+  contraseña (no se guarda) y el botón **«Actualizar modo»**. Usa el primer modo con `plataforma = 'movil'` y lo
+  traduce con `GestureActions.fromCatalog`. Si el control está activo, **se pausa antes** de cambiar la lista
+  (`GestureGate.reconfigure` lo rechaza durante CONTROL) y se reactiva a mano. Sin conexión o con cualquier
+  error se dice el motivo y sigue aplicado lo anterior (al abrir: valores por defecto, rotulados como tales).
+  Contrato, ejemplos reales y traducción: [docs/movil-contrato.md](../docs/movil-contrato.md).
+- **Red**: permiso `INTERNET`; HTTP en claro **solo hacia la IP con que se compila** (`-PztLanHost`, genera
+  `network_security_config.xml`); el resto exige https. El PC debe tener `LAN_HOST=<esa IP>` en `.env`.
+- Pruebas JVM: `GestureGateTest` (95), `GestureActionsTest` (38) y `ModeLoaderTest` (66, con respuestas
+  reales capturadas de la API y un servidor HTTP falso). El cliente Java también se probó contra el backend
+  real del PC con `scripts/probar-contrato-movil.sh`.
+
+### Compilar para la demo (IP del PC en el hotspot o Wi-Fi)
+
+1. En el PC: `ipconfig` → «Dirección IPv4» del adaptador conectado al hotspot (p. ej. `192.168.43.20`).
+2. En el `.env` del PC: `LAN_HOST=192.168.43.20` y reiniciar la API. Permitir Node en el firewall de Windows
+   solo para redes privadas si lo pregunta.
+3. Compilar la APK con esa IP. En PowerShell 5.1 la propiedad va **entre comillas simples** (sin comillas,
+   PowerShell parte el argumento en el primer punto y Gradle recibe `192`, que se rechaza):
+
+```powershell
+& $gradle -p android --no-daemon --project-cache-dir C:/workspace/zt-android-project-cache -PztBuildRoot=C:/workspace/zt-android-build '-PztLanHost=192.168.43.20' :app:assembleDebug
+```
+
+4. En el teléfono: servidor `http://192.168.43.20:3000`, usuario y contraseña de una cuenta verificada que
+   tenga un modo móvil (créalo en el escritorio con plataforma «movil»; para el 👍 asigna
+   `multimedia_play_pause`, porque el `confirmar` del catálogo no existe en el teléfono).
+
+Si la IP del PC cambia, hay que volver a compilar: la política de red de Android no admite comodines de IP.
+Es HTTP en claro en una red local: válido para la demostración, no para una red pública.
 
 ## Actualización 20-11-2026: lista blanca de acciones
 
@@ -20,18 +56,18 @@ Además de Volver, el control admite cuatro acciones, todas a través de `Gestur
 El puño ya **no** ejecuta Volver. El servicio de accesibilidad declara `canPerformGestures`.
 `GestureActions.fromCatalog` traduce las asignaciones de un modo de la API (pulgares y dos dedos);
 una acción que el teléfono no sabe ejecutar deja el gesto deshabilitado, nunca la sustituye.
-Pruebas: `GestureGateTest` (95) y `GestureActionsTest` (38) pasan en JVM. **Sin compilar con el SDK
-de Android ni probar en el teléfono todavía.**
+Pruebas: `GestureGateTest` (95) y `GestureActionsTest` (38) pasan en JVM. (Compilada con el SDK
+el 20-11, ver arriba; sin probar en el teléfono.)
 
 ## Qué hace
 
 Captura Camera2 → MediaPipe GestureRecognizer local → `GestureGate` → servicio
-de accesibilidad → `GLOBAL_ACTION_BACK`. Solo implementa **Volver**. No lee contenido
+de accesibilidad → acción de la lista blanca (Volver, desplazar, multimedia). No lee contenido
 de ventanas ni ofrece comandos arbitrarios. La pantalla es una herramienta de prueba
 nativa, todavía sin el diseño completo del producto.
 
 - Arranque en observación. Activación de control explícita y con mano reciente.
-- Después de activar, mantener palma abierta ≥300 ms y luego puño ≥650 ms con
+- Después de activar, mantener palma abierta ≥300 ms y luego un gesto de la lista ≥650 ms con
   confianza ≥0.8. Una acción por gesto; exige otra palma para repetir.
 - Son umbrales iniciales, no calibración medida. No prometen precisión o latencia.
 - Pausa/parada en pantalla y notificación. Al perder mano o accesibilidad se pausa;
@@ -52,12 +88,14 @@ nativa, todavía sin el diseño completo del producto.
 
 | Archivo | Función |
 |---|---|
-| `MainActivity.java` | Permisos, acceso a ajustes de accesibilidad y controles explícitos |
-| `CameraGestureService.java` | Primer plano, notificación, watchdog, autorización y ciclo de vida |
+| `MainActivity.java` | Permisos, accesibilidad, controles explícitos y «Actualizar modo» |
+| `CameraGestureService.java` | Primer plano, notificación, watchdog, autorización, ciclo de vida y `applyActions` |
 | `FrontCamera.java` | Captura, rotación/YUV, inferencia MediaPipe y liberación de recursos |
-| `GestureGate.java` | Política temporal pura, épocas de sesión y estados de seguridad |
-| `GestureAccessibilityService.java` | Única acción permitida: Volver; informa pérdida del servicio |
-| `tests/GestureGateTest.java` | Pruebas JVM sin cámara ni acciones Android |
+| `GestureGate.java` | Política temporal pura, épocas de sesión, estados de seguridad y `reconfigure` |
+| `GestureActions.java` | Lista blanca gesto → acción y traducción del catálogo (`fromCatalog`) |
+| `ApiClient.java`, `ModeLoader.java`, `MiniJson.java` | Lectura del modo móvil desde la API (Java estándar, probado en JVM) |
+| `GestureAccessibilityService.java` | Acciones permitidas: Volver, desplazar y multimedia; informa pérdida del servicio |
+| `tests/*Test.java`, `tests/fixtures/` | Pruebas JVM sin cámara ni acciones Android; respuestas reales de la API |
 | `prepare-model.ps1` | Descarga explícita y hash del modelo real |
 | `test-core.ps1` | Compila y ejecuta pruebas aisladas del núcleo |
 
@@ -121,8 +159,15 @@ no guardar credenciales en el proyecto. No usar `--scan` ni publicar resultados.
    de accesibilidad. Volver a ZeroTouch antes de iniciar captura.
 4. Iniciar observación: comprobar que detecta una mano y **no** ejecuta Volver.
 5. Activar control, mantener la mano en cámara y abrir una pantalla secundaria
-   de Ajustes. Mostrar palma y puño: comprobar un solo Volver. Mantener puño:
-   no debe seguir retrocediendo. Repetir solo tras otra palma.
+   de Ajustes. Mostrar palma y luego 👎: comprobar un solo Volver. Mantener 👎:
+   no debe seguir retrocediendo. Repetir solo tras otra palma. Probar ✌/☝ en una lista
+   larga y 👍 con música o un vídeo. El puño no debe hacer nada.
+5b. Modo desde la cuenta: con el PC en `LAN_HOST` y la APK compilada con esa IP, pulsar
+   «Actualizar modo» con usuario y contraseña. Comprobar la lista «Gestos vigentes» y su
+   origen. Con el control ACTIVO, actualizar de nuevo: debe quedar en pausa (aviso) y no
+   actuar hasta reactivarlo. Apagar la API y actualizar: debe decir «No se actualizó…» y
+   conservar lo anterior. Cambiar en el escritorio el 👍 a `atras`, sincronizar y actualizar
+   en el teléfono: el 👍 debe pasar a Volver.
 6. Probar Pausar desde notificación: gestos no deben actuar. Detener: debe cesar
    el indicador de cámara. Repetir desde el botón de la app.
 7. Retirar mano, tapar cámara, revocar acceso, apagar/bloquear pantalla, girar teléfono,
@@ -135,15 +180,13 @@ no guardar credenciales en el proyecto. No usar `--scan` ni publicar resultados.
 
 ## Evidencia y pendientes
 
-Núcleo: **95 aserciones JVM aprobadas**. Modelo descargado/verificado. Compilación
-Android en curso al crear esta documentación: consultar el estado final en
-`docs/traspaso-claude.md`. No se ha instalado APK, iniciado cámara ni habilitado
-accesibilidad. Ninguna prueba JVM valida la detección real o el ciclo de vida Android.
+Núcleo: **199 aserciones JVM aprobadas** (95 + 38 + 66). Modelo descargado/verificado. APK de
+depuración compilada con el SDK el 20-11-2026. No se ha instalado APK, iniciado cámara ni habilitado
+accesibilidad. Ninguna prueba JVM valida la detección real, la red del teléfono ni el ciclo de vida Android.
 
-Faltan prueba física, calibración/rendimiento, resto de acciones, adaptación visual
-y cuentas/perfiles. El modo Android todavía no consume preferencias v2 ni el backend;
-no inventa una sincronización exitosa. Cambios posteriores en contratos compartidos
-deben coordinarse con Claude.
+Faltan prueba física, calibración/rendimiento, adaptación visual, activación contextual (acelerómetro)
+y escribir en la cuenta desde el teléfono (es solo lectura a propósito). Cambios en contratos compartidos
+(`contracts/capacidades.json`, API) deben reflejarse en `GestureActions` y en `docs/movil-contrato.md`.
 
 ## Referencias oficiales (APA 7)
 

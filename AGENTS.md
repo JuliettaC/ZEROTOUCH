@@ -17,7 +17,7 @@ El objetivo general es completar el software de escritorio descrito en `docs/Inf
 - Control gestual de Windows, calibración, parada segura y acciones previstas en Hito 1.
 - Air-Swipe real, predicción local, multimedia, temporizadores y asistencia por mirada, cuando formen parte de la tarea solicitada.
 - Sincronización de preferencias, preparación de servicio remoto, distribución instalable, pruebas y documentación.
-- Móvil: únicamente frontend adaptable y coherente visualmente con laptop. Reutilizar componentes cuando sea razonable. No implementar motor móvil, cámara, sensores, mirada ni control nativo móvil. Identificar las funciones no disponibles y los datos de demostración sin simular éxito real.
+- Móvil (cambio de alcance del 20-11-2026, `docs/cambio-alcance-movil.md`): app Android nativa en Java (`android/`) con cámara frontal, MediaPipe local y una lista blanca de acciones por accesibilidad; solo LEE el modo móvil de la cuenta (`docs/movil-contrato.md`). Sin interfaz compartida con React: se comparten la API, `contracts/capacidades.json` y los modos con `plataforma='movil'`. La web móvil queda fuera de alcance. El teléfono usa la misma API por la red local (`LAN_HOST`); no migrar a otro servicio. Nunca simular éxito: sin conexión, valores por defecto con aviso.
 
 No copies automáticamente `desktop/runtime/` ni restaures el backend antiguo con `/api/v2`. Mantén una implementación vigente por componente. Conserva el prototipo histórico del Hito 1 y la separación de builds. No cambies el flujo de publicación sin necesidad demostrada y autorización para cualquier acción remota.
 
