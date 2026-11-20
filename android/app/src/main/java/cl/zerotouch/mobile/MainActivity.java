@@ -30,7 +30,7 @@ public final class MainActivity extends Activity {
         });
         TextView title = new TextView(this); title.setText("ZeroTouch · Android\nPrueba de control por cámara frontal"); title.setTextSize(24); panel.addView(title);
         TextView help = new TextView(this);
-        help.setText("1. Concede cámara y notificaciones.\n2. Activa ZeroTouch en Accesibilidad.\n3. Inicia observación y coloca la mano frente a la cámara.\n4. Activa control. Muestra palma abierta y luego mantén puño para Volver.\n\nLa detección continúa al abrir otra app. Pausa o detén desde la notificación. Perder la mano pausa el control; reactívalo aquí.\n\nLas imágenes se procesan en el teléfono y no se guardan. Esta prueba solo implementa Volver, no control completo del teléfono.");
+        help.setText("1. Concede cámara y notificaciones.\n2. Activa ZeroTouch en Accesibilidad.\n3. Inicia observación y coloca la mano frente a la cámara.\n4. Activa control. Muestra la palma abierta y luego sostén un gesto:\n   ✌ dos dedos: bajar · ☝ índice arriba: subir\n   👎 pulgar abajo: Volver · 👍 pulgar arriba: reproducir / pausar\n   Abre la mano entre un gesto y otro.\n\nLa detección continúa al abrir otra app. Pausa o detén desde la notificación. Perder la mano pausa el control; reactívalo aquí.\n\nLas imágenes se procesan en el teléfono y no se guardan. No hay puntero ni toques: solo esas cuatro acciones.");
         help.setTextSize(17); panel.addView(help);
         addButton(panel, "Conceder permisos", v -> permissions());
         addButton(panel, "Abrir ajustes de accesibilidad", v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));

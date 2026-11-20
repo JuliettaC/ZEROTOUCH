@@ -4,6 +4,25 @@ Módulo independiente de la app Tauri/React y del motor Windows. El usuario auto
 ampliar móvil a control nativo por cámara frontal. Equipo previsto: Samsung A26.
 No existe todavía validación física ni integración de cuentas/perfiles con escritorio.
 
+## Actualización 20-11-2026: lista blanca de acciones
+
+Además de Volver, el control admite cuatro acciones, todas a través de `GestureGate`
+(palma abierta primero, gesto sostenido ≥650 ms, una acción por gesto) y de la lista blanca
+`GestureActions` (cualquier otro gesto se ignora):
+
+| Gesto (categoría MediaPipe) | Acción | Cómo la ejecuta Android |
+|---|---|---|
+| ✌ `Victory` | Desplazar hacia abajo | `dispatchGesture`: deslizamiento vertical en el centro |
+| ☝ `Pointing_Up` | Desplazar hacia arriba | `dispatchGesture` |
+| 👎 `Thumb_Down` | Volver | `GLOBAL_ACTION_BACK` |
+| 👍 `Thumb_Up` | Reproducir / pausar | tecla multimedia (`AudioManager`) |
+
+El puño ya **no** ejecuta Volver. El servicio de accesibilidad declara `canPerformGestures`.
+`GestureActions.fromCatalog` traduce las asignaciones de un modo de la API (pulgares y dos dedos);
+una acción que el teléfono no sabe ejecutar deja el gesto deshabilitado, nunca la sustituye.
+Pruebas: `GestureGateTest` (95) y `GestureActionsTest` (38) pasan en JVM. **Sin compilar con el SDK
+de Android ni probar en el teléfono todavía.**
+
 ## Qué hace
 
 Captura Camera2 → MediaPipe GestureRecognizer local → `GestureGate` → servicio

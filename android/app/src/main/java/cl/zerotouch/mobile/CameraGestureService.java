@@ -13,7 +13,8 @@ public final class CameraGestureService extends Service {
     private static final int NOTIFICATION = 12;
     private static CameraGestureService active;
     static String status = "Detenido. La cámara no está activa.";
-    private final GestureGate gate = new GestureGate();
+    private final GestureActions actions = GestureActions.defaults();
+    private final GestureGate gate = new GestureGate(actions.gestures());
     private final Handler main = new Handler(Looper.getMainLooper());
     private FrontCamera camera;
     private boolean finishing;
@@ -23,7 +24,7 @@ public final class CameraGestureService extends Service {
     static void enableControl() {
         if (active == null) return;
         boolean enabled = active.gate.enable(SystemClock.elapsedRealtime(), GestureAccessibilityService.ready());
-        active.update(enabled ? "Control activado; muestra palma y luego puño." : "No se activó: requiere mano reciente y accesibilidad conectada.");
+        active.update(enabled ? "Control activado; muestra la palma y luego sostén un gesto." : "No se activó: requiere mano reciente y accesibilidad conectada.");
     }
     static void pauseControl() { if (active != null) { active.gate.pause(); active.update("Pausado por el usuario."); } }
     static void stopControl() { if (active != null) active.finish("Detenido por el usuario.", false); }
@@ -53,11 +54,12 @@ public final class CameraGestureService extends Service {
                     main.post(() -> {
                         if (finishing || token != gate.epoch()) return;
                         if (!environmentReady()) { finish("Permiso, notificación o pantalla no disponibles; control detenido.", true); return; }
-                        boolean back = gate.frame(token, captured, SystemClock.elapsedRealtime(), gesture, score, hand, GestureAccessibilityService.ready());
+                        String fired = gate.frame(token, captured, SystemClock.elapsedRealtime(), gesture, score, hand, GestureAccessibilityService.ready());
                         detection = hand ? "Mano detectada · " + gesture : "Sin mano: control bloqueado";
-                        if (back) {
-                            if (!GestureAccessibilityService.back()) { gate.pause(); update("Android rechazó Volver; control pausado."); }
-                            else update("Android aceptó Volver. Abre la mano antes de repetir.");
+                        GestureActions.Action action = actions.actionFor(fired);
+                        if (action != null) {
+                            if (!GestureAccessibilityService.perform(action)) { gate.pause(); update("Android rechazó «" + action.label + "»; control pausado."); }
+                            else update("Android aceptó «" + action.label + "». Abre la mano antes de repetir.");
                         } else update(detection);
                     });
                 }

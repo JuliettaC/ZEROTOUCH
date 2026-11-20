@@ -7,10 +7,11 @@ public final class GestureGateTest {
         checks++; if (!condition) throw new AssertionError(name);
     }
     private static boolean frame(GestureGate gate, long t, String gesture) {
-        return gate.frame(gate.epoch(), t, t + 10, gesture, 0.95f, true, true);
+        return gate.frame(gate.epoch(), t, t + 10, gesture, 0.95f, true, true) != null;
     }
+    private static GestureGate fist() { return new GestureGate(java.util.Set.of("Closed_Fist")); }
     private static GestureGate armed() {
-        GestureGate gate = new GestureGate(); gate.start(); frame(gate, 100, "Open_Palm");
+        GestureGate gate = fist(); gate.start(); frame(gate, 100, "Open_Palm");
         check(gate.enable(110, true), "explicit activation with recent hand"); return gate;
     }
     private static void release(GestureGate gate, long t) {
@@ -18,7 +19,7 @@ public final class GestureGateTest {
         frame(gate, t + 150, "Open_Palm"); frame(gate, t + 300, "Open_Palm");
     }
     public static void main(String[] args) {
-        GestureGate gate = new GestureGate();
+        GestureGate gate = fist();
         check(!frame(gate, 1, "Closed_Fist"), "stopped blocks input");
         gate.start();
         check(!gate.enable(1, true), "no activation without hand");
@@ -35,7 +36,7 @@ public final class GestureGateTest {
         for (long t = 4000; t < 4700; t += 100) frame(gate, t, "Closed_Fist");
         check(frame(gate, 4700, "Closed_Fist"), "second action after release");
         long oldEpoch = gate.epoch(); gate.pause();
-        check(!gate.frame(oldEpoch, 4800, 4810, "Closed_Fist", 1, true, true), "old result after pause discarded");
+        check(null == gate.frame(oldEpoch, 4800, 4810, "Closed_Fist", 1, true, true), "old result after pause discarded");
         check(!frame(gate, 4900, "Closed_Fist"), "paused blocks");
         check(gate.enable(4910, true), "explicit resume");
         gate.frame(gate.epoch(), 5000, 5010, "", 0, false, true);
@@ -47,19 +48,19 @@ public final class GestureGateTest {
         gate.expire(1100);
         check(gate.state() == GestureGate.State.PAUSED, "watchdog handles silent camera stall");
         gate = armed();
-        check(!gate.frame(gate.epoch(), 200, 1000, "Closed_Fist", 1, true, true), "late inference rejected");
+        check(null == gate.frame(gate.epoch(), 200, 1000, "Closed_Fist", 1, true, true), "late inference rejected");
         check(gate.state() == GestureGate.State.PAUSED, "late inference pauses");
         gate = armed();
         gate.frame(gate.epoch(), 200, 210, "Open_Palm", 1, true, false);
         check(gate.state() == GestureGate.State.PAUSED, "accessibility loss pauses");
         gate = armed(); release(gate, 200);
         for (long t = 600; t < 1600; t += 100)
-            check(!gate.frame(gate.epoch(), t, t, "Closed_Fist", Float.NaN, true, true), "nonfinite confidence blocked");
+            check(null == gate.frame(gate.epoch(), t, t, "Closed_Fist", Float.NaN, true, true), "nonfinite confidence blocked");
         gate = armed(); release(gate, 200); frame(gate, 600, "Closed_Fist");
         check(!frame(gate, 1000, "Closed_Fist"), "gap resets hold and release");
         for (long t = 1100; t < 2000; t += 100) check(!frame(gate, t, "Closed_Fist"), "gap cannot finish old gesture");
         gate = armed(); long token = gate.epoch(); gate.stop(); gate.start();
-        check(!gate.frame(token, 200, 210, "Closed_Fist", 1, true, true), "old session cannot act after restart");
+        check(null == gate.frame(token, 200, 210, "Closed_Fist", 1, true, true), "old session cannot act after restart");
         gate.fail();
         check(!gate.enable(220, true), "error cannot activate");
         check(!frame(gate, 230, "Open_Palm"), "error ignores results");

@@ -16,7 +16,7 @@
         <service android:name=".CameraGestureService" android:exported="false"
             android:foregroundServiceType="camera" android:stopWithTask="true" />
         <service android:name=".GestureAccessibilityService" android:exported="true"
-            android:label="ZeroTouch: gesto para Volver"
+            android:label="ZeroTouch: control por gestos"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

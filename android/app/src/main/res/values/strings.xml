@@ -1,3 +1,3 @@
 <resources>
-    <string name="accessibility_description">Control por gesto de mano para asistencia motriz. Solo ejecuta Volver cuando activas el control y sostienes un puño. No lee contenido de pantalla ni almacena imágenes. Puedes pausar o detener desde la notificación.</string>
+    <string name="accessibility_description">Control por gestos de mano para usar el teléfono sin tocarlo. Solo ejecuta Volver, desplazar la pantalla y las teclas multimedia, cuando activas el control, muestras la palma y sostienes un gesto. No lee contenido de pantalla ni almacena imágenes. Puedes pausar o detener desde la notificación.</string>
 </resources>
