@@ -41,9 +41,9 @@ test('servidor real: bloqueo 503, cierre y persistencia después de reiniciar el
       child.once('exit', () => { clearTimeout(timer); reject(new Error('Servidor terminó antes de iniciar.')); });
       child.once('message', message => { clearTimeout(timer); resolve(message.port); });
     });
-    return { ...runtime, async request(method, route, body, session) {
+    return { ...runtime, async request(method, route, body, session, extra = {}) {
       const response = await fetch(`http://127.0.0.1:${port}/api/v1${route}`, {
-        method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(session ? { Cookie: session.cookie, 'X-CSRF-Token': session.csrf } : {}) },
+        method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(session ? { Cookie: session.cookie, 'X-CSRF-Token': session.csrf } : {}), ...extra },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       const text = await response.text();
@@ -69,6 +69,10 @@ test('servidor real: bloqueo 503, cierre y persistencia después de reiniciar el
   server = await start();
   const persisted = await server.request('GET', `/modos/${m.id}`, undefined, session);
   assert.equal(persisted.status, 200); assert.equal(persisted.body.data.sensibilidad_puntero, 72);
-  assert.equal((await server.request('DELETE', `/perfiles/${p.id}`, undefined, session)).status, 204);
+  const tag = persisted.headers.get('etag');
+  assert.equal((await server.request('GET', `/perfiles/${p.id}`, undefined, session)).status, 200);
+  const profileTag = (await server.request('GET', `/perfiles/${p.id}`, undefined, session)).headers.get('etag');
+  assert.ok(tag && profileTag, 'los GET entregan ETag');
+  assert.equal((await server.request('DELETE', `/perfiles/${p.id}`, undefined, session, { 'If-Match': profileTag })).status, 204);
   assert.equal((await server.stop()).code, 0);
 });

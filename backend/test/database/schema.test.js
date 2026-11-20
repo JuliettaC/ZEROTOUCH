@@ -21,10 +21,10 @@ function fixture(t) {
   db.prepare('INSERT INTO modos_uso(id,perfil_id,nombre) VALUES(?,?,?)').run(mode, profile, 'Modo');
   return { db, user, profile, mode };
 }
-test('ocho tablas (v2), catálogos y restricciones de identidad/hash/roles/correo', t => {
+test('nueve tablas (v3), catálogos y restricciones de identidad/hash/roles/correo', t => {
   const { db, user } = fixture(t);
-  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table'").get().n, 8);
-  assert.equal(db.pragma('user_version', { simple: true }), 2);
+  assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table'").get().n, 9);
+  assert.equal(db.pragma('user_version', { simple: true }), 3);
   const email = db.prepare('UPDATE usuarios SET correo=? WHERE id=?');
   for (const value of ['MAYUS@ejemplo.test', ' espacio@ejemplo.test', 'sin-arroba', '@ejemplo.test']) assert.throws(() => email.run(value, user));
   assert.throws(() => db.prepare("UPDATE usuarios SET correo=NULL, correo_verificado_en='2026-01-01T00:00:00.000Z' WHERE id=?").run(user));

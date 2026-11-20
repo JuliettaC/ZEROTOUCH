@@ -5,5 +5,6 @@ export function catalogosRoutes(controller) {
   const noQuery = (req, res, next) => { validateQuery(req.query, false); next(); };
   router.get('/gestos', noQuery, controller.gestures);
   router.get('/acciones', noQuery, controller.actions);
+  router.get('/capacidades', noQuery, controller.capabilities);
   return router;
 }

@@ -6,8 +6,12 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const schema = new URL('../../../db/schema.sql', import.meta.url);
 const migrationV1toV2 = new URL('../../../db/migraciones/001_v1_a_v2.sql', import.meta.url);
+const migrationV2toV3 = new URL('../../../db/migraciones/002_v2_a_v3.sql', import.meta.url);
 export const APPLICATION_ID = 0x5a543032;
-export const SCHEMA_VERSION = 2;
+// Esquema más reciente (el que crea una base nueva). v3 agrega la idempotencia de POST; el backend sigue
+// aceptando bases v2 (sin idempotencia) hasta que se migren de forma explícita.
+export const SCHEMA_VERSION = 3;
+export const MIN_SCHEMA_VERSION = 2;
 
 function inside(candidate, directory) {
   const relative = path.relative(directory, candidate);
@@ -62,8 +66,8 @@ export function openDatabase(filename, { initialize = false } = {}) {
     if (applicationId === APPLICATION_ID && version === 1) {
       throw new Error('Base ZeroTouch v1: ejecuta `npm run db:migrate --prefix backend` (crea un respaldo antes de migrar).');
     }
-    if (applicationId !== APPLICATION_ID || version !== SCHEMA_VERSION) {
-      throw new Error('Esquema incompatible; se requiere la base ZeroTouch v2.');
+    if (applicationId !== APPLICATION_ID || version < MIN_SCHEMA_VERSION || version > SCHEMA_VERSION) {
+      throw new Error(`Esquema incompatible; se requiere la base ZeroTouch v${MIN_SCHEMA_VERSION} o v${SCHEMA_VERSION}.`);
     }
     if (db.pragma('foreign_key_check').length) throw new Error('Integridad referencial inválida.');
     db.pragma('journal_mode = WAL');
@@ -76,9 +80,10 @@ export function openDatabase(filename, { initialize = false } = {}) {
   }
 }
 
-// Explicit, additive v1 -> v2 migration. Never runs on startup. Before changing anything it
-// writes a consistent copy with SQLite's online backup API next to the database. No row is
-// deleted or rewritten; a failure rolls back and leaves the original file as it was.
+// Explicit, additive migration (v1 -> v2 -> v3, only the steps still missing). Never runs on startup.
+// Before changing anything it writes a consistent copy with SQLite's online backup API next to the
+// database. No row is deleted or rewritten; all steps run in ONE transaction, so a failure rolls
+// everything back and leaves the original file as it was.
 export async function migrateDatabase(filename, { now = new Date() } = {}) {
   const resolved = validateDatabasePath(filename);
   const db = new Database(resolved, { fileMustExist: true, timeout: 3000 });
@@ -87,20 +92,20 @@ export async function migrateDatabase(filename, { now = new Date() } = {}) {
     if (db.pragma('application_id', { simple: true }) !== APPLICATION_ID) throw new Error('No es una base ZeroTouch.');
     const version = db.pragma('user_version', { simple: true });
     if (version === SCHEMA_VERSION) return { migrated: false, version, backup: null };
-    if (version !== 1) throw new Error(`Versión de esquema no soportada: ${version}.`);
+    if (version !== 1 && version !== 2) throw new Error(`Versión de esquema no soportada: ${version}.`);
     if (db.pragma('foreign_key_check').length) throw new Error('Integridad referencial inválida; no se migró.');
     if (db.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('La base no supera quick_check; no se migró.');
     const stamp = now.toISOString().replace(/[:.]/g, '-');
-    const backup = `${resolved}.v1-${stamp}.ztbackup`;
+    const backup = `${resolved}.v${version}-${stamp}.ztbackup`;
     if (fs.existsSync(backup)) throw new Error('El archivo de respaldo ya existe; no se sobrescribe.');
     await db.backup(backup);
-    const sql = fs.readFileSync(migrationV1toV2, 'utf8');
+    const steps = [[1, migrationV1toV2], [2, migrationV2toV3]].filter(([from]) => from >= version).map(([, file]) => fs.readFileSync(file, 'utf8'));
     db.transaction(() => {
-      db.exec(sql);
+      for (const sql of steps) db.exec(sql);
       if (db.pragma('foreign_key_check').length) throw new Error('La migración produjo referencias inválidas.');
+      if (db.pragma('user_version', { simple: true }) !== SCHEMA_VERSION) throw new Error('La migración no actualizó la versión.');
     }).immediate();
-    if (db.pragma('user_version', { simple: true }) !== SCHEMA_VERSION) throw new Error('La migración no actualizó la versión.');
-    return { migrated: true, version: SCHEMA_VERSION, backup };
+    return { migrated: true, from: version, version: SCHEMA_VERSION, backup };
   } finally {
     if (db.inTransaction) db.exec('ROLLBACK');
     db.close();

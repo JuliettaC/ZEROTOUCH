@@ -8,7 +8,8 @@ try {
   else {
     console.log(`Base migrada al esquema v${result.version}.`);
     console.log(`Respaldo previo: ${result.backup}`);
-    console.log('Las cuentas existentes deben vincular y confirmar un correo antes de iniciar sesión.');
+    if (result.from === 1) console.log('Las cuentas existentes deben vincular y confirmar un correo antes de iniciar sesión.');
+    console.log('Esquema v3: el backend anuncia y aplica la idempotencia de POST (Idempotency-Key).');
   }
 } catch (error) {
   console.error(`Migración no aplicada: ${error.message}`);

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ZeroTouch Hito 2",
-    "version": "1.1.0",
-    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos. Contraseñas de 8 a 128 caracteres; registro, restablecimiento y primer administrador rechazan contraseñas comunes o iguales al usuario o correo. v1.1: verificación de correo obligatoria antes de iniciar sesión (el login acepta usuario o correo y, solo con la contraseña correcta, responde 403 CUENTA_NO_VERIFICADA), recuperación de contraseña y respuestas que no revelan si un correo existe. Los enlaces abren /cuenta/verificar y /cuenta/restablecer fuera de /api/v1."
+    "version": "1.5.0",
+    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos. Contraseñas de 8 a 128 caracteres; registro, restablecimiento y primer administrador rechazan contraseñas comunes o iguales al usuario o correo. v1.1: verificación de correo obligatoria antes de iniciar sesión (el login acepta usuario o correo y, solo con la contraseña correcta, responde 403 CUENTA_NO_VERIFICADA), recuperación de contraseña y respuestas que no revelan si un correo existe. Los enlaces abren /cuenta/verificar y /cuenta/restablecer fuera de /api/v1. v1.2: asignaciones gesto -> accion editables por modo (PUT /modos/{id}/gestos reemplaza todas; PATCH /modos/{id}/gestos/{gesto} edita una) con control de version optimista del modo (una sola version cubre modo y asignaciones) y contrato de capacidades (GET /capacidades, contracts/capacidades.json): una asignacion habilitada solo se guarda si el motor local ejecuta esa accion para ese gesto (400 ACCION_NO_COMPATIBLE); sin_accion siempre vale. v1.3: borrado condicional. DELETE /perfiles/{id} y DELETE /modos/{id} exigen If-Match con el ETag que el cliente conocia (428 si falta, 400 si no es un unico ETag fuerte, 412 si el recurso cambio, 404 si no existe o es ajeno). El ETag de un modo cubre su version (que incluye sus asignaciones); el del perfil es un agregado: version del perfil + (id, version) de todos sus modos, asi que detecta tambien altas, bajas y ediciones de modos y asignaciones antes del borrado en cascada. El servidor recalcula el ETag, compara y borra en una misma transaccion con bloqueo de escritura. GET /perfiles/{id} y GET /modos/{id} entregan el ETag vigente en la cabecera ETag. GET /capacidades anuncia servidor.borrado_condicional. Algoritmo y vectores: backend/src/domain/etag.js, src/sync/etag.js y contracts/etag-vectores.json. Sin cambios de esquema SQLite. v1.4: creaciones idempotentes. POST /perfiles y POST /perfiles/{id}/modos aceptan la cabecera opcional Idempotency-Key (UUID v7 en minusculas; sus 48 primeros bits son la hora, asi que la clave indica su antiguedad). Repetir la misma clave con el mismo cuerpo (tras normalizar) devuelve la respuesta ORIGINAL con la cabecera Idempotent-Replayed: true y no crea otro recurso; la misma clave con otro cuerpo o contra otro perfil padre responde 409 IDEMPOTENCIA_CONFLICTO. La comprobacion de la clave, la creacion y el registro de su resultado ocurren en una misma transaccion, de modo que dos solicitudes simultaneas crean un solo recurso. Solo se registran las creaciones que terminaron bien (un 400 o un 409 NOMBRE_DUPLICADO no deja rastro y la clave puede reutilizarse). Una clave se acepta durante 30 dias contados desde la hora que lleva incrustada (mas antigua: 422 IDEMPOTENCIA_CLAVE_EXPIRADA; hora en el futuro, mas de 5 minutos: 400 IDEMPOTENCIA_CLAVE_INVALIDA); el ambito es la cuenta autenticada. Sin la cabecera todo funciona como antes. Con una base en esquema v2 (sin la tabla) el servidor sigue operando pero responde 501 IDEMPOTENCIA_NO_DISPONIBLE a cualquier Idempotency-Key en lugar de ignorarla, y GET /capacidades anuncia servidor.idempotencia = false. Esquema SQLite v3: migracion aditiva db/migraciones/002_v2_a_v3.sql (tabla idempotencia), explicita, con respaldo previo. v1.5: mutacion conjunta modo + asignaciones. POST /perfiles/{id}/modos y PATCH /modos/{id} aceptan el campo opcional gestos (la lista completa de asignaciones, con la semantica de PUT /modos/{id}/gestos: los gestos sin fila vuelven a la accion predeterminada del catalogo; [] las borra todas). El modo y sus asignaciones se escriben en UNA transaccion y con UNA sola subida de version (un modo se crea en la version 1; un PATCH sube de v a v+1): si cualquier cosa falla, incluida una asignacion invalida o no compatible con el motor (400 DATOS_INVALIDOS / ACCION_NO_COMPATIBLE) o una version obsoleta (409), no se aplica nada, ni los campos del modo ni las asignaciones. Un PATCH puede traer solo gestos y version. La respuesta sigue siendo el modo; las asignaciones efectivas se leen con GET /modos/{id}/gestos. Con Idempotency-Key, la lista de gestos forma parte de la huella de la solicitud (el orden de la lista no importa). GET /capacidades anuncia servidor.modo_con_asignaciones; un cliente que no lo vea debe seguir usando PATCH/POST del modo y PUT de asignaciones por separado. Sin cambios de esquema SQLite."
   },
   "servers": [
     {
@@ -1189,6 +1189,7 @@
       },
       "post": {
         "summary": "Crear perfil",
+        "description": "Con la cabecera opcional Idempotency-Key la creacion es idempotente (ver el parametro). Sin ella, el comportamiento no cambia.",
         "operationId": "Crear_perfil",
         "security": [
           {
@@ -1196,9 +1197,14 @@
             "csrf": []
           }
         ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "responses": {
           "201": {
-            "description": "Operación correcta",
+            "description": "Creado. Con Idempotency-Key repetida (mismo cuerpo) devuelve esta misma respuesta con Idempotent-Replayed: true.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1221,11 +1227,14 @@
                   "type": "string"
                 },
                 "description": "Ruta individual del recurso creado."
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
               }
             }
           },
           "400": {
-            "description": "Datos inválidos",
+            "description": "Datos invalidos, o IDEMPOTENCIA_CLAVE_INVALIDA (Idempotency-Key no es un UUID v7 en minusculas o su hora esta en el futuro)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1265,27 +1274,7 @@
             }
           },
           "409": {
-            "description": "Duplicado, conflicto de versión o último administrador",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Error interno sin detalles",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SQLite ocupada",
+            "description": "Duplicado, conflicto de version o ultimo administrador; IDEMPOTENCIA_CONFLICTO: la clave ya se uso con una solicitud distinta (otro cuerpo)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1306,6 +1295,46 @@
           },
           "415": {
             "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "IDEMPOTENCIA_CLAVE_EXPIRADA: la clave tiene mas de 30 dias y ya no puede repetirse. No se creo nada; genera una clave nueva y comprueba antes si la creacion se aplico.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "IDEMPOTENCIA_NO_DISPONIBLE: este servidor no tiene habilitada la idempotencia (base en esquema v2). Se rechaza en vez de ignorar la clave; no se creo nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
             "content": {
               "application/json": {
                 "schema": {
@@ -1357,6 +1386,11 @@
                     "data"
                   ]
                 }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -1523,26 +1557,6 @@
               }
             }
           },
-          "500": {
-            "description": "Error interno sin detalles",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SQLite ocupada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "413": {
             "description": "Más de 16 KB",
             "content": {
@@ -1555,6 +1569,26 @@
           },
           "415": {
             "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
             "content": {
               "application/json": {
                 "schema": {
@@ -1592,7 +1626,7 @@
         }
       },
       "delete": {
-        "summary": "Eliminar perfil",
+        "summary": "Eliminar perfil (condicional)",
         "operationId": "Eliminar_perfil",
         "security": [
           {
@@ -1605,7 +1639,7 @@
             "description": "Sin cuerpo"
           },
           "400": {
-            "description": "Datos inválidos",
+            "description": "Datos invalidos (incluye un If-Match que no sea un unico ETag fuerte)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1654,6 +1688,26 @@
               }
             }
           },
+          "412": {
+            "description": "PRECONDICION_FALLIDA: el recurso (o, en un perfil, alguno de sus modos o asignaciones) cambio; no se borro nada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "PRECONDICION_REQUERIDA: falta If-Match",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Error interno sin detalles",
             "content": {
@@ -1685,8 +1739,12 @@
               "format": "uuid"
             },
             "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
-        ]
+        ],
+        "description": "Borra el perfil, sus modos y sus asignaciones solo si If-Match coincide con el ETag actual; comprobacion y borrado ocurren en una misma transaccion. Si algo cambio desde que el cliente lo consulto, responde 412 y no borra nada."
       }
     },
     "/perfiles/{id}/modos": {
@@ -1846,6 +1904,7 @@
       },
       "post": {
         "summary": "Crear modo",
+        "description": "Con la cabecera opcional Idempotency-Key la creacion es idempotente (ver el parametro). Sin ella, el comportamiento no cambia. Con el campo opcional gestos el modo y todas sus asignaciones se crean en una sola transaccion (version 1); si alguna asignacion es invalida el modo no se crea.",
         "operationId": "Crear_modo",
         "security": [
           {
@@ -1853,9 +1912,24 @@
             "csrf": []
           }
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "responses": {
           "201": {
-            "description": "Operación correcta",
+            "description": "Creado. Con Idempotency-Key repetida (mismo cuerpo) devuelve esta misma respuesta con Idempotent-Replayed: true.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1878,11 +1952,14 @@
                   "type": "string"
                 },
                 "description": "Ruta individual del recurso creado."
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
               }
             }
           },
           "400": {
-            "description": "Datos inválidos",
+            "description": "Datos invalidos, o IDEMPOTENCIA_CLAVE_INVALIDA (Idempotency-Key no es un UUID v7 en minusculas o su hora esta en el futuro); DATOS_INVALIDOS o ACCION_NO_COMPATIBLE en gestos (no se crea nada)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1922,27 +1999,7 @@
             }
           },
           "409": {
-            "description": "Duplicado, conflicto de versión o último administrador",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Error interno sin detalles",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SQLite ocupada",
+            "description": "Duplicado, conflicto de version o ultimo administrador; IDEMPOTENCIA_CONFLICTO: la clave ya se uso con una solicitud distinta (otro cuerpo o contra otro perfil padre)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1970,20 +2027,48 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "IDEMPOTENCIA_CLAVE_EXPIRADA: la clave tiene mas de 30 dias y ya no puede repetirse. No se creo nada; genera una clave nueva y comprueba antes si la creacion se aplico.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "IDEMPOTENCIA_NO_DISPONIBLE: este servidor no tiene habilitada la idempotencia (base en esquema v2). Se rechaza en vez de ignorar la clave; no se creo nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "UUID v4 del recurso o perfil padre."
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2028,6 +2113,11 @@
                     "data"
                   ]
                 }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -2145,7 +2235,7 @@
             }
           },
           "400": {
-            "description": "Datos inválidos",
+            "description": "Datos inválidos; DATOS_INVALIDOS o ACCION_NO_COMPATIBLE en gestos (no se aplica nada)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2194,26 +2284,6 @@
               }
             }
           },
-          "500": {
-            "description": "Error interno sin detalles",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SQLite ocupada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "413": {
             "description": "Más de 16 KB",
             "content": {
@@ -2226,6 +2296,26 @@
           },
           "415": {
             "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
             "content": {
               "application/json": {
                 "schema": {
@@ -2260,10 +2350,11 @@
               }
             }
           }
-        }
+        },
+        "description": "Con el campo opcional gestos reemplaza tambien todas las asignaciones del modo en la misma transaccion y con UNA sola subida de version (de v a v+1). Es todo o nada: una asignacion invalida (400) o una version obsoleta (409) no aplican ni los campos ni las asignaciones. Puede enviarse solo gestos y version. Responde el modo; las asignaciones se leen con GET /modos/{id}/gestos."
       },
       "delete": {
-        "summary": "Eliminar modo",
+        "summary": "Eliminar modo (condicional)",
         "operationId": "Eliminar_modo",
         "security": [
           {
@@ -2276,7 +2367,7 @@
             "description": "Sin cuerpo"
           },
           "400": {
-            "description": "Datos inválidos",
+            "description": "Datos invalidos (incluye un If-Match que no sea un unico ETag fuerte)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2325,6 +2416,26 @@
               }
             }
           },
+          "412": {
+            "description": "PRECONDICION_FALLIDA: el recurso (o, en un perfil, alguno de sus modos o asignaciones) cambio; no se borro nada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "PRECONDICION_REQUERIDA: falta If-Match",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Error interno sin detalles",
             "content": {
@@ -2356,8 +2467,12 @@
               "format": "uuid"
             },
             "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
-        ]
+        ],
+        "description": "Borra el modo y sus asignaciones solo si If-Match coincide con el ETag actual; comprobacion y borrado ocurren en una misma transaccion. Si algo cambio desde que el cliente lo consulto, responde 412 y no borra nada."
       }
     },
     "/gestos": {
@@ -2530,6 +2645,88 @@
         }
       }
     },
+    "/capacidades": {
+      "get": {
+        "summary": "Consultar contrato de capacidades",
+        "operationId": "Consultar_contrato_de_capacidades",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Capacidades"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/modos/{id}/gestos": {
       "get": {
         "summary": "Consultar configuracion efectiva",
@@ -2640,6 +2837,268 @@
               "format": "uuid"
             },
             "description": "UUID v4 del recurso o perfil padre."
+          }
+        ]
+      },
+      "put": {
+        "summary": "Reemplazar asignaciones del modo",
+        "operationId": "Reemplazar_asignaciones_del_modo",
+        "security": [
+          {
+            "sesion": []
+          },
+          {
+            "csrf": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsignacionesReemplazo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Configuracion"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ]
+      }
+    },
+    "/modos/{id}/gestos/{gesto}": {
+      "patch": {
+        "summary": "Editar una asignacion del modo",
+        "operationId": "Editar_una_asignacion_del_modo",
+        "security": [
+          {
+            "sesion": []
+          },
+          {
+            "csrf": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsignacionParche"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Configuracion"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "name": "gesto",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]{1,60}$"
+            },
+            "description": "Codigo del gesto del catalogo (GET /gestos)."
           }
         ]
       }
@@ -2850,26 +3309,6 @@
               }
             }
           },
-          "500": {
-            "description": "Error interno sin detalles",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SQLite ocupada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "413": {
             "description": "Más de 16 KB",
             "content": {
@@ -2882,6 +3321,26 @@
           },
           "415": {
             "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
             "content": {
               "application/json": {
                 "schema": {
@@ -3008,26 +3467,6 @@
               }
             }
           },
-          "500": {
-            "description": "Error interno sin detalles",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SQLite ocupada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "413": {
             "description": "Más de 16 KB",
             "content": {
@@ -3040,6 +3479,26 @@
           },
           "415": {
             "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
             "content": {
               "application/json": {
                 "schema": {
@@ -3446,6 +3905,14 @@
           "activacion_contextual_movil": {
             "type": "boolean",
             "default": false
+          },
+          "gestos": {
+            "type": "array",
+            "maxItems": 13,
+            "items": {
+              "$ref": "#/components/schemas/Asignacion"
+            },
+            "description": "Mutacion conjunta: lista completa de asignaciones del modo (semantica de PUT /modos/{id}/gestos). Se escribe en la misma transaccion que los demas campos y con la misma (unica) subida de version. Solo debe enviarse si GET /capacidades anuncia servidor.modo_con_asignaciones."
           }
         },
         "required": [
@@ -3513,6 +3980,14 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 9007199254740990
+          },
+          "gestos": {
+            "type": "array",
+            "maxItems": 13,
+            "items": {
+              "$ref": "#/components/schemas/Asignacion"
+            },
+            "description": "Mutacion conjunta: lista completa de asignaciones del modo (semantica de PUT /modos/{id}/gestos). Se escribe en la misma transaccion que los demas campos y con la misma (unica) subida de version. Solo debe enviarse si GET /capacidades anuncia servidor.modo_con_asignaciones."
           }
         },
         "required": [
@@ -3722,6 +4197,195 @@
           "estado",
           "servicio"
         ]
+      },
+      "Asignacion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "gesto_codigo": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,60}$"
+          },
+          "accion_codigo": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,60}$"
+          },
+          "habilitado": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gesto_codigo",
+          "accion_codigo",
+          "habilitado"
+        ],
+        "description": "Habilitada, accion_codigo debe figurar en las acciones permitidas del gesto en el contrato de capacidades; sin_accion siempre se acepta. Deshabilitada se guarda y queda inactiva."
+      },
+      "AsignacionesReemplazo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Version actual del modo (modos_uso.version); se incrementa al aplicar."
+          },
+          "gestos": {
+            "type": "array",
+            "maxItems": 13,
+            "items": {
+              "$ref": "#/components/schemas/Asignacion"
+            },
+            "description": "Gestos sin fila vuelven a la accion predeterminada del catalogo. Sin repetidos."
+          }
+        },
+        "required": [
+          "version",
+          "gestos"
+        ]
+      },
+      "AsignacionParche": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "accion_codigo": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,60}$"
+          },
+          "habilitado": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "description": "Requiere accion_codigo o habilitado ademas de version."
+      },
+      "Capacidades": {
+        "type": "object",
+        "description": "Copia de contracts/capacidades.json: acciones (codigo -> nombre, tipo, efecto), gestos (codigo -> nombre, tipo, predeterminada, acciones permitidas, interruptor de interfaz), acciones_discretas, teclas_permitidas, eventos_interfaz, predeterminados_interfaz, ajustes_equipo y ajustes_sincronizados.",
+        "properties": {
+          "version": {
+            "type": "integer"
+          },
+          "acciones": {
+            "type": "object"
+          },
+          "gestos": {
+            "type": "object"
+          },
+          "acciones_discretas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "teclas_permitidas": {
+            "type": "object"
+          },
+          "eventos_interfaz": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "predeterminados_interfaz": {
+            "type": "object"
+          },
+          "servidor": {
+            "type": "object",
+            "description": "Funciones del backend que no forman parte del contrato gesto -> accion del motor.",
+            "properties": {
+              "borrado_condicional": {
+                "type": "boolean",
+                "description": "true: DELETE de perfiles y modos exige y comprueba If-Match. Sin este anuncio, un cliente no debe enviar DELETE."
+              },
+              "idempotencia": {
+                "description": "false: el servidor no tiene habilitada la idempotencia (base en esquema v2) y responde 501 a cualquier Idempotency-Key; un cliente no debe enviarla. Objeto: describe como usarla.",
+                "oneOf": [
+                  {
+                    "type": "boolean",
+                    "const": false
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "clave": {
+                        "type": "string",
+                        "enum": [
+                          "uuid-v7"
+                        ],
+                        "description": "Formato de la Idempotency-Key."
+                      },
+                      "retencion_dias": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Dias que una clave puede repetirse, contados desde la hora incrustada."
+                      }
+                    },
+                    "required": [
+                      "clave",
+                      "retencion_dias"
+                    ]
+                  }
+                ]
+              },
+              "modo_con_asignaciones": {
+                "type": "boolean",
+                "description": "true: POST /perfiles/{id}/modos y PATCH /modos/{id} aceptan gestos y lo aplican junto al modo en una sola transaccion y con una sola subida de version. Sin este anuncio, un cliente no debe enviar gestos en esas solicitudes."
+              }
+            }
+          }
+        },
+        "required": [
+          "version",
+          "acciones",
+          "gestos"
+        ]
+      }
+    },
+    "parameters": {
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "ETag fuerte del recurso tal como el cliente lo conocia (cabecera ETag de su GET, o calculado con el algoritmo compartido a partir de lo que ya tenia). Un unico valor entre comillas; no se aceptan * ni ETags debiles ni listas.",
+        "schema": {
+          "type": "string",
+          "pattern": "^\"[A-Za-z0-9_-]{16,64}\"$"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Clave de idempotencia de la creacion: un UUID v7 en minusculas generado por el cliente UNA vez por creacion y reutilizado en cada reintento. Repetirla con el mismo cuerpo devuelve la respuesta original (Idempotent-Replayed: true) sin crear otro recurso. Valida 30 dias desde la hora incrustada. Solo se anuncia con GET /capacidades servidor.idempotencia; un servidor que no la tiene habilitada responde 501.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "headers": {
+      "ETag": {
+        "description": "ETag vigente del recurso para usarlo como If-Match al borrar. Modo: identidad + version. Perfil: agregado de la version del perfil y de todos sus modos.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IdempotentReplayed": {
+        "description": "Presente (true) cuando la respuesta es la original de una creacion ya realizada con la misma Idempotency-Key; ausente en la primera ejecucion.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "true"
+          ]
+        }
       }
     }
   }

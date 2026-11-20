@@ -12,6 +12,8 @@ import { createCatalogosRepository } from './repositories/catalogosRepository.js
 import { createPerfilesService } from './services/perfilesService.js';
 import { createModosService } from './services/modosService.js';
 import { createCatalogosService } from './services/catalogosService.js';
+import { createIdempotenciaRepository } from './repositories/idempotenciaRepository.js';
+import { createIdempotencyRunner } from './services/idempotencia.js';
 import { createPerfilesController } from './controllers/perfilesController.js';
 import { createModosController } from './controllers/modosController.js';
 import { createCatalogosController } from './controllers/catalogosController.js';
@@ -49,9 +51,12 @@ export function createApp({ db, config, mailer, securityLog }) {
   app.use('/api/v1/admin', createAdminRouter({ db, config, log }));
   const profiles = id => createPerfilesRepository(db, id);
   const modes = id => createModosRepository(db, id);
-  const profileController = createPerfilesController(id => createPerfilesService(profiles(id)));
-  const modeController = createModosController(id => createModosService(modes(id), profiles(id)));
-  const catalogController = createCatalogosController(id => createCatalogosService(createCatalogosRepository(db), modes(id), id));
+  // Idempotencia de POST: solo si la base ya está en el esquema v3 (tabla `idempotencia`). Con v2 todo sigue igual.
+  const features = { idempotencia: db.pragma('user_version', { simple: true }) >= 3 };
+  const idempotency = id => createIdempotencyRunner({ repository: createIdempotenciaRepository(db, id), enabled: features.idempotencia });
+  const profileController = createPerfilesController(id => createPerfilesService(profiles(id), idempotency(id)));
+  const modeController = createModosController(id => createModosService(modes(id), profiles(id), idempotency(id)));
+  const catalogController = createCatalogosController(id => createCatalogosService(createCatalogosRepository(db), modes(id), id, features));
   const authenticate = createAuthMiddleware({ db, config });
   app.use('/api/v1/perfiles', authenticate, perfilesRoutes(profileController, modeController));
   app.use('/api/v1/modos', authenticate, modosRoutes(modeController, catalogController));
@@ -64,7 +69,7 @@ export function createApp({ db, config, mailer, securityLog }) {
 
 function catalogosRoutesWithAuth(authenticate, controller) {
   const router = express.Router();
-  router.use(['/gestos', '/acciones'], authenticate);
+  router.use(['/gestos', '/acciones', '/capacidades'], authenticate);
   router.use(catalogosRoutes(controller));
   return router;
 }

@@ -1,5 +1,8 @@
 # Base nueva del Hito 2
 
+> Este documento describe el diseño original (esquema v1, siete tablas). El esquema vigente es el **v3** (nueve
+> tablas): ver «Versiones del esquema y migraciones» al final. `db/schema.sql` es siempre la versión vigente.
+
 Este esquema es independiente del backend antiguo de desktop/runtime. Fuente: diseño nuevo de siete tablas aportado por el equipo. No se importan cuentas ni configuraciones anteriores.
 
 ## Inicialización
@@ -52,3 +55,35 @@ I2 implementa actualización atómica de `version` y `actualizado_en` en sus CRU
 `node --test backend/test/database/schema.test.js`
 
 Las pruebas usan memoria y archivos temporales propios, nunca la base de desarrollo. Prueban integridad, cascadas, datos maliciosos como texto, creación exclusiva, reapertura y cierre. La demostración de reinicio completo de proceso queda a cargo de I3.
+
+## Versiones del esquema y migraciones
+
+| Versión (`user_version`) | Qué añade | Migración |
+|---|---|---|
+| 1 | Diseño original: usuarios, sesiones, perfiles, modos, acciones, gestos y asignaciones | — |
+| 2 | Correo verificable y `tokens_cuenta` (verificación y restablecimiento de contraseña) | `db/migraciones/001_v1_a_v2.sql` |
+| 3 | `idempotencia`: claves de las creaciones por POST (`Idempotency-Key`) | `db/migraciones/002_v2_a_v3.sql` |
+
+Las migraciones son **explícitas** (`node backend/scripts/migrate-db.js`, con `DATABASE_PATH`), nunca se ejecutan al
+arrancar el servidor y nunca borran datos. Antes de modificar nada se copia la base a `<base>.v<origen>-<fecha>.ztbackup`;
+todos los pasos pendientes (de v1 a v3 son dos) corren en **una sola transacción** con comprobación de claves foráneas y
+de versión final, y si algo falla se deshace por completo. El backend abre bases v2 o v3: con una v2 sigue funcionando,
+sin idempotencia (una `Idempotency-Key` recibe 501 `IDEMPOTENCIA_NO_DISPONIBLE` y `GET /capacidades` anuncia
+`servidor.idempotencia: false`). Las pruebas migran solo bases temporales (`backend/test/database/migracion.test.js`,
+con una copia congelada del esquema v2 en `backend/test/fixtures/schema-v2.sql`); no se ha migrado ninguna base real.
+
+### Tabla `idempotencia` (v3)
+
+Clave primaria `(usuario_id, clave)`: el ámbito es la cuenta. Guarda la huella SHA-256 de la solicitud (método + ruta con
+el perfil padre + cuerpo validado y normalizado), el tipo e id del recurso creado, la respuesta original (JSON de hasta
+4 KB) y `creado_en`. Solo se inserta cuando la creación terminó bien, **en la misma transacción** que el recurso. Se
+elimina en cascada con la cuenta y se purga lo anterior a 30 días **y 5 minutos** (la tolerancia de reloj, ver abajo) en
+lotes de 200 durante cada creación idempotente.
+
+La clave es un UUID v7: sus 48 bits altos son la hora en milisegundos. La regla de antigüedad se aplica **sobre la
+clave**, exista o no su fila (422 `IDEMPOTENCIA_CLAVE_EXPIRADA` a partir de 30 días; 400 si la hora está más de 5 minutos
+en el futuro). Por eso purgar filas antiguas nunca permite recrear una operación: una clave que la regla acepta
+jamás ha sido purgada. Ese margen de 5 minutos en la purga es necesario: con un cliente adelantado la hora de la clave
+puede superar a `creado_en` hasta esa tolerancia, y sin el margen quedaría una ventana en la que la clave aún vale pero
+su fila ya no existe (corregido el 12-11-2026 tras una revisión; `idempotencia.test.js`, «reloj del cliente adelantado»). Consecuencia que conviene conocer: pasados 30 días no hay forma de saber por clave si una creación
+se aplicó; el cliente cae entonces en la comprobación manual de candidatos.

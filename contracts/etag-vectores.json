@@ -1,0 +1,121 @@
+{
+  "descripcion": "Vectores del ETag de borrado condicional. Los consumen backend/test/resources/borrado.test.js y tests/frontend/etag.test.js: el algoritmo de backend/src/domain/etag.js y el de src/sync/etag.js deben producir exactamente estos valores. Si cambia el algoritmo, regenerar y cambiar los dos a la vez (también el puente y OpenAPI).",
+  "algoritmo": "sha256 → base64url → primeros 32 caracteres, entre comillas. Modo: \"modo:<id>|v<version>\". Perfil: \"perfil:<id>|v<version>|\" + hijos \"<modoId>:<version>\" ordenados como texto y unidos con \";\".",
+  "vectores": [
+    {
+      "nombre": "modo en su primera versión",
+      "kind": "modo",
+      "id": "0a1b2c3d-1111-4222-8333-444455556666",
+      "version": 1,
+      "etag": "\"wyCPPLqz5ktoLe_HgLiakAuIdtpdxYzq\""
+    },
+    {
+      "nombre": "modo tras varias ediciones",
+      "kind": "modo",
+      "id": "0a1b2c3d-1111-4222-8333-444455556666",
+      "version": 7,
+      "etag": "\"E06YiCoJngrVbaXfw7VY99ovMU6rOS4I\""
+    },
+    {
+      "nombre": "perfil sin modos",
+      "kind": "perfil",
+      "id": "b3a1f0c2-5d4e-4f6a-8b7c-1d2e3f4a5b6c",
+      "version": 1,
+      "modes": [],
+      "etag": "\"XF2mS10bEInXass1Z6bIwsI2VhKqYVBp\""
+    },
+    {
+      "nombre": "perfil con un modo",
+      "kind": "perfil",
+      "id": "b3a1f0c2-5d4e-4f6a-8b7c-1d2e3f4a5b6c",
+      "version": 1,
+      "modes": [
+        {
+          "id": "0a1b2c3d-1111-4222-8333-444455556666",
+          "version": 1
+        }
+      ],
+      "etag": "\"OkBtmsl_LOQqJjJ4MvpoD7oA1Vtvr65o\""
+    },
+    {
+      "nombre": "perfil con tres modos",
+      "kind": "perfil",
+      "id": "b3a1f0c2-5d4e-4f6a-8b7c-1d2e3f4a5b6c",
+      "version": 2,
+      "modes": [
+        {
+          "id": "0a1b2c3d-1111-4222-8333-444455556666",
+          "version": 1
+        },
+        {
+          "id": "ffeeddcc-aaaa-4bbb-9ccc-ddddeeee0000",
+          "version": 4
+        },
+        {
+          "id": "5e6f7a8b-9999-4888-a777-666655554444",
+          "version": 2
+        }
+      ],
+      "etag": "\"peu2FG_JJOHVHFkFd3B2RcwLYlOFIvbE\""
+    },
+    {
+      "nombre": "mismo perfil, modos en otro orden (mismo ETag)",
+      "kind": "perfil",
+      "id": "b3a1f0c2-5d4e-4f6a-8b7c-1d2e3f4a5b6c",
+      "version": 2,
+      "modes": [
+        {
+          "id": "5e6f7a8b-9999-4888-a777-666655554444",
+          "version": 2
+        },
+        {
+          "id": "0a1b2c3d-1111-4222-8333-444455556666",
+          "version": 1
+        },
+        {
+          "id": "ffeeddcc-aaaa-4bbb-9ccc-ddddeeee0000",
+          "version": 4
+        }
+      ],
+      "etag": "\"peu2FG_JJOHVHFkFd3B2RcwLYlOFIvbE\""
+    },
+    {
+      "nombre": "un modo cambió de versión (ETag distinto)",
+      "kind": "perfil",
+      "id": "b3a1f0c2-5d4e-4f6a-8b7c-1d2e3f4a5b6c",
+      "version": 2,
+      "modes": [
+        {
+          "id": "0a1b2c3d-1111-4222-8333-444455556666",
+          "version": 1
+        },
+        {
+          "id": "ffeeddcc-aaaa-4bbb-9ccc-ddddeeee0000",
+          "version": 5
+        },
+        {
+          "id": "5e6f7a8b-9999-4888-a777-666655554444",
+          "version": 2
+        }
+      ],
+      "etag": "\"hq8JI4CbVThSRQsF1WUMQRoLsjlkautN\""
+    },
+    {
+      "nombre": "falta un modo (ETag distinto)",
+      "kind": "perfil",
+      "id": "b3a1f0c2-5d4e-4f6a-8b7c-1d2e3f4a5b6c",
+      "version": 2,
+      "modes": [
+        {
+          "id": "0a1b2c3d-1111-4222-8333-444455556666",
+          "version": 1
+        },
+        {
+          "id": "ffeeddcc-aaaa-4bbb-9ccc-ddddeeee0000",
+          "version": 4
+        }
+      ],
+      "etag": "\"ByN-GkSKHL2f7l4EPIjpEy5pLtFcozOr\""
+    }
+  ]
+}

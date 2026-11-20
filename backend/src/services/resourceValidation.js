@@ -1,6 +1,6 @@
-import { ResourceError } from '../domain/resourceError.js';
+import { invalid } from '../domain/resourceError.js';
+import { validateAssignmentList } from './asignacionesValidation.js';
 
-const invalid = message => { throw new ResourceError(400, 'DATOS_INVALIDOS', message); };
 export function validateId(value) {
   if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) invalid('Se requiere UUID v4.');
   return value.toLowerCase();
@@ -21,8 +21,10 @@ export function validateQuery(query, paginated = true) {
 export const modeBooleans = ['desk_rest_habilitado', 'asistencia_mirada_habilitada', 'activacion_contextual_movil'];
 export const modeNumbers = ['sensibilidad_puntero', 'estabilizacion_puntero', 'tolerancia_micro_pinza'];
 export const modeFields = ['nombre', 'categoria', 'plataforma', ...modeNumbers, ...modeBooleans];
+// `gestos` (mutación conjunta) no es una columna de modos_uso: lo aplica el repositorio en la misma transacción.
+const modeBodyFields = [...modeFields, 'gestos'];
 export function validateBody(kind, body, patch = false) {
-  const allowed = kind === 'perfil' ? ['nombre', 'descripcion'] : modeFields;
+  const allowed = kind === 'perfil' ? ['nombre', 'descripcion'] : modeBodyFields;
   if (!body || typeof body !== 'object' || Array.isArray(body)) invalid('Se requiere un objeto JSON.');
   const keys = Object.keys(body);
   if (keys.some(key => !allowed.includes(key) && !(patch && key === 'version'))) invalid('Campo no permitido.');
@@ -39,5 +41,7 @@ export function validateBody(kind, body, patch = false) {
   for (const key of modeBooleans) if (Object.hasOwn(body, key) && typeof body[key] !== 'boolean') invalid(`${key} debe ser booleano.`);
   if (Object.hasOwn(body, 'categoria') && !['manual', 'oficina', 'accesibilidad', 'personalizado'].includes(body.categoria)) invalid('categoria inválida.');
   if (Object.hasOwn(body, 'plataforma') && !['pc', 'movil'].includes(body.plataforma)) invalid('plataforma inválida.');
+  // Lista completa de asignaciones (semántica de PUT /modos/{id}/gestos), validada y ordenada para que sea comparable.
+  if (Object.hasOwn(body, 'gestos')) result.gestos = validateAssignmentList(body.gestos);
   return result;
 }

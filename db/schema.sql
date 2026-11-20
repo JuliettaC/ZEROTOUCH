@@ -5,9 +5,10 @@
 -- IDs: el backend genera UUID (crypto.randomUUID()), no se generan aquí.
 -- Fechas: ISO 8601 UTC; el backend actualiza actualizado_en y version.
 -- Inicialización exclusiva: no ejecutar sobre una base existente. Application ID ZT02.
--- Versión de esquema 2 (user_version = 2): agrega correo verificable y tokens de cuenta.
--- Una base v1 existente se actualiza solo con db/migraciones/001_v1_a_v2.sql mediante
--- `npm run db:migrate --prefix backend`, que crea un respaldo antes de modificarla.
+-- Versión de esquema 3 (user_version = 3): v2 (correo verificable y tokens de cuenta) + idempotencia de POST.
+-- Una base v1 o v2 existente se actualiza solo con db/migraciones/001_v1_a_v2.sql y 002_v2_a_v3.sql mediante
+-- `npm run db:migrate --prefix backend`, que crea un respaldo antes de modificarla. El backend sigue
+-- aceptando bases v2 (sin idempotencia) hasta que se migren.
 -- Nombres: NFC en servicios; NOCASE solo ignora mayúsculas ASCII. No promete equivalencia Unicode completa.
 -- La cámara, el reconocimiento gestual y las acciones sobre el SO se ejecutan localmente:
 -- ¡NO se guardan videos, imágenes, coordenadas de manos ni textos escritos con Air-Swipe!
@@ -178,5 +179,23 @@ INSERT INTO gestos (codigo, nombre, accion_predeterminada) VALUES
 -- Estado temporal (pausa, cámara, puntero, temporizadores), visión y predicción
 -- Air-Swipe permanecen en el dispositivo local. No se exige crear tablas para ellos.
 
-PRAGMA user_version = 2;
+-- 9. v3 · Idempotencia de las creaciones (POST /perfiles y POST /perfiles/{id}/modos).
+-- Una fila por clave aceptada: guarda la huella del contenido y la respuesta original para devolverla tal cual
+-- si el cliente repite la misma solicitud (p. ej. porque perdió la respuesta). La clave es un UUID v7: su marca de
+-- tiempo permite rechazar siempre las claves más viejas que la retención (30 días), de modo que purgar filas
+-- antiguas nunca permite recrear una operación. No guarda credenciales, tokens ni textos escritos con Air-Swipe.
+CREATE TABLE idempotencia (
+    usuario_id TEXT NOT NULL,
+    clave TEXT NOT NULL CHECK (length(clave) = 36 AND clave = lower(clave) AND substr(clave, 15, 1) = '7'),
+    huella TEXT NOT NULL CHECK (length(huella) = 64 AND huella NOT GLOB '*[^0-9a-f]*'),
+    recurso_tipo TEXT NOT NULL CHECK (recurso_tipo IN ('perfil', 'modo')),
+    recurso_id TEXT NOT NULL CHECK (length(recurso_id) = 36),
+    respuesta TEXT NOT NULL CHECK (json_valid(respuesta) AND length(respuesta) <= 4096),
+    creado_en TEXT NOT NULL CHECK(julianday(creado_en) IS NOT NULL) DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    PRIMARY KEY (usuario_id, clave),
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX idx_idempotencia_creado ON idempotencia(creado_en);
+
+PRAGMA user_version = 3;
 COMMIT;

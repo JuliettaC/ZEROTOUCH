@@ -69,7 +69,7 @@ test('colección: HTTP real, aislamiento, reinicio y exportación sin credencial
     const pm = {
       variables: { set: (key, value) => values.set(key, value), replaceIn: replace },
       test: (name, run) => { try { run(); } catch (error) { throw new Error(`${item.name}: ${name}`, { cause: error }); } },
-      response: { json: () => JSON.parse(body), to: { have: { status: expected => assert.equal(response.status, expected) } } },
+      response: { json: () => JSON.parse(body), headers: { get: name => response.headers.get(name) }, to: { have: { status: expected => assert.equal(response.status, expected) } } },
     };
     const scripts = event => item.event.filter(e => e.listen === event).forEach(e => vm.runInNewContext(e.script.exec.join('\n'), { pm }, { timeout: 1000 }));
     scripts('prerequest');

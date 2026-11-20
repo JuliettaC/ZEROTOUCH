@@ -87,12 +87,14 @@ test('dos CRUD completos, valores predeterminados, paginación y cascada', async
   assert.equal((await request('GET', `/api/v1/perfiles/${p.id}/modos`, undefined, session)).body.data[0].id, m.id);
   assert.equal((await request('GET', `/api/v1/modos/${m.id}`, undefined, session)).status, 200);
   assert.equal((await request('PATCH', `/api/v1/modos/${m.id}`, { sensibilidad_puntero: 20, version: 1 }, session)).body.data.version, 2);
-  const deleted = await request('DELETE', `/api/v1/modos/${m.id}`, undefined, session);
+  const modeTag = (await request('GET', `/api/v1/modos/${m.id}`, undefined, session)).headers.get('etag');
+  const deleted = await request('DELETE', `/api/v1/modos/${m.id}`, undefined, session, { headers: { 'If-Match': modeTag } });
   assert.equal(deleted.status, 204); assert.equal(deleted.text, '');
   assert.equal((await request('GET', `/api/v1/modos/${m.id}`, undefined, session)).status, 404);
   const second = (await request('POST', `/api/v1/perfiles/${p.id}/modos`, { nombre: 'Segundo' }, session)).body.data;
   db.prepare("INSERT INTO asignaciones_gestos(modo_id,gesto_codigo,accion_codigo) VALUES(?,'micro_pinza','clic')").run(second.id);
-  assert.equal((await request('DELETE', `/api/v1/perfiles/${p.id}`, undefined, session)).status, 204);
+  const profileTag = (await request('GET', `/api/v1/perfiles/${p.id}`, undefined, session)).headers.get('etag');
+  assert.equal((await request('DELETE', `/api/v1/perfiles/${p.id}`, undefined, session, { headers: { 'If-Match': profileTag } })).status, 204);
   assert.equal(db.prepare('SELECT count(*) n FROM asignaciones_gestos').get().n, 0);
   assert.equal((await request('GET', `/api/v1/modos/${second.id}`, undefined, session)).status, 404);
 });

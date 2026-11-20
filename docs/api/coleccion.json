@@ -2,7 +2,7 @@
   "info": {
     "name": "ZeroTouch Hito 2 — recorrido local",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Ejecutar en Collection Runner, en orden, sobre una base de demostración. Genera una cuenta ficticia por ejecución (no hay DELETE de usuarios). Cookie jar habilitado. Antes de 02b, copiar el token del enlace recibido (en desarrollo, archivo .eml en MAIL_OUTBOX_DIR; parte tras #token=) en la variable local token_verificacion; no exportarla. Variables de contraseña/CSRF solo locales al recorrido; no exportarlas. Para motor: ejecutar hasta 18 y guardar solamente el cuerpo data de esa respuesta como motor-local/config.local.json. El recorrido completo borra perfil y modo. Persistencia: usar la prueba integration/collection.test.js o detener entre 18 y 19, reiniciar servidor y repetir 13. No utiliza React."
+    "description": "Ejecutar en Collection Runner, en orden, sobre una base de demostración. Genera una cuenta ficticia por ejecución (no hay DELETE de usuarios). Cookie jar habilitado. Antes de 02b, copiar el token del enlace recibido (en desarrollo, archivo .eml en MAIL_OUTBOX_DIR; parte tras #token=) en la variable local token_verificacion; no exportarla. Variables de contraseña/CSRF solo locales al recorrido; no exportarlas. Para motor: ejecutar hasta 18 y guardar solamente el cuerpo data de esa respuesta como motor-local/config.local.json. El recorrido completo borra perfil y modo. Persistencia: usar la prueba integration/collection.test.js o detener entre 18 y 19, reiniciar servidor y repetir 13. No utiliza React. Borrado condicional (v1.3): DELETE de perfiles y modos exige If-Match con el ETag vigente (pasos 19b y 21b); sin él responde 428 y con uno obsoleto 412."
   },
   "variable": [
     {
@@ -603,6 +603,106 @@
       ]
     },
     {
+      "name": "18b Editar modo con asignaciones (una sola solicitud, una sola subida de versión)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrf_token}}"
+          }
+        ],
+        "url": "{{base_url}}/modos/{{modo_id}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"version\":2,\"nombre\":\"Manual con asignaciones\",\"gestos\":[{\"gesto_codigo\":\"dos_dedos\",\"accion_codigo\":\"desplazar\",\"habilitado\":true},{\"gesto_codigo\":\"liberacion_pinza\",\"accion_codigo\":\"soltar\",\"habilitado\":false}]}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"la versión sube una sola vez (2 → 3)\", () => { if (pm.response.json().data.version !== 3) throw new Error(\"version\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18c Asignación inválida: no se aplica nada (ni el nombre)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrf_token}}"
+          }
+        ],
+        "url": "{{base_url}}/modos/{{modo_id}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"version\":3,\"nombre\":\"No debe aplicarse\",\"gestos\":[{\"gesto_codigo\":\"no_existe\",\"accion_codigo\":\"sin_accion\",\"habilitado\":true}]}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18d El rechazo no cambió el modo",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/modos/{{modo_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"sigue con el nombre y la versión de 18b\", () => { const modo = pm.response.json().data; if (modo.nombre !== \"Manual con asignaciones\" || modo.version !== 3) throw new Error(\"el modo cambió\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "19 Rol insuficiente",
       "request": {
         "method": "GET",
@@ -627,6 +727,90 @@
       ]
     },
     {
+      "name": "19b Consultar ETag del modo",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/modos/{{modo_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200 con ETag\", () => { pm.response.to.have.status(200); pm.variables.set(\"etag_modo\", pm.response.headers.get(\"ETag\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19c Borrar modo sin If-Match",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrf_token}}"
+          }
+        ],
+        "url": "{{base_url}}/modos/{{modo_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 428: el borrado exige If-Match\", () => pm.response.to.have.status(428));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19d Borrar modo con ETag obsoleto",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrf_token}}"
+          },
+          {
+            "key": "If-Match",
+            "value": "\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\""
+          }
+        ],
+        "url": "{{base_url}}/modos/{{modo_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 412: no se borra nada\", () => pm.response.to.have.status(412));"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "20 Borrar modo",
       "request": {
         "method": "DELETE",
@@ -638,6 +822,10 @@
           {
             "key": "X-CSRF-Token",
             "value": "{{csrf_token}}"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{etag_modo}}"
           }
         ],
         "url": "{{base_url}}/modos/{{modo_id}}"
@@ -679,6 +867,30 @@
       ]
     },
     {
+      "name": "21b Consultar ETag del perfil",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/perfiles/{{perfil_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200 con ETag de agregado\", () => { pm.response.to.have.status(200); pm.variables.set(\"etag_perfil\", pm.response.headers.get(\"ETag\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "22 Borrar perfil",
       "request": {
         "method": "DELETE",
@@ -690,6 +902,10 @@
           {
             "key": "X-CSRF-Token",
             "value": "{{csrf_token}}"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{etag_perfil}}"
           }
         ],
         "url": "{{base_url}}/perfiles/{{perfil_id}}"
