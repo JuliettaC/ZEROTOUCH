@@ -24,7 +24,7 @@ from motor_local.os_adapter import MockOSAdapter
 from motor_local.window_control import MockWindowController, WindowActions, WindowRef
 
 from tests.test_api_export import _document
-from tests.test_engine import make_open_palm
+from tests.test_engine import armed, make_open_palm
 
 
 def make_three_fingers(cx: float = 0.5, cy: float = 0.5) -> HandLandmarks:
@@ -127,15 +127,21 @@ def _window_config(**kw) -> EngineConfig:
     return EngineConfig(window_gestures_enabled=True, **kw)
 
 
+def _swipe_config(**kw) -> EngineConfig:
+    kw.setdefault("swipe_left_enabled", True)
+    kw.setdefault("swipe_right_enabled", True)
+    return EngineConfig(**kw)
+
+
 def test_three_fingers_are_ignored_unless_window_gestures_are_enabled() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(EngineConfig())
     seen = _run(interp, [(make_three_fingers(0.5, 0.5), t) for t in (0.0, 33.0, 66.0)]
                 + [(make_three_fingers(0.5, 0.6), 100.0)])
     assert EVENT_MINIMIZE_WINDOW not in seen
 
 
 def test_three_fingers_down_minimizes_once_while_held() -> None:
-    interp = GestureInterpreter(_window_config())
+    interp = armed(_window_config())
     frames = [(make_three_fingers(0.5, 0.5), t) for t in (0.0, 33.0, 66.0)]
     frames += [(make_three_fingers(0.5, 0.6), 100.0)]
     frames += [(make_three_fingers(0.5, 0.6), t) for t in range(133, 1000, 33)]
@@ -145,7 +151,7 @@ def test_three_fingers_down_minimizes_once_while_held() -> None:
 
 
 def test_three_fingers_up_restores_after_rearm() -> None:
-    interp = GestureInterpreter(_window_config())
+    interp = armed(_window_config())
     frames = [(make_three_fingers(0.5, 0.5), t) for t in (0.0, 33.0, 66.0, 100.0)]
     frames += [(make_three_fingers(0.5, 0.6), 133.0)]          # minimiza
     frames += [(open_hand(0.5, 0.6), t) for t in range(166, 500, 33)]  # postura soltada: rearme
@@ -157,13 +163,13 @@ def test_three_fingers_up_restores_after_rearm() -> None:
 
 
 def test_small_three_finger_motion_does_not_act() -> None:
-    interp = GestureInterpreter(_window_config())
+    interp = armed(_window_config())
     frames = [(make_three_fingers(0.5, 0.5 + 0.002 * (i % 2)), 33.0 * i) for i in range(40)]
     assert EVENT_MINIMIZE_WINDOW not in _run(interp, frames)
 
 
 def test_three_fingers_do_not_click_or_scroll() -> None:
-    interp = GestureInterpreter(_window_config())
+    interp = armed(_window_config())
     seen = _run(interp, [(make_three_fingers(0.5, 0.5 + 0.01 * i), 33.0 * i) for i in range(20)])
     assert "LEFT_CLICK" not in seen and "SCROLL" not in seen and "START_DRAG" not in seen
 
@@ -197,33 +203,33 @@ def _swipe_frames(start: float, step: float, count: int, t0: float = 0.0, dt: fl
 
 
 def test_swipe_left_fires_back_once_per_motion() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(_swipe_config())
     seen = _run(interp, _swipe_frames(0.5, -0.03, 10))
     assert seen.count(EVENT_BACK) == 1
     assert EVENT_FORWARD not in seen
 
 
 def test_swipe_right_fires_forward() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(_swipe_config())
     seen = _run(interp, _swipe_frames(0.3, 0.03, 10))
     assert seen.count(EVENT_FORWARD) == 1
     assert EVENT_BACK not in seen
 
 
 def test_slow_drift_does_not_swipe() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(_swipe_config())
     seen = _run(interp, _swipe_frames(0.5, -0.01, 30, dt=100.0))
     assert EVENT_BACK not in seen
 
 
 def test_micro_movement_does_not_swipe() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(_swipe_config())
     seen = _run(interp, [(open_hand(0.5 + 0.01 * (k % 2), 0.5), 33.0 * k) for k in range(30)])
     assert EVENT_BACK not in seen and EVENT_FORWARD not in seen
 
 
 def test_return_movement_after_partial_swipe_does_not_fire() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(_swipe_config())
     frames = _swipe_frames(0.5, -0.01, 8)            # 0.08 hacia la izquierda (0,5 palmas)
     last = frames[-1][0]
     frames += [(open_hand(0.42 + 0.01 * k, 0.5), 33.0 * (9 + k)) for k in range(9)]  # vuelve a la derecha
@@ -231,12 +237,12 @@ def test_return_movement_after_partial_swipe_does_not_fire() -> None:
 
 
 def test_disabled_direction_does_not_fire() -> None:
-    interp = GestureInterpreter(EngineConfig(swipe_left_enabled=False))
+    interp = armed(_swipe_config(swipe_left_enabled=False))
     assert EVENT_BACK not in _run(interp, _swipe_frames(0.5, -0.03, 10))
 
 
 def test_swipe_rearms_only_after_the_hand_is_still() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(_swipe_config())
     frames = _swipe_frames(0.5, -0.03, 10)                       # primer barrido
     frames += [(open_hand(0.5 - 0.3 - 0.03 * k, 0.5), 363.0 + 33.0 * k) for k in range(1, 9)]  # sigue moviendo
     frames += [(open_hand(0.5 - 0.6, 0.5), 700.0 + 33.0 * k) for k in range(12)]               # quieta
@@ -247,14 +253,14 @@ def test_swipe_rearms_only_after_the_hand_is_still() -> None:
 
 def test_swipe_flows_through_action_engine_as_alt_arrow_in_control_only() -> None:
     adapter = MockOSAdapter()
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(_swipe_config())
     engine = LogicalActionEngine(adapter, MODE_CONTROL)
     for hand, t in _swipe_frames(0.5, -0.03, 10):
         engine.dispatch(interp.process_frame(hand, now_ms=t))
     assert ("KEY_COMBO", {"keys": ["alt", "left"]}) in adapter.executed_actions
     observed = MockOSAdapter()
     observation = LogicalActionEngine(observed, MODE_OBSERVATION)
-    interp2 = GestureInterpreter(EngineConfig())
+    interp2 = armed(_swipe_config())
     for hand, t in _swipe_frames(0.5, -0.03, 10):
         observation.dispatch(interp2.process_frame(hand, now_ms=t))
     assert observed.executed_actions == []
@@ -275,3 +281,68 @@ def test_export_accepts_implemented_swipe_bindings_when_enabled() -> None:
     imported = load_api_export(doc)
     assert imported.config.swipe_left_enabled is True
     assert imported.gestures["deslizamiento_izquierda"]["accion_codigo"] == "atras"
+
+
+# ------------------------------------------------- barrido vertical (mano abierta)
+
+def _vertical_frames(start: float, step: float, count: int, t0: float = 0.0, dt: float = 33.0, cx: float = 0.5):
+    return [(open_hand(cx, start + step * i), t0 + dt * i) for i in range(count)]
+
+
+def _vertical_config(**kw) -> EngineConfig:
+    kw.setdefault("window_swipe_enabled", True)
+    return EngineConfig(**kw)
+
+
+def test_open_hand_fast_down_minimizes_and_up_restores() -> None:
+    interp = armed(_vertical_config())
+    down = _run(interp, _vertical_frames(0.30, 0.05, 9))   # 2,5 palmas en ~0,26 s: barrido decidido
+    assert down.count(EVENT_MINIMIZE_WINDOW) == 1 and EVENT_RESTORE_WINDOW not in down
+    still = _run(interp, [(open_hand(0.5, 0.70), 400.0 + 33.0 * i) for i in range(30)])   # quieta: rearme
+    assert EVENT_MINIMIZE_WINDOW not in still and EVENT_RESTORE_WINDOW not in still
+    up = _run(interp, _vertical_frames(0.70, -0.05, 9, t0=1500.0))
+    assert up.count(EVENT_RESTORE_WINDOW) == 1 and EVENT_MINIMIZE_WINDOW not in up
+
+
+def test_vertical_swipe_is_opt_in_and_can_be_turned_off() -> None:
+    # QA 19-11: activado por defecto minimizaba ventanas al mover el cursor rápido hacia abajo.
+    assert EngineConfig().window_swipe_enabled is False
+    assert EngineConfig.from_dict({"windowSwipe": False}).window_swipe_enabled is False
+    assert EngineConfig.from_dict({}).to_dict()["windowSwipe"] is False  # opt-in desde el QA del 19-11
+    interp = armed(_vertical_config(window_swipe_enabled=False))
+    seen = _run(interp, _vertical_frames(0.30, 0.05, 9))
+    assert EVENT_MINIMIZE_WINDOW not in seen
+
+
+def test_fast_cursor_move_of_one_and_a_half_palms_does_not_minimize() -> None:
+    # Con el umbral anterior (1,3 palmas a 3,5 palmas/s) esto minimizaba: es un movimiento rápido del cursor.
+    interp = armed(_vertical_config())
+    seen = _run(interp, _vertical_frames(0.30, 0.03, 8))
+    assert EVENT_MINIMIZE_WINDOW not in seen
+
+
+def test_normal_vertical_pointer_movement_does_not_minimize() -> None:
+    # Mover el cursor de arriba abajo a velocidad normal (~1,9 palmas/s) no es un barrido.
+    interp = armed(_vertical_config())
+    seen = _run(interp, _vertical_frames(0.30, 0.01, 40))
+    assert EVENT_MINIMIZE_WINDOW not in seen and EVENT_RESTORE_WINDOW not in seen
+
+
+def test_short_fast_flick_does_not_minimize() -> None:
+    interp = armed(_vertical_config())
+    seen = _run(interp, _vertical_frames(0.40, 0.04, 4))   # 0,12 de cuadro: < 2 palmas
+    assert EVENT_MINIMIZE_WINDOW not in seen
+
+
+def test_vertical_swipe_goes_through_window_actions_in_control_only() -> None:
+    controller, actions, target, _ = _window_setup()
+    engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_OBSERVATION, window_actions=actions)
+    interp = armed(_vertical_config())
+    for hand, t in _vertical_frames(0.30, 0.05, 9):
+        engine.dispatch(interp.process_frame(hand, now_ms=t))
+    assert target not in controller.minimized, "en observación no se toca ninguna ventana"
+    engine2 = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL, window_actions=actions)
+    interp2 = armed(_vertical_config())
+    for hand, t in _vertical_frames(0.30, 0.05, 9):
+        engine2.dispatch(interp2.process_frame(hand, now_ms=t))
+    assert target in controller.minimized

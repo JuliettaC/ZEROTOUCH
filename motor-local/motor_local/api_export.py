@@ -10,11 +10,11 @@ Forma aceptada (contrato docs/api/openapi.yaml, componente Configuracion):
 Reglas:
 - Claves desconocidas, tipos o rangos inválidos, formato distinto de 1, gestos desconocidos,
   duplicados o ausentes y cualquier clave con nombre de credencial -> rechazo (ConfigError).
-- Una asignación HABILITADA solo se acepta si el motor implementa esa acción para ese gesto.
-  Las asignaciones deshabilitadas, o con acción no implementada y deshabilitada, se aceptan
-  y quedan listadas en `notes` como inactivas. Nada se convierte silenciosamente en default.
-- Campos de runtime local (cámara, espejo, mano preferida, área de movimiento, confianza) no
-  forman parte de la exportación: se leen de `runtime` con las mismas reglas que el IPC.
+- Una asignación HABILITADA solo se acepta si el contrato de capacidades (capacidades.json) la lista
+  para ese gesto. Las deshabilitadas, o con acción no implementada y deshabilitadas, se aceptan y
+  quedan listadas en `notes` como inactivas. Nada se convierte silenciosamente en default.
+- Campos de runtime local (cámara, espejo, mano preferida, área de movimiento, confianza,
+  calibraciones) no forman parte de la exportación: se leen de `runtime` con las reglas del IPC.
 - Este módulo no abre red, no lee archivos y no contiene credenciales.
 """
 
@@ -24,50 +24,17 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from .config import ConfigError, EngineConfig
+from .capabilities import CAPABILITIES, DEFAULT_ACTION, DISCRETE_GESTURES, GESTURE_TOGGLE, KNOWN_GESTURES, NO_ACTION, is_allowed
+from .config import ConfigError, EngineConfig, GazeConfig
 
 SUPPORTED_EXPORT_VERSIONS = frozenset({1})
 
-# Catálogo de gestos sembrado en db/schema.sql (13 códigos).
-KNOWN_GESTURES = frozenset(
-    {
-        "mano_abierta_sostenida",
-        "micro_pinza",
-        "pinza_sostenida",
-        "liberacion_pinza",
-        "palma_abierta",
-        "puno_cerrado",
-        "deslizamiento_izquierda",
-        "deslizamiento_derecha",
-        "dos_dedos",
-        "pulgar_arriba",
-        "pulgar_abajo",
-        "modo_precision",
-        "trazo_airswipe",
-    }
-)
+# Compatibilidad con pruebas y documentación anteriores: acción predeterminada ejecutable por gesto.
+IMPLEMENTED_BINDINGS: dict[str, str] = dict(DEFAULT_ACTION)
 
-# Acción que el motor SÍ ejecuta para cada gesto. Cualquier otra combinación habilitada se rechaza.
-IMPLEMENTED_BINDINGS: dict[str, str] = {
-    "mano_abierta_sostenida": "activar_puntero",
-    "micro_pinza": "clic",
-    "pinza_sostenida": "arrastrar",
-    "liberacion_pinza": "soltar",  # implícita en el arrastre; no tiene interruptor propio
-    "dos_dedos": "desplazar",
-    "puno_cerrado": "pausar",
-    "deslizamiento_izquierda": "atras",   # Alt+Izquierda
-    "deslizamiento_derecha": "adelante",  # Alt+Derecha
-}
-
-# Interruptor del motor controlado por cada gesto implementado.
+# Interruptor del motor controlado por cada gesto (campo de EngineConfig).
 GESTURE_FLAG: dict[str, str] = {
-    "mano_abierta_sostenida": "pointer_enabled",
-    "micro_pinza": "pinch_enabled",
-    "pinza_sostenida": "drag_enabled",
-    "dos_dedos": "scroll_enabled",
-    "puno_cerrado": "fist_pause_enabled",
-    "deslizamiento_izquierda": "swipe_left_enabled",
-    "deslizamiento_derecha": "swipe_right_enabled",
+    code: EngineConfig._TOGGLE_FIELDS[toggle] for code, toggle in GESTURE_TOGGLE.items() if toggle
 }
 
 _MODO_REQUIRED = frozenset(
@@ -151,13 +118,16 @@ def _parse_modo(modo: Any) -> tuple[dict[str, Any], str, list[str]]:
         "stability": _int_0_100(modo["estabilizacion_puntero"], "estabilizacion_puntero"),
         "pinch_tolerance": _int_0_100(modo["tolerancia_micro_pinza"], "tolerancia_micro_pinza"),
         "desk_rest": _bool(modo["desk_rest_habilitado"], "desk_rest_habilitado"),
+        "gaze_assist": False,
     }
     notes: list[str] = []
     for key in sorted(_MODO_OPTIONAL_BOOL):
         if key in modo:
             flag = _bool(modo[key], key)
-            if flag:
-                notes.append(f"{key}=true: dato previsto, sin efecto en el motor de este hito.")
+            if key == "asistencia_mirada_habilitada":
+                values["gaze_assist"] = flag
+            elif flag:
+                notes.append(f"{key}=true: dato previsto para móvil, sin efecto en el motor de escritorio.")
     return values, nombre.strip(), notes
 
 
@@ -189,15 +159,16 @@ def _parse_gestos(gestos: Any) -> tuple[dict[str, dict[str, Any]], list[str]]:
         if version is not None and (isinstance(version, bool) or not isinstance(version, int) or version < 1):
             raise _reject("FIELD_INVALID", "asignacion_version debe ser entero positivo o null.")
 
-        implemented = IMPLEMENTED_BINDINGS.get(code)
-        if enabled and action != implemented:
+        if enabled and not is_allowed(code, action, True):
             # Acción no implementada para ese gesto: no se ejecuta ni se sustituye.
             raise _reject(
                 "ACTION_NOT_IMPLEMENTED",
                 f"El gesto {code} con acción {action} no está implementado en el motor local.",
             )
-        if not enabled and action != implemented:
+        if not enabled and action not in CAPABILITIES["gestos"][code]["acciones"]:
             notes.append(f"{code}: acción {action} deshabilitada; sin efecto.")
+        if enabled and action == NO_ACTION:
+            notes.append(f"{code}: sin_accion; el gesto no produce acción.")
         if code == "liberacion_pinza" and not enabled:
             notes.append("liberacion_pinza: implícita en el arrastre; su interruptor no cambia el motor.")
         parsed[code] = {"accion_codigo": action, "habilitado": enabled}
@@ -227,7 +198,12 @@ def load_api_export(document: Any, runtime: Mapping[str, Any] | None = None) -> 
     gestures, gesture_notes = _parse_gestos(document["gestos"])
 
     base = EngineConfig.from_dict(dict(runtime) if runtime is not None else None)
-    flags = {flag: gestures.get(code, {}).get("habilitado", True) for code, flag in GESTURE_FLAG.items()}
+    flags = {
+        flag: bool(gestures[code]["habilitado"] and gestures[code]["accion_codigo"] != NO_ACTION)
+        for code, flag in GESTURE_FLAG.items()
+    }
+    discrete = {code: gestures[code]["accion_codigo"] for code in DISCRETE_GESTURES}
+    gaze = GazeConfig(**{**dataclasses.asdict(base.gaze), "enabled": base.gaze.enabled and mode_values["gaze_assist"]})
     config = dataclasses.replace(
         base,
         format_version=base.format_version,
@@ -235,13 +211,9 @@ def load_api_export(document: Any, runtime: Mapping[str, Any] | None = None) -> 
         stability=mode_values["stability"],
         pinch_tolerance=mode_values["pinch_tolerance"],
         desk_rest=mode_values["desk_rest"],
-        pointer_enabled=bool(flags["pointer_enabled"]),
-        pinch_enabled=bool(flags["pinch_enabled"]),
-        drag_enabled=bool(flags["drag_enabled"]),
-        scroll_enabled=bool(flags["scroll_enabled"]),
-        fist_pause_enabled=bool(flags["fist_pause_enabled"]),
-        swipe_left_enabled=bool(flags["swipe_left_enabled"]),
-        swipe_right_enabled=bool(flags["swipe_right_enabled"]),
+        discrete_actions=discrete,
+        gaze=gaze,
+        **flags,
     )
     return ImportedConfig(
         config=config,

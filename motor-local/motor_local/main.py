@@ -3,14 +3,21 @@
 Protocolo JSON-lines: comandos por stdin, respuestas por stdout.
 - Cada comando puede llevar "id". Toda orden recibe un mensaje ACK con el mismo "id":
   ok=true si se aplicó, ok=false con "code" y "message" si se rechazó. La aplicación no debe
-  dar por hecho un cambio sin ACK ok=true.
+  dar por hecho un cambio sin ACK ok=true. El ACK de SET_CONFIG y LOAD_EXPORT incluye la
+  configuración realmente aplicada (`config`) para que la interfaz la compare con la deseada.
 - Comandos: SET_MODE, SET_PAUSED, SET_CONFIG (formato IPC), LOAD_EXPORT (exportación de la API),
+  AIRSWIPE (abrir/cerrar teclado), TYPE_TEXT y PRESS_KEY (escritura Air-Swipe), GAZE_CALIBRATE,
   EMERGENCY_STOP, STOP.
+- Mensajes de salida: READY, TELEMETRY (~16 Hz), MODE_CHANGED, EVENT (acciones de aplicación:
+  TIMER, PRECISION, NAVIGATION, AIRSWIPE_TRACE, CONFIRM/CANCEL/BACK/FORWARD con el teclado
+  abierto, GAZE_CALIBRATED), ERROR, STOPPED.
 
 Garantías:
 - Cámara y botones se liberan en finally ante STOP, EOF, fallo o excepción.
 - No se activa CONTROL sin cámara abierta y sin atajo de parada de emergencia activo.
 - Un cambio de configuración libera el botón antes de aplicarse.
+- La asistencia por mirada solo retiene la interacción; nunca habilita el control ni anula la
+  parada de emergencia.
 """
 
 from __future__ import annotations
@@ -25,14 +32,16 @@ from typing import Any
 from .action_engine import MODE_CONTROL, MODE_OBSERVATION, LogicalActionEngine
 from .api_export import load_api_export
 from .capture import CameraCapture
-from .config import ConfigError, EngineConfig
+from .config import ConfigError, EngineConfig, GazeConfig
 from .detector import HandDetector
+from .gaze import FaceOrientationDetector, GazeGate
 from .interpreter import GestureInterpreter
 from .os_adapter import MockOSAdapter, PynputOSAdapter
 from .window_control import MockWindowController, WindowActions, Win32WindowController
 
 DETECTOR_MAX_CONSECUTIVE_FAILURES = 30
 VALID_MODES = (MODE_OBSERVATION, MODE_CONTROL)
+GAZE_EVERY_N_FRAMES = 3
 
 
 def emit_json(payload: dict[str, Any]) -> None:
@@ -95,10 +104,17 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
 
     capture = CameraCapture(camera_index=config.camera_index, mirror=config.mirror_camera)
     detector: HandDetector | None = None
+    face_detector: FaceOrientationDetector | None = None
+    face_error = ""
     interpreter = GestureInterpreter(config)
+    gaze_gate = GazeGate(config.gaze)
     action_engine: LogicalActionEngine | None = None
     detector_failures = 0
+    camera_thread: threading.Thread | None = None
+    camera_result: dict[str, bool] = {}
     last_telemetry_emit = 0.0
+    frame_counter = 0
+    event_seq = 0
 
     def dispatch(events: list[Any]) -> list[str]:
         return action_engine.dispatch(events) if action_engine is not None else []
@@ -107,16 +123,88 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
         adapter = action_engine.adapter if action_engine is not None else None
         return bool(getattr(adapter, "hotkey_active", False)), str(getattr(adapter, "hotkey_error", ""))
 
+    def emit_app_events() -> None:
+        nonlocal event_seq
+        if action_engine is None:
+            return
+        for event in action_engine.take_app_events():
+            event_seq += 1
+            emit_json({"type": "EVENT", "seq": event_seq, **event})
+
+    def ensure_face_detector() -> None:
+        nonlocal face_detector, face_error
+        if face_detector is not None or not config.gaze.enabled:
+            return
+        try:
+            face_detector = FaceOrientationDetector()
+            face_error = ""
+        except Exception as exc:  # pragma: no cover - depende del entorno
+            face_error = f"Sin detector facial: {exc}"
+
     def apply_config(new_config: EngineConfig) -> list[str]:
         """Libera lo que estuviera retenido, aplica la configuración y reabre cámara si cambió."""
         nonlocal config
         events = interpreter.update_config(new_config)
         dispatched = dispatch(events)
         config = new_config
+        if action_engine is not None and not config.airswipe_enabled:
+            action_engine.airswipe_active = False
         capture.mirror = config.mirror_camera
         if config.camera_index != capture.camera_index or not capture.is_open:
             capture.open(config.camera_index)
+        gaze_gate.update_config(config.gaze)
+        if not config.gaze.enabled:
+            dispatch(interpreter.set_external_hold(False))
+            if action_engine is not None:
+                action_engine.set_external_hold(False)
+        ensure_face_detector()
         return dispatched
+
+    def telemetry_payload(latency_ms: float, dispatched: list[str]) -> dict[str, Any]:
+        assert action_engine is not None
+        tel = interpreter.telemetry
+        x_min, x_max, y_min, y_max = config.active_bounds
+        hotkey_ok, _ = hotkey_state()
+        _ = dispatched
+        return {
+            "type": "TELEMETRY",
+            "running": True,
+            "cameraOpen": capture.is_open,
+            "cameraIndex": config.camera_index,
+            "preferredHand": config.preferred_hand,
+            "mirrorCamera": config.mirror_camera,
+            "activeBounds": [x_min, x_max, y_min, y_max],
+            "mode": action_engine.mode,
+            "paused": tel.paused,
+            "emergencyStopped": action_engine.emergency_stopped,
+            "hotkeyActive": hotkey_ok,
+            "handDetected": tel.hand_detected,
+            "handedness": (
+                "DERECHA"
+                if tel.handedness == "Right"
+                else ("IZQUIERDA" if tel.handedness == "Left" else "NINGUNA")
+            ),
+            "confidence": round(tel.confidence * 100),
+            "gesture": tel.gesture,
+            "lastEvent": action_engine.last_dispatched_event,
+            "pointerArmed": tel.pointer_armed,
+            "precision": interpreter.precision_active,
+            "airswipe": interpreter.airswipe_active,
+            "tracing": tel.tracing,
+            "gaze": {**gaze_gate.telemetry(), "error": face_error},
+            "pinchDistancePx": tel.pinch_distance_px,
+            "pinchRatio": tel.pinch_ratio,
+            "cursorX": tel.cursor_norm_x,
+            "cursorY": tel.cursor_norm_y,
+            "rawAnchorX": tel.raw_anchor_x,
+            "rawAnchorY": tel.raw_anchor_y,
+            "landmarks": tel.landmarks_2d,
+            "fps": capture.fps,
+            "latencyMs": latency_ms,
+            "totalClicks": action_engine.total_clicks,
+            "totalScrolls": action_engine.total_scrolls,
+            "windowResult": action_engine.last_window_result,
+        }
 
     def handle_command(msg: dict[str, Any]) -> bool:
         """Ejecuta un comando y emite su ACK. Devuelve False si el motor debe detenerse."""
@@ -135,7 +223,8 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
 
         if cmd == "EMERGENCY_STOP":
             action_engine.trigger_emergency_stop()
-            interpreter.set_paused(True, time.monotonic() * 1000.0)
+            dispatch(interpreter.set_paused(True, time.monotonic() * 1000.0))
+            dispatch(interpreter.set_airswipe(False))
             emit_ack(cmd_id, cmd, True, message="Parada de emergencia aplicada.")
             emit_json(
                 {
@@ -148,6 +237,8 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                     "mode": action_engine.mode,
                     "paused": interpreter.paused,
                     "emergencyStopped": True,
+                    "airswipe": interpreter.airswipe_active,
+                    "tracing": False,
                     "handDetected": False,
                     "gesture": "EMERGENCY_STOP",
                     "fps": capture.fps,
@@ -195,7 +286,7 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                 emit_ack(cmd_id, cmd, False, exc.code, exc.message)
                 return True
             apply_config(candidate)
-            emit_ack(cmd_id, cmd, True, message="Configuración aplicada.", format="ipc")
+            emit_ack(cmd_id, cmd, True, message="Configuración aplicada.", format="ipc", config=config.to_dict())
             return True
 
         if cmd == "LOAD_EXPORT":
@@ -214,13 +305,60 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                 mode=imported.mode_name,
                 notes=list(imported.notes),
                 gestures={code: dict(value) for code, value in imported.gestures.items()},
+                config=config.to_dict(),
             )
+            return True
+
+        if cmd == "AIRSWIPE":
+            active = msg.get("active")
+            if not isinstance(active, bool):
+                emit_ack(cmd_id, cmd, False, "FIELD_INVALID", "active debe ser booleano JSON.")
+                return True
+            if active and not config.airswipe_enabled:
+                emit_ack(cmd_id, cmd, False, "AIRSWIPE_DISABLED", "El trazo Air-Swipe está deshabilitado en el modo actual.")
+                return True
+            dispatch(interpreter.set_airswipe(active))
+            action_engine.airswipe_active = active
+            emit_ack(cmd_id, cmd, True, airswipe=active)
+            return True
+
+        if cmd == "TYPE_TEXT":
+            ok, code, message = action_engine.type_text(msg.get("text"))
+            if ok:
+                emit_ack(cmd_id, cmd, True)
+            else:
+                emit_ack(cmd_id, cmd, False, code, message)
+            return True
+
+        if cmd == "PRESS_KEY":
+            ok, code, message = action_engine.press_edit_key(msg.get("key"))
+            if ok:
+                emit_ack(cmd_id, cmd, True)
+            else:
+                emit_ack(cmd_id, cmd, False, code, message)
+            return True
+
+        if cmd == "GAZE_CALIBRATE":
+            if not config.gaze.enabled:
+                emit_ack(cmd_id, cmd, False, "GAZE_DISABLED", "Activa la asistencia por mirada antes de calibrar.")
+                return True
+            if face_detector is None:
+                emit_ack(cmd_id, cmd, False, "GAZE_UNAVAILABLE", face_error or "Detector facial no disponible.")
+                return True
+            gaze_gate.start_calibration()
+            emit_ack(cmd_id, cmd, True, message="Mira a la pantalla; calibrando orientación neutra.")
             return True
 
         emit_ack(cmd_id, cmd or "UNKNOWN", False, "UNKNOWN_COMMAND", "Comando no soportado.")
         return True
 
     try:
+        # La cámara se abre en un hilo mientras MediaPipe se carga en este: los dos arranques se solapan.
+        camera_thread = threading.Thread(
+            target=lambda: camera_result.update(ok=capture.open(config.camera_index)),
+            daemon=True,
+        )
+        camera_thread.start()
         window_actions: WindowActions | None
         if use_mock_os:
             adapter = MockOSAdapter()
@@ -236,7 +374,9 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
             adapter=adapter, initial_mode=MODE_OBSERVATION, window_actions=window_actions
         )
         detector = HandDetector(min_detection_confidence=0.50, min_tracking_confidence=0.50)
-        camera_ok = capture.open(config.camera_index)
+        ensure_face_detector()
+        camera_thread.join()
+        camera_ok = bool(camera_result.get("ok", False))
         x_min, x_max, y_min, y_max = config.active_bounds
         hotkey_ok, hotkey_error = hotkey_state()
 
@@ -279,6 +419,7 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
             # 2. Capture and process webcam frame at native camera rate (~30 FPS)
             t0 = time.monotonic()
             now_ms = t0 * 1000.0
+            frame_counter += 1
 
             if capture.is_open and detector is not None:
                 ok, rgb = capture.read_rgb_frame()
@@ -296,6 +437,21 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                         hand = None
                         if detector_failures >= DETECTOR_MAX_CONSECUTIVE_FAILURES:
                             raise RuntimeError(f"DETECTOR_FAILED: {exc}") from exc
+                    # Asistencia por orientación de la cabeza: cada N fotogramas, solo si está activa.
+                    if config.gaze.enabled and face_detector is not None and frame_counter % GAZE_EVERY_N_FRAMES == 0:
+                        try:
+                            pose = face_detector.detect(rgb)
+                        except Exception:
+                            pose = None
+                        allowed = gaze_gate.update(pose, now_ms)
+                        dispatch(interpreter.set_external_hold(not allowed))
+                        action_engine.set_external_hold(not allowed)
+                        if gaze_gate.calibration_result is not None:
+                            yaw, pitch = gaze_gate.calibration_result
+                            gaze_gate.calibration_result = None
+                            config = EngineConfig(**{**config.__dict__, "gaze": GazeConfig(**{**config.gaze.__dict__, "calibration": (yaw, pitch)})})
+                            gaze_gate.update_config(config.gaze)
+                            action_engine.app_events.append({"event": "GAZE_CALIBRATED", "yaw": yaw, "pitch": pitch})
                     events = interpreter.process_frame(hand, now_ms)
                 else:
                     events = interpreter.process_frame(None, now_ms)
@@ -305,6 +461,10 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                 dispatched = dispatch(events)
                 time.sleep(0.05)
 
+            action_engine.paused = interpreter.paused
+            action_engine.set_external_hold(interpreter.external_hold)
+            action_engine.set_tracking_lost(interpreter._tracking_lost_emitted)
+
             # Sin cámara no hay control: pasar a observación libera cualquier botón retenido.
             if action_engine.mode == MODE_CONTROL and not capture.is_open:
                 action_engine.set_mode(MODE_OBSERVATION)
@@ -313,6 +473,7 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                            "emergencyStopped": action_engine.emergency_stopped,
                            "reason": "CAMERA_LOST"})
 
+            emit_app_events()
             latency_ms = round((time.monotonic() - t0) * 1000.0, 1)
 
             # 3. Emit telemetry at ~16 Hz (or immediately on click/scroll/pause events)
@@ -329,51 +490,21 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                     "TRACKING_LOST",
                     "BACK",
                     "FORWARD",
+                    "CONFIRM",
+                    "CANCEL",
+                    "MEDIA_PLAY_PAUSE",
+                    "MEDIA_NEXT",
+                    "PRECISION",
+                    "NAVIGATION",
+                    "TIMER",
+                    "AIRSWIPE_TRACE",
                     "MINIMIZE_WINDOW",
                     "RESTORE_WINDOW",
                 )
             )
             if important_event or (now_sec - last_telemetry_emit) >= 0.060:
                 last_telemetry_emit = now_sec
-                tel = interpreter.telemetry
-                x_min, x_max, y_min, y_max = config.active_bounds
-                hotkey_ok, _ = hotkey_state()
-                emit_json(
-                    {
-                        "type": "TELEMETRY",
-                        "running": True,
-                        "cameraOpen": capture.is_open,
-                        "cameraIndex": config.camera_index,
-                        "preferredHand": config.preferred_hand,
-                        "mirrorCamera": config.mirror_camera,
-                        "activeBounds": [x_min, x_max, y_min, y_max],
-                        "mode": action_engine.mode,
-                        "paused": tel.paused,
-                        "emergencyStopped": action_engine.emergency_stopped,
-                        "hotkeyActive": hotkey_ok,
-                        "handDetected": tel.hand_detected,
-                        "handedness": (
-                            "DERECHA"
-                            if tel.handedness == "Right"
-                            else ("IZQUIERDA" if tel.handedness == "Left" else "NINGUNA")
-                        ),
-                        "confidence": round(tel.confidence * 100),
-                        "gesture": tel.gesture,
-                        "lastEvent": action_engine.last_dispatched_event,
-                        "pinchDistancePx": tel.pinch_distance_px,
-                        "pinchRatio": tel.pinch_ratio,
-                        "cursorX": tel.cursor_norm_x,
-                        "cursorY": tel.cursor_norm_y,
-                        "rawAnchorX": tel.raw_anchor_x,
-                        "rawAnchorY": tel.raw_anchor_y,
-                        "landmarks": tel.landmarks_2d,
-                        "fps": capture.fps,
-                        "latencyMs": latency_ms,
-                        "totalClicks": action_engine.total_clicks,
-                        "totalScrolls": action_engine.total_scrolls,
-                        "windowResult": action_engine.last_window_result,
-                    }
-                )
+                emit_json(telemetry_payload(latency_ms, dispatched))
 
             # Yield only 1ms when camera is open so VideoCapture.read() paces the loop naturally
             if capture.is_open:
@@ -384,6 +515,8 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
         emit_json({"type": "ERROR", "running": False, "message": f"Error en motor gestual: {exc}"})
         return 1
     finally:
+        if camera_thread is not None:
+            camera_thread.join(timeout=5)  # no liberar la cámara mientras aún se está abriendo
         if action_engine is not None:
             try:
                 action_engine.shutdown()
@@ -394,6 +527,11 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                 detector.close()
             except Exception:
                 pass
+        if face_detector is not None:
+            try:
+                face_detector.close()
+            except Exception:
+                pass
         try:
             capture.release()
         except Exception:
@@ -401,6 +539,20 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
         emit_json({"type": "STOPPED", "running": False, "cameraOpen": False, "mode": MODE_OBSERVATION})
 
 
+def _initial_config_from_argv(argv: list[str]) -> dict[str, Any] | None:
+    """Lee --config-json. La configuración inicial viaja en la línea de comandos para no esperar un ACK."""
+    if "--config-json" not in argv:
+        return None
+    index = argv.index("--config-json")
+    raw = argv[index + 1] if index + 1 < len(argv) else ""
+    try:
+        return json.loads(raw)
+    except ValueError:
+        emit_json({"type": "ERROR", "running": False, "code": "IPC_INVALID_JSON",
+                   "message": "--config-json no es JSON válido."})
+        sys.exit(2)
+
+
 if __name__ == "__main__":
     mock_flag = "--mock-os" in sys.argv
-    sys.exit(run_engine(use_mock_os=mock_flag))
+    sys.exit(run_engine(use_mock_os=mock_flag, initial_config=_initial_config_from_argv(sys.argv)))

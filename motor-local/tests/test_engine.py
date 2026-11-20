@@ -79,6 +79,15 @@ def make_two_fingers(cx: float = 0.5, cy: float = 0.5, handedness: str = "Right"
     return HandLandmarks(landmarks=lms, handedness=handedness, confidence=0.95)
 
 
+def armed(config: EngineConfig | None = None) -> GestureInterpreter:
+    """Interpretador con el puntero ya armado: mano abierta sostenida antes de t=0 (activar_puntero)."""
+    interp = GestureInterpreter(config)
+    for t in (-2000.0, -1900.0, -1800.0, -1700.0, -1600.0, -1500.0):
+        interp.process_frame(make_open_palm(0.5, 0.5, pinch_dist=0.14), now_ms=t)
+    assert interp.pointer_armed or not interp.config.pointer_enabled
+    return interp
+
+
 # --- 1 & 2. Left/right handedness & Mirrored vs. Non-Mirrored camera input ---
 
 def test_handedness_mirrored_and_unmirrored() -> None:
@@ -140,7 +149,7 @@ def test_cursor_coordinate_mapping_and_one_euro_smoothing() -> None:
 
 def test_confirmed_pinch_clicks_once_and_cooldown_blocks_repeat() -> None:
     cfg = EngineConfig(click_cooldown_ms=320, drag_hold_ms=420, pinch_tolerance=50)
-    interp = GestureInterpreter(cfg)
+    interp = armed(cfg)
     mock_os = MockOSAdapter()
     engine = LogicalActionEngine(mock_os, initial_mode=MODE_CONTROL)
     clicks: list[str] = []
@@ -179,7 +188,7 @@ def test_confirmed_pinch_clicks_once_and_cooldown_blocks_repeat() -> None:
 
 def test_sustained_pinch_drag_and_tracking_loss_release() -> None:
     cfg = EngineConfig(drag_hold_ms=380, tracking_loss_frames=3)
-    interp = GestureInterpreter(cfg)
+    interp = armed(cfg)
     mock_os = MockOSAdapter()
     engine = LogicalActionEngine(mock_os, initial_mode=MODE_CONTROL)
 
@@ -206,7 +215,7 @@ def test_sustained_pinch_drag_and_tracking_loss_release() -> None:
 
 def test_two_finger_scroll_pause_and_emergency_stop() -> None:
     cfg = EngineConfig(pause_hold_ms=400)
-    interp = GestureInterpreter(cfg)
+    interp = armed(cfg)
     mock_os = MockOSAdapter()
     engine = LogicalActionEngine(mock_os, initial_mode=MODE_CONTROL)
 
@@ -287,3 +296,31 @@ def test_config_roundtrip_and_ipc_subprocess() -> None:
     msg_types = [m.get("type") for m in lines]
     assert "READY" in msg_types
     assert "STOPPED" in msg_types
+
+
+def test_quick_pinch_tap_clicks_at_low_frame_rate() -> None:
+    """A ~15 FPS una pinza breve dura dos muestras: debe confirmarse y hacer clic."""
+    interp = armed(EngineConfig(click_cooldown_ms=0))
+    frames = [(make_open_palm(0.5, 0.5, pinch_dist=0.14), 0.0)]
+    frames += [(make_open_palm(0.5, 0.5, pinch_dist=0.02), t) for t in (66.0, 133.0)]
+    frames += [(make_open_palm(0.5, 0.5, pinch_dist=0.14), t) for t in (200.0, 266.0)]
+    seen = [e.type for hand, t in frames for e in interp.process_frame(hand, now_ms=t)]
+    assert seen.count(EVENT_LEFT_CLICK) == 1
+
+
+def test_pinch_ignores_tips_overlapping_only_in_2d() -> None:
+    """Puntas superpuestas en la imagen pero separadas en profundidad no son una pinza."""
+    interp = armed(EngineConfig(click_cooldown_ms=0))
+    seen = []
+    for i, t in enumerate((0.0, 33.0, 66.0, 100.0, 133.0, 166.0)):
+        hand = make_open_palm(0.5, 0.5, pinch_dist=0.02)
+        lms = list(hand.landmarks)
+        lms[4] = Point3D(lms[4].x, lms[4].y, -0.15)   # pulgar mucho más cerca de la cámara
+        seen += [e.type for e in interp.process_frame(HandLandmarks(lms, "Right", 0.95), now_ms=t)]
+    assert EVENT_LEFT_CLICK not in seen and EVENT_START_DRAG not in seen
+
+
+def test_cursor_gain_no_longer_amplifies_jitter_with_desk_rest() -> None:
+    cfg = EngineConfig(sensitivity=65, desk_rest=True)
+    assert 1.2 <= cfg.cursor_gain <= 1.45
+    assert EngineConfig(sensitivity=100).cursor_gain <= 1.6

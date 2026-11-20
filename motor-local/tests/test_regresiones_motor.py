@@ -21,7 +21,7 @@ from motor_local.interpreter import (
 )
 from motor_local.os_adapter import MockOSAdapter
 
-from tests.test_engine import make_closed_fist, make_open_palm, make_two_fingers
+from tests.test_engine import armed, make_closed_fist, make_open_palm, make_two_fingers
 
 
 def _types(events) -> list[str]:
@@ -38,7 +38,7 @@ def _feed(interp: GestureInterpreter, engine: LogicalActionEngine, frames) -> li
 
 
 def test_observation_mode_never_moves_clicks_or_scrolls() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(EngineConfig())
     mock_os = MockOSAdapter()
     engine = LogicalActionEngine(mock_os, initial_mode=MODE_OBSERVATION)
     frames = [(make_open_palm(0.4, 0.4, pinch_dist=0.14), 0.0)]
@@ -50,7 +50,7 @@ def test_observation_mode_never_moves_clicks_or_scrolls() -> None:
 
 
 def test_single_noise_frame_never_clicks() -> None:
-    interp = GestureInterpreter(EngineConfig(click_cooldown_ms=0))
+    interp = armed(EngineConfig(click_cooldown_ms=0))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
     seen = _feed(
         interp,
@@ -68,7 +68,7 @@ def test_single_noise_frame_never_clicks() -> None:
 
 def test_config_change_releases_held_drag_before_applying() -> None:
     cfg = EngineConfig(drag_hold_ms=100, tracking_loss_frames=5)
-    interp = GestureInterpreter(cfg)
+    interp = armed(cfg)
     mock_os = MockOSAdapter()
     engine = LogicalActionEngine(mock_os, initial_mode=MODE_CONTROL)
     _feed(
@@ -88,7 +88,7 @@ def test_config_change_releases_held_drag_before_applying() -> None:
 
 def test_pause_during_drag_releases_button() -> None:
     cfg = EngineConfig(drag_hold_ms=100)
-    interp = GestureInterpreter(cfg)
+    interp = armed(cfg)
     mock_os = MockOSAdapter()
     engine = LogicalActionEngine(mock_os, initial_mode=MODE_CONTROL)
     _feed(interp, engine, [(make_open_palm(0.5, 0.5, pinch_dist=0.015), t) for t in (0.0, 40.0, 80.0, 120.0, 160.0)])
@@ -99,7 +99,7 @@ def test_pause_during_drag_releases_button() -> None:
 
 def test_closed_fist_during_drag_releases_without_click() -> None:
     cfg = EngineConfig(drag_hold_ms=100, pause_hold_ms=400)
-    interp = GestureInterpreter(cfg)
+    interp = armed(cfg)
     mock_os = MockOSAdapter()
     engine = LogicalActionEngine(mock_os, initial_mode=MODE_CONTROL)
     _feed(interp, engine, [(make_open_palm(0.5, 0.5, pinch_dist=0.015), t) for t in (0.0, 40.0, 80.0, 120.0, 160.0)])
@@ -113,7 +113,7 @@ def test_closed_fist_during_drag_releases_without_click() -> None:
 
 
 def test_fist_hold_pauses_and_pinch_is_ignored_while_paused() -> None:
-    interp = GestureInterpreter(EngineConfig(pause_hold_ms=400))
+    interp = armed(EngineConfig(pause_hold_ms=400))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
     seen = _feed(interp, engine, [(make_closed_fist(), float(t)) for t in range(0, 1000, 33)])
     assert EVENT_PAUSE in seen
@@ -127,7 +127,7 @@ def test_fist_hold_pauses_and_pinch_is_ignored_while_paused() -> None:
 
 
 def test_fist_pause_disabled_does_not_pause() -> None:
-    interp = GestureInterpreter(EngineConfig(pause_hold_ms=400, fist_pause_enabled=False))
+    interp = armed(EngineConfig(pause_hold_ms=400, fist_pause_enabled=False))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
     seen = _feed(interp, engine, [(make_closed_fist(), float(t)) for t in range(0, 1000, 33)])
     assert EVENT_PAUSE not in seen
@@ -146,7 +146,7 @@ def _partial_curl(dy: float):
 
 
 def test_open_hand_with_slightly_bent_fingers_never_pauses() -> None:
-    interp = GestureInterpreter(EngineConfig(pause_hold_ms=450))
+    interp = armed(EngineConfig(pause_hold_ms=450))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
     seen = _feed(interp, engine, [(_partial_curl(-0.08), float(t)) for t in range(0, 3000, 33)])
     assert EVENT_PAUSE not in seen
@@ -154,7 +154,7 @@ def test_open_hand_with_slightly_bent_fingers_never_pauses() -> None:
 
 
 def test_brief_fist_flicker_does_not_pause_or_release_drag() -> None:
-    interp = GestureInterpreter(EngineConfig(pause_hold_ms=450, drag_hold_ms=100))
+    interp = armed(EngineConfig(pause_hold_ms=450, drag_hold_ms=100))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
     _feed(interp, engine, [(make_open_palm(0.5, 0.5, pinch_dist=0.015), t) for t in (0.0, 40.0, 80.0, 120.0, 160.0)])
     assert mock_drag_held(engine)
@@ -166,7 +166,7 @@ def test_brief_fist_flicker_does_not_pause_or_release_drag() -> None:
 
 
 def test_moving_fist_is_not_a_pause_gesture() -> None:
-    interp = GestureInterpreter(EngineConfig(pause_hold_ms=450))
+    interp = armed(EngineConfig(pause_hold_ms=450))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
     frames = []
     for i in range(60):
@@ -180,7 +180,7 @@ def mock_drag_held(engine: LogicalActionEngine) -> bool:
 
 
 def test_disabled_pinch_produces_no_click_and_disabled_pointer_produces_no_movement() -> None:
-    interp = GestureInterpreter(EngineConfig(pinch_enabled=False, pointer_enabled=False))
+    interp = armed(EngineConfig(pinch_enabled=False, pointer_enabled=False))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
     seen = _feed(
         interp,
@@ -205,7 +205,7 @@ def _scroll_sum(events) -> int:
 
 
 def test_quiet_two_finger_pose_does_not_scroll_and_jitter_is_ignored() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(EngineConfig())
     total = 0
     for i in range(30):
         jitter = 0.002 if i % 2 else -0.002
@@ -215,7 +215,7 @@ def test_quiet_two_finger_pose_does_not_scroll_and_jitter_is_ignored() -> None:
 
 def test_two_finger_scroll_sign_is_up_positive_and_down_negative() -> None:
     def run(start: float, end: float) -> int:
-        interp = GestureInterpreter(EngineConfig())
+        interp = armed(EngineConfig())
         total = 0
         ys = [start] * 3 + [start + (end - start) * k / 10 for k in range(1, 11)] + [end] * 15
         for i, cy in enumerate(ys):
@@ -228,7 +228,7 @@ def test_two_finger_scroll_sign_is_up_positive_and_down_negative() -> None:
 
 def test_scroll_total_is_similar_across_cadences() -> None:
     def run(step_ms: float) -> int:
-        interp = GestureInterpreter(EngineConfig())
+        interp = armed(EngineConfig())
         total = 0
         ys = [0.62] * 3 + [0.62 - 0.18 * k / 12 for k in range(1, 13)] + [0.44] * 80
         for i, cy in enumerate(ys):
@@ -242,7 +242,7 @@ def test_scroll_total_is_similar_across_cadences() -> None:
 
 
 def test_horizontal_two_finger_motion_does_not_scroll() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(EngineConfig())
     total = 0
     for i in range(20):
         total += _scroll_sum(interp.process_frame(make_two_fingers(0.3 + 0.02 * i, 0.5), now_ms=100.0 + i * 33.0))
@@ -250,7 +250,7 @@ def test_horizontal_two_finger_motion_does_not_scroll() -> None:
 
 
 def test_scroll_speed_is_limited_per_second() -> None:
-    interp = GestureInterpreter(EngineConfig(sensitivity=100))
+    interp = armed(EngineConfig(sensitivity=100))
     interp.process_frame(make_two_fingers(0.5, 0.9), now_ms=0.0)
     interp.process_frame(make_two_fingers(0.5, 0.9), now_ms=100.0)
     interp.process_frame(make_two_fingers(0.5, 0.9), now_ms=200.0)
@@ -260,7 +260,7 @@ def test_scroll_speed_is_limited_per_second() -> None:
 
 
 def test_two_fingers_never_click() -> None:
-    interp = GestureInterpreter(EngineConfig())
+    interp = armed(EngineConfig())
     seen: list[str] = []
     for i in range(12):
         seen.extend(_types(interp.process_frame(make_two_fingers(0.5, 0.6 - 0.01 * i), now_ms=i * 40.0)))
@@ -300,3 +300,26 @@ def test_ipc_config_roundtrip_preserves_enabled_flags() -> None:
     restored = EngineConfig.from_dict(cfg.to_dict())
     assert (restored.pinch_enabled, restored.drag_enabled, restored.scroll_enabled) == (False, False, False)
     assert (restored.pointer_enabled, restored.fist_pause_enabled) == (False, False)
+
+
+def test_pinch_survives_jitter_between_enter_and_exit_thresholds() -> None:
+    # Entre el umbral de entrada (0,35 palmas) y el de salida (0,48) la medida oscila en una pinza real.
+    interp = armed(EngineConfig(click_cooldown_ms=0, drag_hold_ms=2000))
+    engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
+    frames = []
+    for i, t in enumerate(range(0, 300, 40)):
+        pinch = 0.048 if i % 2 == 0 else 0.064  # alterna dentro de la histéresis
+        frames.append((make_open_palm(0.5, 0.5, pinch_dist=pinch), float(t)))
+    frames += [(make_open_palm(0.5, 0.5, pinch_dist=0.14), 320.0), (make_open_palm(0.5, 0.5, pinch_dist=0.14), 360.0)]
+    seen = _feed(interp, engine, frames)
+    assert seen.count(EVENT_LEFT_CLICK) == 1
+
+
+def test_one_bad_frame_does_not_reset_scroll_confirmation() -> None:
+    interp = armed(EngineConfig())
+    seen = []
+    for t, cy in ((100.0, 0.62), (130.0, 0.62), (160.0, 0.62)):
+        seen += _types(interp.process_frame(make_two_fingers(0.5, cy), now_ms=t))
+    seen += _types(interp.process_frame(make_open_palm(0.5, 0.62), now_ms=190.0))  # un fotograma malo
+    evts = interp.process_frame(make_two_fingers(0.5, 0.44), now_ms=220.0)
+    assert any(e.type == EVENT_SCROLL and e.payload["dy"] > 0 for e in evts)

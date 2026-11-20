@@ -58,7 +58,7 @@ class CameraCapture:
                 pass
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-            cap.set(cv2.CAP_PROP_FPS, 30)
+            # No se pide CAP_PROP_FPS: fijarlo costaba ~0,5 s en Windows y la cámara ya entrega su cadencia nativa.
 
             # Warm-up read to verify the stream actually delivers frames
             ok, frame = cap.read()

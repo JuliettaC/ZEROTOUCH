@@ -22,7 +22,6 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-import mediapipe as mp
 
 
 @dataclass(frozen=True)
@@ -143,15 +142,22 @@ def select_target_hand(
     )
 
 
+# Complejidad del modelo de MediaPipe: 1 completo (~31 ms), 0 ligero (~16 ms, menos precisión). Se dejó en 1: el ligero no subió los cuadros reales porque la cámara entrega ~15 por sí sola.
+MODEL_COMPLEXITY = 1
+
+
 class HandDetector:
     """MediaPipe Hands wrapper supporting up to 2 hands with deterministic hand selection."""
 
     def __init__(self, min_detection_confidence: float = 0.65, min_tracking_confidence: float = 0.60) -> None:
+        # Importación diferida: MediaPipe tarda ~2 s y así se solapa con la apertura de la cámara.
+        import mediapipe as mp
+
         self._mp_hands = mp.solutions.hands
         self._hands: Any = self._mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=2,
-            model_complexity=1,
+            model_complexity=MODEL_COMPLEXITY,
             min_detection_confidence=min_detection_confidence,
             min_tracking_confidence=min_tracking_confidence,
         )
