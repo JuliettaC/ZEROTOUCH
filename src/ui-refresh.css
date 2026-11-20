@@ -9,8 +9,8 @@
   --warn-bg: #F6EEDC;
   --error: #A33A2B;       /* 6,6:1 sobre blanco */
   --error-bg: #F9ECEA;
-  --control-off: #7A7F88; /* contorno de controles ≥ 3:1 (1.4.11) */
-  --focus: #343942;
+  --control-off: #8C7F77; /* contorno de controles: 3,9:1 sobre blanco y 3,7:1 sobre el fondo (1.4.11) */
+  --focus: #5F4D47;
 }
 
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -155,7 +155,7 @@ kbd { font: inherit; font-size: 12px; font-weight: 600; padding: 1px 6px; border
 .camera-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; }
 .camera-empty > span { font-size: 48px; opacity: .85; }
 .camera-empty strong { font-size: 22px; }
-.camera-empty small { font-size: 15px; color: #D9DEE4; max-width: 34ch; }
+.camera-empty small { font-size: 15px; color: var(--tinte); max-width: 34ch; }
 .camera-empty .button { margin-top: 12px; }
 .tech-details { background: #fff; border-radius: 16px; padding: 4px 16px; }
 .tech-details summary, .step-summary { cursor: pointer; padding: 10px 0; font-weight: 600; font-size: 15px; list-style-position: inside; }

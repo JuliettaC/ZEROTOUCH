@@ -1,19 +1,19 @@
 /* Ventana del teclado Air-Swipe. Solo se carga en la ventana overlay (import dinámico en main.jsx).
    Las medidas usan vh porque el teclado ocupa toda la ventana y la geometría es proporcional. */
-html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #343942; user-select: none; -webkit-user-select: none; cursor: default; }
+html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #5F4D47; user-select: none; -webkit-user-select: none; cursor: default; }
 
-.as-overlay { position: relative; width: 100vw; height: 100vh; background: #343942; color: #fff; font-family: 'Outfit', sans-serif; }
+.as-overlay { position: relative; width: 100vw; height: 100vh; background: #5F4D47; color: #fff; font-family: 'Outfit', sans-serif; }
 .as-bar { position: absolute; inset: 0 0 auto 0; display: flex; align-items: center; justify-content: space-between; gap: 2vh; padding: 0 2vh; background: #2A2E36; }
 .as-proposals { display: flex; align-items: center; gap: 1.6vh; min-width: 0; flex: 1; }
-.as-message { margin: 0; font-size: 5.2vh; line-height: 1.2; color: #E5E6EA; overflow-wrap: anywhere; }
+.as-message { margin: 0; font-size: 5.2vh; line-height: 1.2; color: #F9F8F7; overflow-wrap: anywhere; }
 .as-message.warn { color: #F2D9A0; }
 .as-message.error { color: #F5B4A8; }
 
-.as-chip { min-height: 13vh; padding: 0 3vh; border-radius: 3vh; border: 0.5vh solid #A1A5AD; background: #3E434E; color: #fff; font: inherit; font-size: 6.4vh; font-weight: 600; cursor: pointer; }
-.as-chip.chosen { background: #fff; color: #343942; border-color: #fff; }
-.as-chip.ghost { min-width: 13vh; padding: 0; border-color: transparent; background: transparent; color: #E5E6EA; }
+.as-chip { min-height: 13vh; padding: 0 3vh; border-radius: 3vh; border: 0.5vh solid #BDB3AA; background: #69564F; color: #fff; font: inherit; font-size: 6.4vh; font-weight: 600; cursor: pointer; }
+.as-chip.chosen { background: #fff; color: #5F4D47; border-color: #fff; }
+.as-chip.ghost { min-width: 13vh; padding: 0; border-color: transparent; background: transparent; color: #F9F8F7; }
 .as-actions { display: flex; align-items: center; gap: 1.2vh; flex-shrink: 0; }
-.as-action { min-height: 13vh; padding: 0 2.6vh; border-radius: 3vh; border: 0.5vh solid #646A74; background: transparent; color: #fff; font: inherit; font-size: 5vh; font-weight: 500; cursor: pointer; }
+.as-action { min-height: 13vh; padding: 0 2.6vh; border-radius: 3vh; border: 0.5vh solid #BDB3AA; background: transparent; color: #fff; font: inherit; font-size: 5vh; font-weight: 500; cursor: pointer; }
 .as-action.close { min-width: 13vh; padding: 0; }
 
 .as-key-slot { position: absolute; }

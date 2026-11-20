@@ -7,20 +7,25 @@
 }
 
 :root {
-  /* Colores oficiales de ZeroTouch */
-  --fondo: #F4F4F6;
-  --boton: #343942;
-  --activo: #646A74;
-  --inactivo: #A1A5AD;
+  /* Paleta del Informe del Hito 1: #F9F8F7, #5F4D47, #69564F, #BDB3AA.
+     Contraste (WCAG 2.2): #5F4D47 sobre #F9F8F7 ≈ 7,5:1; #69564F ≈ 6,5:1; blanco sobre #5F4D47 ≈ 8:1.
+     #BDB3AA (≈ 1,9:1 sobre el fondo) solo para fondos, bordes y decoración, nunca para texto. */
+  --fondo: #F9F8F7;
+  --boton: #5F4D47;
+  --activo: #69564F;
+  --inactivo: #BDB3AA;
   --blanco: #FFFFFF;
 
-  /* Color para textos */
-  --texto: #343942;
-  --background: #F4F4F6;
-  --brown: #343942;
-  --active: #646A74;
-  --muted: #A1A5AD;
-  --soft: #E5E6EA;
+  /* Alias usados por las hojas de estilo; texto principal y secundario legibles. */
+  --texto: #5F4D47;
+  --background: #F9F8F7;
+  --brown: #5F4D47;
+  --active: #69564F;
+  --muted: #BDB3AA;
+  /* Tintes derivados de la paleta: superficies suaves (#69564F sobre ellos ≥ 5,5:1) y líneas. */
+  --soft: #EEEAE6;
+  --tinte: #E2DAD3;
+  --linea: #E4DED8;
   --green: #748D7C;
   background: white;
   font-synthesis: none;
@@ -64,8 +69,8 @@ button:disabled { cursor: default; }
 a { color: inherit; text-decoration: none; }
 h1, h2, h3, p { margin: 0; }
 img { display: block; }
-button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #646A74; outline-offset: 4px; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--activo); outline-offset: 4px; }
 button, a { transition: background-color .15s, box-shadow .15s; }
 button:hover:not(:disabled), a.button:hover { filter: brightness(.96); }
-::selection { background: #A1A5AD; color: #343942; }
+::selection { background: var(--tinte); color: var(--brown); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }

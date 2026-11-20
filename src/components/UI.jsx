@@ -242,8 +242,8 @@ function LiveDiagnosticOverlay({ engineStatus }) {
         if (!pa || !pb) return null
         return <line key={idx} x1={pa[0] * 100} y1={pa[1] * 100} x2={pb[0] * 100} y2={pb[1] * 100} stroke="#9DB5A4" strokeWidth="0.7" strokeLinecap="round" />
       })}
-      {lms.map((pt, idx) => <circle key={idx} cx={pt[0] * 100} cy={pt[1] * 100} r={idx === 4 || idx === 8 ? 1.35 : 0.85} fill={idx === 4 || idx === 8 ? '#FFFFFF' : '#D9DEE4'} stroke="#343942" strokeWidth="0.3" />)}
-      <circle cx={(engineStatus.cursorX ?? 0.5) * 100} cy={(engineStatus.cursorY ?? 0.5) * 100} r="1.9" fill={engineStatus.mode === 'CONTROL' ? '#748D7C' : '#A1A5AD'} stroke="#FFFFFF" strokeWidth="0.5" />
+      {lms.map((pt, idx) => <circle key={idx} cx={pt[0] * 100} cy={pt[1] * 100} r={idx === 4 || idx === 8 ? 1.35 : 0.85} fill={idx === 4 || idx === 8 ? '#FFFFFF' : '#E2DAD3'} stroke="#5F4D47" strokeWidth="0.3" />)}
+      <circle cx={(engineStatus.cursorX ?? 0.5) * 100} cy={(engineStatus.cursorY ?? 0.5) * 100} r="1.9" fill={engineStatus.mode === 'CONTROL' ? '#748D7C' : '#BDB3AA'} stroke="#FFFFFF" strokeWidth="0.5" />
     </>}
   </svg>
 }
