@@ -32,3 +32,22 @@ tasks.register('verifyModel') {
     }
 }
 tasks.named('preBuild').configure { dependsOn 'verifyModel' }
+
+// La firma de depuración vive en el directorio de build (nunca en Git). AGP solo crea por sí mismo
+// ~/.android/debug.keystore, así que esta clave se genera aquí con keytool del JDK si falta.
+tasks.register('createDebugKeystore') {
+    def keystore = layout.buildDirectory.file('zerotouch-debug.keystore')
+    outputs.file(keystore)
+    doLast {
+        def target = keystore.get().asFile
+        if (target.isFile()) return
+        target.parentFile.mkdirs()
+        def keytool = new File(System.getProperty('java.home'), 'bin/keytool' + (System.getProperty('os.name').toLowerCase().contains('win') ? '.exe' : ''))
+        def process = [keytool.absolutePath, '-genkeypair', '-noprompt', '-keystore', target.absolutePath,
+            '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-keyalg', 'RSA',
+            '-keysize', '2048', '-validity', '3650', '-dname', 'CN=ZeroTouch Debug,O=ZeroTouch,C=CL'].execute()
+        process.waitForProcessOutput(System.out, System.err)
+        if (process.exitValue() != 0) throw new GradleException('No se pudo crear la clave de depuración con keytool.')
+    }
+}
+tasks.matching { it.name == 'validateSigningDebug' }.configureEach { dependsOn 'createDebugKeystore' }
