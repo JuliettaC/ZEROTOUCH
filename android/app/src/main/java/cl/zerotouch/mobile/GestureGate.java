@@ -1,0 +1,58 @@
+package cl.zerotouch.mobile;
+
+/** Pure safety policy. All times are monotonic milliseconds; no Android dependencies. */
+public final class GestureGate {
+    public enum State { STOPPED, OBSERVATION, CONTROL, PAUSED, ERROR }
+    public static final long MAX_AGE_MS = 350, MAX_GAP_MS = 300, HOLD_MS = 650, RELEASE_MS = 300;
+    private State state = State.STOPPED;
+    private long epoch, lastFrame = -1, since = -1;
+    private boolean tracked, released;
+    private String candidate = "";
+
+    public synchronized State state() { return state; }
+    public synchronized long epoch() { return epoch; }
+    private void reset() { since = -1; candidate = ""; released = false; }
+    public synchronized void start() {
+        epoch++; state = State.OBSERVATION; tracked = false; lastFrame = -1; reset();
+    }
+    public synchronized boolean enable(long now, boolean accessibilityReady) {
+        if ((state != State.OBSERVATION && state != State.PAUSED) || !accessibilityReady
+                || !tracked || lastFrame < 0 || now < lastFrame || now - lastFrame > MAX_AGE_MS) return false;
+        epoch++; state = State.CONTROL; reset(); return true;
+    }
+    public synchronized void pause() {
+        if (state == State.STOPPED || state == State.ERROR) return;
+        epoch++; state = State.PAUSED; reset();
+    }
+    public synchronized void stop() { epoch++; state = State.STOPPED; tracked = false; reset(); }
+    public synchronized void fail() { epoch++; state = State.ERROR; tracked = false; reset(); }
+    public synchronized void expire(long now) {
+        if (lastFrame >= 0 && now - lastFrame > MAX_AGE_MS) {
+            tracked = false;
+            if (state == State.CONTROL) pause();
+            reset();
+        }
+    }
+    public synchronized boolean frame(long token, long captured, long now, String gesture,
+            float score, boolean hand, boolean accessibilityReady) {
+        if (token != epoch || state == State.STOPPED || state == State.ERROR) return false;
+        if (captured <= lastFrame || captured > now || now - captured > MAX_AGE_MS) {
+            tracked = false; if (state == State.CONTROL) pause(); reset(); return false;
+        }
+        if (lastFrame >= 0 && captured - lastFrame > MAX_GAP_MS) reset();
+        lastFrame = captured;
+        tracked = hand;
+        if (!hand || !accessibilityReady) {
+            if (state == State.CONTROL) pause();
+            reset(); return false;
+        }
+        if (state != State.CONTROL) return false;
+        String accepted = Float.isFinite(score) && score >= 0.8f ? gesture : "";
+        if (!accepted.equals(candidate)) { candidate = accepted; since = captured; }
+        if ("Open_Palm".equals(accepted) && captured - since >= RELEASE_MS) released = true;
+        if ("Closed_Fist".equals(accepted) && released && captured - since >= HOLD_MS) {
+            released = false; since = captured; return true;
+        }
+        return false;
+    }
+}

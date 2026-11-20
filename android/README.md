@@ -1,0 +1,145 @@
+# ZeroTouch Android — primer flujo nativo
+
+Módulo independiente de la app Tauri/React y del motor Windows. El usuario autorizó
+ampliar móvil a control nativo por cámara frontal. Equipo previsto: Samsung A26.
+No existe todavía validación física ni integración de cuentas/perfiles con escritorio.
+
+## Qué hace
+
+Captura Camera2 → MediaPipe GestureRecognizer local → `GestureGate` → servicio
+de accesibilidad → `GLOBAL_ACTION_BACK`. Solo implementa **Volver**. No lee contenido
+de ventanas ni ofrece comandos arbitrarios. La pantalla es una herramienta de prueba
+nativa, todavía sin el diseño completo del producto.
+
+- Arranque en observación. Activación de control explícita y con mano reciente.
+- Después de activar, mantener palma abierta ≥300 ms y luego puño ≥650 ms con
+  confianza ≥0.8. Una acción por gesto; exige otra palma para repetir.
+- Son umbrales iniciales, no calibración medida. No prometen precisión o latencia.
+- Pausa/parada en pantalla y notificación. Al perder mano o accesibilidad se pausa;
+  el retorno de la mano no reactiva el control. Abrir ZeroTouch y pulsar reactivar.
+- Resultados tardíos (>350 ms desde adquisición), discontinuidades y resultados de
+  sesiones anteriores no generan acciones. Watchdog cada 150 ms; sin frames
+  recientes se pausa. El reloj mide desde adquisición, no latencia física del sensor.
+- Pantalla apagada/bloqueada, permiso retirado, notificación bloqueada o fallo de
+  cámara/modelo detienen la sesión. No reinicia automáticamente tras muerte de proceso.
+- Cámara y modelo permanecen en el servicio en primer plano al abrir otra aplicación.
+  El servicio se inicia desde la actividad visible. Pausar bloquea acciones, pero
+  mantiene detección; **Detener** libera cámara y modelo.
+- Procesa como máximo una inferencia a la vez y descarta frames mientras está ocupado.
+  Selecciona YUV de hasta 640×480; sin formato compatible falla explícitamente.
+  No almacena video, imágenes, landmarks ni textos.
+
+## Archivos y responsabilidades
+
+| Archivo | Función |
+|---|---|
+| `MainActivity.java` | Permisos, acceso a ajustes de accesibilidad y controles explícitos |
+| `CameraGestureService.java` | Primer plano, notificación, watchdog, autorización y ciclo de vida |
+| `FrontCamera.java` | Captura, rotación/YUV, inferencia MediaPipe y liberación de recursos |
+| `GestureGate.java` | Política temporal pura, épocas de sesión y estados de seguridad |
+| `GestureAccessibilityService.java` | Única acción permitida: Volver; informa pérdida del servicio |
+| `tests/GestureGateTest.java` | Pruebas JVM sin cámara ni acciones Android |
+| `prepare-model.ps1` | Descarga explícita y hash del modelo real |
+| `test-core.ps1` | Compila y ejecuta pruebas aisladas del núcleo |
+
+## Entorno y compatibilidad
+
+AGP 8.13.0; Gradle 8.14.3; JDK de ejecución utilizado: JBR 21. Código Java 17;
+compile/target SDK 36. `minSdk=26` (Android 8) es una decisión del prototipo para
+usar directamente canales de notificación y `startForegroundService`; MediaPipe
+documenta mínimo API 24. No significa que todos los equipos con API 26 funcionen.
+Debe verificarse cámara, ABI, memoria, orientación, restricciones del fabricante y
+rendimiento en cada dispositivo. No se ha probado todavía el A26 ni un equipo de 2021.
+La compatibilidad con páginas nativas de 16 KB también debe verificarse antes de
+declarar soporte general de Android reciente.
+
+Dependencia fijada: `com.google.mediapipe:tasks-vision:0.10.21`, no `latest.release`.
+Modelo oficial `gesture_recognizer/float16/1`, 8,373,440 bytes. SHA-256:
+
+```text
+97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482
+```
+
+`verifyModel` impide compilar sin ese modelo o con otro hash. El binario se ignora
+en Git; obtenerlo con `./android/prepare-model.ps1`. No hay descarga de modelos
+en el teléfono ni sustitución por detección falsa.
+
+## Comandos reproducibles (PowerShell)
+
+Desde la raíz del repositorio:
+
+```powershell
+./android/test-core.ps1 -JavaHome 'C:\Users\cespe\.jdks\jbr-21.0.11'
+./android/prepare-model.ps1
+
+$env:JAVA_HOME = 'C:\Users\cespe\.jdks\jbr-21.0.11'
+$env:ANDROID_HOME = 'C:\Users\cespe\AppData\Local\Android\Sdk'
+$env:GRADLE_USER_HOME = 'C:\workspace\zt-android-gradle'
+$env:GRADLE_RO_DEP_CACHE = 'C:\Users\cespe\.gradle\caches'
+$gradle = 'C:\Users\cespe\.gradle\wrapper\dists\gradle-8.14.3-all\10utluxaxniiv4wxiphsi49nj\gradle-8.14.3\bin\gradle.bat'
+& $gradle -p android --no-daemon --project-cache-dir C:/workspace/zt-android-project-cache -PztBuildRoot=C:/workspace/zt-android-build :app:assembleDebug
+```
+
+En otro equipo ajustar rutas. El PATH observado apunta Java a un JRE 8, por eso
+se fija JAVA_HOME. El directorio corto evita problemas Windows/OneDrive con rutas
+de transformaciones Gradle. Es solo caché/salida, no otro clon del código.
+Sin `ztBuildRoot`, las salidas van a `android/app/build`. Con el comando anterior,
+APK esperada: `C:/workspace/zt-android-build/app/outputs/apk/debug/app-debug.apk`.
+La firma es de depuración y se genera en el directorio de build, no una clave de
+distribución. Nunca añadir esa clave ni los APK a Git.
+
+Si el entorno exige proxy, Gradle necesita `https.proxyHost/https.proxyPort` y sus
+equivalentes HTTP, tomados del proxy configurado por el entorno; no desactivar TLS,
+no guardar credenciales en el proyecto. No usar `--scan` ni publicar resultados.
+
+## Prueba manual en el A26 (pendiente, con el usuario)
+
+1. Registrar modelo exacto, Android/One UI, ABI y condiciones de iluminación.
+2. Instalar la APK de depuración manualmente. No se instala ni habilita accesibilidad
+   desde scripts. Si Android restringe ajustes de una APK externa, revisar las
+   opciones del sistema conscientemente; no automatizar ni eludir esa protección.
+3. Abrir ZeroTouch, conceder cámara/notificaciones y activar el servicio en ajustes
+   de accesibilidad. Volver a ZeroTouch antes de iniciar captura.
+4. Iniciar observación: comprobar que detecta una mano y **no** ejecuta Volver.
+5. Activar control, mantener la mano en cámara y abrir una pantalla secundaria
+   de Ajustes. Mostrar palma y puño: comprobar un solo Volver. Mantener puño:
+   no debe seguir retrocediendo. Repetir solo tras otra palma.
+6. Probar Pausar desde notificación: gestos no deben actuar. Detener: debe cesar
+   el indicador de cámara. Repetir desde el botón de la app.
+7. Retirar mano, tapar cámara, revocar acceso, apagar/bloquear pantalla, girar teléfono,
+   abrir otra app que use cámara, cerrar desde recientes y reiniciar el proceso:
+   nunca debe reactivar control por sí solo ni ejecutar un gesto antiguo.
+8. Verificar si otra app rechaza o no responde a Volver. El booleano de la API
+   indica aceptación del sistema, no prueba el cambio visible de pantalla.
+9. Solo tras validar seguridad, medir latencia, falsos positivos, consumo y temperatura
+   durante una sesión. Repetir en un teléfono físico de aproximadamente 2021.
+
+## Evidencia y pendientes
+
+Núcleo: **95 aserciones JVM aprobadas**. Modelo descargado/verificado. Compilación
+Android en curso al crear esta documentación: consultar el estado final en
+`docs/traspaso-claude.md`. No se ha instalado APK, iniciado cámara ni habilitado
+accesibilidad. Ninguna prueba JVM valida la detección real o el ciclo de vida Android.
+
+Faltan prueba física, calibración/rendimiento, resto de acciones, adaptación visual
+y cuentas/perfiles. El modo Android todavía no consume preferencias v2 ni el backend;
+no inventa una sincronización exitosa. Cambios posteriores en contratos compartidos
+deben coordinarse con Claude.
+
+## Referencias oficiales (APA 7)
+
+Android Developers. (s. f.). *Camera preview*. Recuperado el 11 de noviembre de 2026, de https://developer.android.com/media/camera/camera2/camera-preview
+
+Android Developers. (s. f.). *Foreground service types*. Recuperado el 11 de noviembre de 2026, de https://developer.android.com/develop/background-work/services/fgs/service-types
+
+Android Developers. (s. f.). *AccessibilityService*. Recuperado el 11 de noviembre de 2026, de https://developer.android.com/reference/android/accessibilityservice/AccessibilityService
+
+Android Developers. (s. f.). *Android Gradle Plugin 8.13.0*. Recuperado el 11 de noviembre de 2026, de https://developer.android.com/build/releases/agp-8-13-0-release-notes
+
+Android Developers. (s. f.). *Support 16 KB page sizes*. Recuperado el 11 de noviembre de 2026, de https://developer.android.com/guide/practices/page-sizes
+
+Google AI Edge. (s. f.). *Setup guide for Android*. Recuperado el 11 de noviembre de 2026, de https://developers.google.com/edge/mediapipe/solutions/setup_android
+
+Google AI Edge. (s. f.). *Gesture Recognizer*. Recuperado el 11 de noviembre de 2026, de https://developers.google.com/edge/mediapipe/solutions/vision/gesture_recognizer
+
+Implementación asistida por Codex. Revisión humana y validación física pendientes.
