@@ -81,7 +81,7 @@ Todos están en el contrato `contracts/capacidades.json` y se pueden reasignar p
 | Predicción Air-Swipe local | Hecho (ver §4) |
 | *(añadido)* Tauri 2 como aplicación de escritorio | Hecho. **Sin instalador**: `bundle.active: false` y Python no se empaqueta todavía |
 | Identidad visual: tipografía Outfit | Hecho |
-| Identidad visual: paleta #F9F8F7, #5F4D47, #69564F, #BDB3AA | Hecho en la interfaz de escritorio (`src/index.css`), con contraste de texto ≥ 6,5:1. El prototipo del Hito 1 no se modifica |
+| Identidad visual: paleta #F9F8F7, #5F4D47, #69564F, #BDB3AA | No aplicada: la interfaz conserva la paleta gris grafito (#343942, #646A74, #A1A5AD, #F4F4F6) por decisión del 20-11-2026 (se probó la del Informe y se revirtió) |
 
 ## 6. Validación y entrega
 

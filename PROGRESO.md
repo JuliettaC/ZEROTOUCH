@@ -431,3 +431,7 @@ Rama `codex/h2-seguridad-verificacion`. **Sin push**: la rama no tiene upstream 
 - En Git Bash, curl.exe recibe los argumentos en la página de códigos ANSI: el cuerpo con «é» se envía desde un archivo UTF-8.
 
 Implementación asistida por Claude; revisión humana pendiente.
+
+### Reversión de la paleta (20-11-2026, noche)
+
+La persona usuaria no reconoció la interfaz con la paleta del Informe y pidió **volver a la gris grafito**. Se revirtió `bc49fdd` (las hojas de `src/` quedan idénticas al estado anterior a la sesión) y el HUD pasó a la misma paleta gris. `docs/matriz-hito1.md`: la paleta del Informe queda como «No aplicada», por decisión. Verificación: frontend 147/147, `lint` y `verify:separation` pasan. `npm run desktop:build` no pudo reemplazar el `.exe` porque había una instancia abierta por la persona usuaria (no se cerró). `verify:tauri` anterior: se detuvo en una excepción (12 comprobaciones correctas, `click` sobre un elemento inexistente, línea 222 del script) antes de llegar al HUD; **sin investigar todavía**.

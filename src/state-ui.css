@@ -80,7 +80,7 @@
 .tool-gestures li { display: flex; flex-direction: column; }
 .tool-gestures .muted { color: var(--muted, #6b7280); }
 .timer-dock { position: fixed; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 40; }
-.timer-chip { border: 0; border-radius: 999px; padding: 8px 14px; background: var(--brown); color: #fff; font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.timer-chip { border: 0; border-radius: 999px; padding: 8px 14px; background: #343942; color: #fff; font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
 .timer-chip.done { background: #c8582b; }
 @media (prefers-reduced-motion: reduce) { .timer-row.done { animation: none; } }
 
