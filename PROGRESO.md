@@ -445,3 +445,10 @@ Tras recompilar (`npm run desktop:build`, con la paleta gris) se ejecutó `npm r
 4. **45/45**, incluidas las 6 del HUD: se abre en `#hud` con el motor en marcha; muestra el estado real (cámara 9 inexistente → «Cámara no disponible», «Última acción: Mano perdida»); mismo origen; desde el HUD se rechazan `engine_stop`, `airswipe_window_open` y la API (solo `engine_status` pasa); no activable, encima, transparente a los clics, sin foco; se cierra al detener el motor.
 
 Sin cámara ni entradas en ninguna ejecución. Falta ver el HUD con manos reales.
+
+### Fallo intermitente de la overlay en `verify:tauri` (investigación)
+
+- **Hipótesis**: el script abría la overlay llamando a los comandos con **un solo latido sembrado**, que caduca a los 3,5 s (`STALE_AFTER_MS`), mientras que la app real (`openKeyboard`) da 8 s (`OPEN_GRACE_MS`). Si la overlay tardaba más de 3,5 s en escribir su latido, el guardia de huérfanos de `useEngine` la cerraba antes de que el script la viera.
+- **Medido**: con el script ya corregido, tres ejecuciones seguidas **45/45**. La overlay escribió su primer latido a los **543, 542 y 566 ms**. Eso queda muy por debajo de 3,5 s, así que la hipótesis **no está confirmada**: la ejecución fallida habría necesitado una carga más de seis veces más lenta que lo normal, y no quedó evidencia de por qué.
+- **Cambios (solo en el script)**: se emula el margen real de 8 s renovando la semilla hasta el primer latido de la overlay (pasos 8 y 14), y se mide `msHastaPrimerLatido`. Si vuelve a fallar, el detalle incluye el aviso de la ventana principal: sin latido y con «Se apagó el modo teclado…», el guardia la cerró; si no hay aviso, la causa es otra (p. ej., que el destino CDP no se registre).
+- **Para la demo**: la app real tiene 8 s de margen y la overlay suele cargar en ~0,55 s en este PC. No se cambió código de la app.

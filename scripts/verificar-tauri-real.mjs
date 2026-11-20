@@ -291,11 +291,24 @@ try {
   // La aplicación abre el teclado con `openKeyboard`, que da 8 s de margen hasta el primer latido de la overlay; llamar
   // directamente a los comandos se saltaría ese margen y el guardia de huérfanos cerraría la ventana mientras carga.
   // Aquí se emula sembrando un latido; la comprobación 9 exige que luego lo REESCRIBA la propia overlay.
+  // Un único latido sembrado caduca a los 3,5 s (STALE_AFTER_MS): si la overlay tarda más en escribir el suyo, el guardia
+  // de huérfanos la cierra. La app real da 8 s (OPEN_GRACE_MS); aquí se emula igual: se renueva la semilla hasta que la
+  // overlay escriba su propio latido o pasen 8 s, y se MIDE cuánto tardó (dato para saber si el margen real alcanza).
   const opened = await run(page, async () => { const seed = Date.now(); localStorage.setItem('zerotouch:airswipe:heartbeat', String(seed)); const g = await invoke('airswipe_window_open'); await invoke('engine_airswipe', { active: true }); return { g, seed } })
-  const seedStamp = opened.seed
+  const seeds = new Set([String(opened.seed)])
+  let seedStamp = opened.seed, firstBeatMs = null
+  while (Date.now() - opened.seed < 8000) {
+    await delay(300)
+    const value = await run(page, async () => localStorage.getItem('zerotouch:airswipe:heartbeat'))
+    if (value && !seeds.has(value)) { firstBeatMs = Date.now() - opened.seed; break }
+    seedStamp = await run(page, async () => { const now = Date.now(); localStorage.setItem('zerotouch:airswipe:heartbeat', String(now)); return now })
+    seeds.add(String(seedStamp))
+  }
   let overlay
   for (let i = 0; i < 40 && !overlay; i += 1) { await delay(500); overlay = await findTarget(isOverlay) }
-  check('la ventana overlay real se crea en #airswipe', overlay, overlay?.url)
+  // Diagnóstico si falla: sin latido + aviso de «modo teclado apagado» = el guardia la cerró; con latido y sin destino CDP = otra causa.
+  const overlayToast = overlay ? null : await run(page, async () => document.querySelector('.toast')?.innerText ?? null)
+  check('la ventana overlay real se crea en #airswipe y escribe su latido dentro del margen de 8 s de la app', overlay && firstBeatMs !== null, { url: overlay?.url, msHastaPrimerLatido: firstBeatMs, ...(overlay ? {} : { aviso: overlayToast }) })
   await run(overlay, async () => { await until(() => document.querySelectorAll('.as-key').length === 27, 30000) })
   const keys = await run(overlay, async () => ({ keys: document.querySelectorAll('.as-key').length, message: document.querySelector('.as-message')?.textContent, buttons: [...document.querySelectorAll('.as-action')].map(b => b.textContent.trim()) }))
   check('la overlay carga el léxico y dibuja las 27 teclas en WebView2 real', keys.keys === 27, keys)
@@ -365,7 +378,11 @@ try {
   app.once('exit', () => { exited = true })
   await run(await main(), async ({ config }) => { localStorage.setItem('zerotouch:airswipe:heartbeat', String(Date.now())); await invoke('engine_start', { config }); await invoke('airswipe_window_open') }, { config: { format_version: 2, cameraIndex: 9 } })
   let overlayAgain
-  for (let i = 0; i < 20 && !overlayAgain; i += 1) { await delay(500); overlayAgain = await findTarget(isOverlay) }
+  // Mismo margen de 8 s que la app: se renueva la semilla mientras la overlay no aparezca.
+  for (let i = 0; i < 20 && !overlayAgain; i += 1) {
+    await delay(500); overlayAgain = await findTarget(isOverlay)
+    if (!overlayAgain && i < 16) await run(await main(), async () => localStorage.setItem('zerotouch:airswipe:heartbeat', String(Date.now())))
+  }
   const before = winState(app.pid).windows.filter(w => w.title).map(w => w.title)
   const sent = execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', `${ROOT}/scripts/verificar-tauri-real-cerrar.ps1`, '-ProcessId', String(app.pid)], { encoding: 'utf8' }).trim()
   for (let i = 0; i < 40 && !exited; i += 1) await delay(500)
