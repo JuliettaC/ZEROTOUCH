@@ -7,7 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:app": "vite --mode desktop",
+    "build:app": "vite build --mode desktop",
+    "preview:app": "vite preview --mode desktop",
+    "verify:separation": "node scripts/verify-separation.cjs",
+    "desktop:build": "npm run build:app && cargo build --manifest-path desktop/Cargo.toml --locked",
+    "desktop:test": "cargo test --manifest-path desktop/Cargo.toml --locked",
+    "verify:tauri": "node scripts/verificar-tauri-real.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@font-face {
+  font-family: 'Outfit';
+  src: url('./assets/Outfit.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
 
 :root {
   /* Colores oficiales de ZeroTouch */

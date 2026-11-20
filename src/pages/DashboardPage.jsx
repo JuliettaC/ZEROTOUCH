@@ -1,46 +1,100 @@
-import { gestures as catalog } from '../data/gestures'
-import { contexts } from '../data/preferences'
-import { DeviceStatus, Icon, MobileAction, NavLink, SensorPreview } from '../components/UI'
+import { useId, useState } from 'react'
+import { CATEGORY_ICON, presets } from '../data/preferences'
+import { ConfigStatus, EngineCard, GestureList, Icon, NavLink } from '../components/UI'
+import { ToolsPanel } from '../components/AppTools'
 
-const ASSETS = `${import.meta.env.BASE_URL}assets/`
+// Textos breves para elegir modo de un vistazo (las descripciones completas siguen en preferences.js).
+const PRESET_SUMMARY = {
+  kitchen: 'Mano a media distancia',
+  desk: 'Antebrazo apoyado, movimientos cortos',
+  assistance: 'Más estable ante temblores',
+}
+const CATEGORY_LABEL = { manual: 'Manos ocupadas', oficina: 'Oficina', accesibilidad: 'Accesibilidad', personalizado: 'Personalizado' }
 
-const gestures = [
-  ['pointer', catalog.pointer.title, 'imgMinimalistLineArtIllustrationOfAnOpenHandPalmGestureSoftColors'],
-  ['click', catalog.click.title, 'imgMinimalistLineArtIllustrationOfAPinchGestureFingersTogetherSoftColors'],
-  ['pause', catalog.pause.title, 'imgMinimalistLineArtIllustrationOfAFistGestureSoftColors'],
-]
-
-function ContextCard({ context, active, onSelect, mobile = false }) {
-  return <article className={`context-card ${active ? 'selected' : ''} ${mobile ? 'mobile-card' : ''}`}>
-    {!mobile && active && <span className="active-tag">ACTIVO AHORA</span>}
-    {!mobile && <button className="context-select" aria-label={`Seleccionar ${context.title}`} aria-pressed={active} onClick={onSelect} />}
-    <div className="card-top"><span className="context-icon"><Icon name={context.icon} muted={!mobile && !active} /></span>{!mobile && !active && <span className="tiny-button">SELECCIONAR</span>}</div>
-    <h3>{context.title}</h3><p>{context.description}</p><div className="card-footer"><span>{context.badge}</span><span className="indicators">{context.indicators.map(icon => <span key={icon}><Icon name={icon} /></span>)}</span></div>
-  </article>
+function ModeOption({ name, value, checked, disabled, onSelect, icon, title, summary, status, children }) {
+  return <div className={`mode-option ${checked ? 'checked' : ''}`}>
+    <label>
+      <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={onSelect} />
+      <span className="context-icon" aria-hidden="true">{icon}</span>
+      <span className="mode-text"><strong>{title}</strong>{summary && <small>{summary}</small>}</span>
+      {status && <span className="sync-chip">{status}</span>}
+      {checked && <span className="mode-check" aria-hidden="true">✓</span>}
+    </label>
+    {children}
+  </div>
 }
 
-function CustomContexts({ preferences, openModal, deleteContext, update, mobile = false }) {
-  return <section className={`custom-contexts ${mobile ? '' : 'panel'}`}>
-    {!mobile && <div className="section-line"><span>Crear Nuevo Contexto</span><button className="new-preset" onClick={() => openModal({ type: 'context', mobile })}>+ Nuevo Preset</button></div>}
-    {preferences.contexts.map(context => <div className={`custom-context ${preferences[mobile ? 'mobileContext' : 'desktopContext'] === context.id ? 'active-custom' : ''}`} key={context.id}>
-      <button className="custom-select" onClick={() => update({ [mobile ? 'mobileContext' : 'desktopContext']: context.id })} aria-pressed={preferences[mobile ? 'mobileContext' : 'desktopContext'] === context.id}><span className="custom-icon"><Icon name="account-circle" muted={!mobile && preferences.desktopContext !== context.id} /></span><strong>{context.name}</strong></button>
-      {!mobile && <button className="tiny-button" onClick={() => update({ desktopContext: context.id })}>{preferences.desktopContext === context.id ? 'ACTIVO' : 'SELECCIONAR'}</button>}
-      <button className="delete-context" onClick={() => deleteContext(context.id)} aria-label={`Eliminar ${context.name}`}>Eliminar</button>
-    </div>)}
-    {(!preferences.contexts.length) && <button className={`add-context ${mobile && preferences.contexts.length ? 'additional-context' : ''}`} onClick={() => openModal({ type: 'context', mobile })}><span className="device-icon"><Icon name="plus" /></span><span><strong>Agregar Modo Personalizado</strong><small>Configura tolerancia, sensibilidad y gestos a tu medida</small></span></button>}
-  </section>
+function ConfirmDelete({ label, note, disabled, onConfirm }) {
+  const [confirming, setConfirming] = useState(false)
+  if (!confirming) return <button type="button" className="icon-button" disabled={disabled} onClick={() => setConfirming(true)} aria-label={`Eliminar ${label}`}>✕</button>
+  return <span className="confirm-inline" role="group" aria-label={`¿Eliminar ${label}?`} title={note}>
+    <span>¿Eliminar aquí?</span>
+    <button type="button" className="tiny-button danger" onClick={onConfirm} autoFocus>Sí</button>
+    <button type="button" className="tiny-button ghost" onClick={() => setConfirming(false)}>No</button>
+  </span>
 }
 
-function DetectionBanner({ mobile, enabled, onChange }) {
-  return <section className={`detection-banner ${!enabled ? 'inactive' : ''}`}><span className="detection-icon">{mobile ? <Icon name={enabled ? 'proximity-active' : 'proximity-inactive'} /> : <Icon name={enabled ? 'eye' : 'eyeOff'} />}</span><div><strong>{mobile ? 'Reposo por Proximidad' : `Detección Inteligente: Gaze-Gating ${enabled ? 'activo' : 'inactivo'}`}</strong><p>{mobile ? 'Preferencia simulada: se propone activar la cámara al acercar la mano.' : 'Preferencia simulada: se propone pausar el puntero al desviar la mirada.'}</p></div><button className="outline-tiny" onClick={() => onChange(!enabled)} aria-pressed={enabled}>{enabled ? 'DESACTIVAR' : 'ACTIVAR'}</button></section>
-}
+const modeStatus = mode => (mode.version === null ? 'Sin subir' : mode.dirty ? 'Cambios sin subir' : '')
 
-export default function DashboardPage({ preferences, update, navigate, openModal, deleteContext }) {
-  const customProps = { preferences, update, openModal, deleteContext }
-  const mobileContext = contexts[preferences.mobileContext]
-  return <main className="dashboard-page"><div className="desktop-dashboard desktop-only">
-    <DetectionBanner enabled={preferences.gaze} onChange={gaze => update({ gaze })} />
-    <div className="dashboard-grid"><div className="dashboard-left"><div className="contexts-heading"><div><h1>Contextos de Trabajo</h1><p>Presets optimizados según tu actividad y entorno actual.</p></div><NavLink to="/calibracion" navigate={navigate} className="button primary calibrate-button"><Icon name="wand" />Iniciar Calibración Anatómica y Gestos</NavLink></div><div className="context-grid">{['kitchen', 'desk', 'assistance'].map(id => <ContextCard key={id} context={contexts[id]} active={preferences.desktopContext === id} onSelect={() => update({ desktopContext: id })} />)}</div><CustomContexts {...customProps} /></div>
-    <aside className="dashboard-aside"><DeviceStatus /><section className="memory panel"><h2>Gestos en Memoria</h2>{gestures.map(([title, subtitle, image]) => <button className="memory-gesture" key={title} onClick={() => openModal({ type: 'gesture', gesture: title })}><img src={`${ASSETS}home-${image}.png`} alt="" /><span><strong>{catalog[title].action}</strong><small>{subtitle}</small></span><Icon name="chevron" /></button>)}</section><section className="tip"><h2>Consejo</h2><p>Usa el <strong>"Modo Desk-Rest"</strong> mientras escribes para alternar entre<br /> teclado y navegación sin levantar las muñecas.</p><Icon name="tip" /></section></aside></div>
-    </div><div className="mobile-dashboard mobile-only"><DetectionBanner mobile enabled={preferences.proximity} onChange={proximity => update({ proximity })} /><section className="mobile-contexts"><h1>Contexto de Trabajo</h1><div className="context-tabs" aria-label="Contexto de trabajo">{['kitchen', 'handsfree', 'assistance'].map(id => <button key={id} aria-pressed={preferences.mobileContext === id} className={preferences.mobileContext === id ? 'active' : ''} onClick={() => update({ mobileContext: id })}>{contexts[id].tab}</button>)}</div>{mobileContext && <ContextCard context={mobileContext} mobile active />}</section><CustomContexts {...customProps} mobile />{preferences.contexts.length > 0 && <button className="additional-context" onClick={() => openModal({ type: 'context', mobile: true })}>Agregar Modo Personalizado</button>}<section className="mobile-sensor-section"><div className="section-line"><h2>Vista de Sensor</h2><span className="connected">● DEMO · 60 FPS</span></div><SensorPreview variant="home" /></section><MobileAction to="/calibracion" navigate={navigate}>Ver Atajos y Calibración</MobileAction></div></main>
+export default function DashboardPage({
+  view, settings, assignments, locked, apply, onRetryApply, syncSummary, account,
+  onSelectProfile, onSelectMode, onDeleteMode, onDeleteProfile, openModal, navigate,
+  engineStatus, engineBusy, onStartEngine, onStopEngine, onToggleControlMode, onTogglePause,
+  tools, onChangeTimerMinutes,
+}) {
+  const radioName = useId()
+  const profileId = useId()
+  const { profiles, activeProfile, modes, activeModeId, tombstones } = view
+  return <main id="main" tabIndex={-1} className="page home-page">
+    <h1 className="sr-only">Inicio</h1>
+    <EngineCard engineStatus={engineStatus} engineBusy={engineBusy} onStartEngine={onStartEngine} onStopEngine={onStopEngine} onToggleControlMode={onToggleControlMode} onTogglePause={onTogglePause} />
+    <div className="save-status-line">
+      <ConfigStatus apply={apply} onRetry={onRetryApply} />
+      <p className={`sync-summary sync-${syncSummary.tone}`}>{account ? 'Cuenta: ' : ''}{syncSummary.text}</p>
+    </div>
+
+    <div className="home-grid">
+      <section className="panel" aria-labelledby="modes-title">
+        <div className="section-line"><h2 id="modes-title">Modo de uso</h2>
+          <button type="button" className="text-link" disabled={locked || !activeProfile} onClick={() => openModal({ type: 'context' })}><span aria-hidden="true">＋</span> Nuevo modo</button>
+        </div>
+
+        <div className="profile-bar">
+          {activeProfile ? <>
+            <label htmlFor={profileId}>Perfil</label>
+            <select id={profileId} className="compact-select" value={activeProfile.id} disabled={locked} onChange={event => onSelectProfile(event.target.value)}>
+              {profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.nombre}</option>)}
+            </select>
+            <button type="button" className="text-link" disabled={locked} onClick={() => openModal({ type: 'profile', profile: activeProfile })}>Editar</button>
+            <ConfirmDelete label={`el perfil ${activeProfile.nombre}`} disabled={locked} note="Se quita de este equipo y de tu cuenta al sincronizar, solo si no cambió en otro equipo (con todos sus modos)." onConfirm={() => onDeleteProfile(activeProfile.id)} />
+          </> : <p className="empty-note">No hay ningún perfil.</p>}
+          <button type="button" className="text-link" disabled={locked} onClick={() => openModal({ type: 'profile' })}><span aria-hidden="true">＋</span> Nuevo perfil</button>
+        </div>
+
+        {activeProfile && modes.length === 0 && <p className="empty-note">Este perfil no tiene modos. Crea uno con «Nuevo modo».</p>}
+        {modes.length > 0 && <fieldset className="mode-list">
+          <legend className="sr-only">Elige un modo de uso</legend>
+          {modes.map(mode => {
+            const preset = mode.plantilla ? presets[mode.plantilla] : null
+            const icon = preset ? <Icon name={preset.icon} /> : CATEGORY_ICON[mode.categoria] === 'star' ? <span className="custom-glyph">★</span> : <Icon name={CATEGORY_ICON[mode.categoria]} />
+            return <ModeOption key={mode.id} name={radioName} value={mode.id} checked={activeModeId === mode.id} disabled={locked} onSelect={() => onSelectMode(mode.id)} icon={icon} title={mode.nombre} summary={(mode.plantilla && PRESET_SUMMARY[mode.plantilla]) || CATEGORY_LABEL[mode.categoria]} status={account ? modeStatus(mode) : ''}>
+              <button type="button" className="icon-button" disabled={locked} onClick={() => openModal({ type: 'context', mode })} aria-label={`Editar ${mode.nombre}`} title="Cambiar nombre o categoría">✎</button>
+              <ConfirmDelete label={mode.nombre} disabled={locked} note="Se quita de este equipo y, si ya estaba sincronizado, de tu cuenta al sincronizar, solo si no cambió en otro equipo." onConfirm={() => onDeleteMode(mode.id)} />
+            </ModeOption>
+          })}
+        </fieldset>}
+        {account && tombstones > 0 && <p className="pending-note" role="status">{tombstones} elemento{tombstones === 1 ? '' : 's'} eliminado{tombstones === 1 ? '' : 's'} aquí se quitará{tombstones === 1 ? '' : 'n'} de tu cuenta al sincronizar, solo si no cambió en otro equipo.</p>}
+      </section>
+
+      <section className="panel" aria-labelledby="gestures-title">
+        <div className="section-line"><h2 id="gestures-title">Gestos</h2>
+          <NavLink to="/calibracion" navigate={navigate} className="text-link">Calibrar <Icon name="chevron" /></NavLink>
+        </div>
+        <GestureList engineStatus={engineStatus} settings={settings} assignments={assignments} onOpen={gesture => openModal({ type: 'gesture', gesture })} />
+      </section>
+
+      {tools && <ToolsPanel tools={tools} minutes={settings.timerMinutes ?? 5} onChangeMinutes={onChangeTimerMinutes} assignments={assignments} navigate={navigate}
+        controlActive={engineStatus.mode === 'CONTROL' && !engineStatus.emergencyStopped} />}
+    </div>
+  </main>
 }

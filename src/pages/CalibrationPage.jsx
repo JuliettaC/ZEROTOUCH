@@ -1,6 +1,59 @@
-import { DeviceStatus, ErgonomicControls, Icon, MobileAction, NavLink, SensorPreview } from '../components/UI'
-import { gestures as catalog } from '../data/gestures'
-export default function CalibrationPage({ preferences, update, navigate, openModal }) {
-  return <main className="calibration-page"><div className="desktop-calibration desktop-only"><div className="calibration-grid"><div className="calibration-left"><SensorPreview variant="desktop" /><div className="metrics"><div><small>Latencia de ejemplo</small><strong>1.2<span>ms</span></strong><em>▼ 0.2</em></div><div><small>Puntos Clave</small><strong>21 <span>/ 21</span></strong><em>OK</em></div><div><small>CPU de ejemplo</small><strong>4.2<span>%</span></strong><em>Eco-Modo</em></div></div></div><aside className="calibration-aside"><section className="ergonomic-summary panel"><h2>Control Ergonómico</h2><button className="tiny-button" onClick={() => openModal({ type: 'ergonomic' })}>AJUSTAR</button></section><section className="configured-gestures"><h2>Gestos Configurados</h2><div>{Object.entries(catalog).map(([id, { emoji, title, action: subtitle }]) => <button key={title} className="configured-gesture" onClick={() => openModal({ type: 'gesture', gesture: id })}><span className="emoji-icon">{emoji}</span><span><strong>{title}</strong><small>{subtitle}</small></span><span className="gesture-badge">DEMO</span></button>)}</div></section></aside></div><nav className="page-actions"><NavLink to="/" navigate={navigate} className="button secondary"><Icon name="back" />Volver al Panel Principal</NavLink><NavLink to="/teclado" navigate={navigate} className="button primary">Ir al Teclado Gestual<Icon name="next" /></NavLink></nav></div>
-    <div className="mobile-calibration mobile-only"><div className="mobile-calibration-top"><DeviceStatus mobile /><SensorPreview variant="calibration" /></div><section className="mobile-ergonomics"><h2>Ajustes Ergonómicos</h2><div className="panel"><ErgonomicControls settings={preferences.settings} onChange={settings => update({ settings })} /></div></section><section className="mobile-gestures"><h2>Gestos Configurados</h2>{['scroll', 'pause'].map(id => { const { icon, title } = catalog[id]; return <button key={title} onClick={() => openModal({ type: 'gesture', gesture: id })}><span className="emoji-icon"><Icon name={icon} /></span><span>{title}</span><Icon name="chevron" /></button> })}</section><MobileAction to="/prueba" navigate={navigate}>Abrir Entorno de prueba</MobileAction></div></main>
+import { AdvancedSettings, AssignmentEditor, CameraView, ConfigStatus, EngineCard, GestureList, HandSelectionOptions } from '../components/UI'
+import { getEngineState, GESTURE_LABELS } from '../data/engineStatus'
+
+function TechDetails({ engineStatus }) {
+  const state = getEngineState(engineStatus)
+  const hand = state.handDetected
+  const rows = [
+    ['Imágenes por segundo', state.cameraOpen ? `${engineStatus.fps || 0} FPS` : '—'],
+    ['Latencia', state.cameraOpen ? `${engineStatus.latencyMs || 0} ms` : '—'],
+    ['Puntos de la mano', hand ? '21 / 21' : '0 / 21'],
+    ['Confianza', hand ? `${engineStatus.confidence}%` : '—'],
+    ['Distancia de pinza', hand ? `${engineStatus.pinchDistancePx} px` : '—'],
+    ['Gesto', hand ? (GESTURE_LABELS[engineStatus.gesture] || '—') : '—'],
+  ]
+  return <details className="tech-details">
+    <summary>Datos técnicos</summary>
+    <dl>{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+  </details>
+}
+
+export default function CalibrationPage({ settings, assignments, modeName, locked, apply, onRetryApply, onChangeSettings, onAssign, openModal, engineStatus, engineBusy, onStartEngine, onStopEngine, onToggleControlMode, onTogglePause }) {
+  const onChange = onChangeSettings
+  return <main id="main" tabIndex={-1} className="page calibration-page">
+    <h1 className="page-title">Calibrar</h1>
+    <div className="calibration-layout">
+      <div className="calibration-view">
+        <CameraView engineStatus={engineStatus} showDiagnostic={settings.diagnosticOverlay !== false} />
+        <TechDetails engineStatus={engineStatus} />
+      </div>
+      <div className="calibration-steps">
+        <section className="panel step" aria-labelledby="step1">
+          <h2 id="step1"><span className="step-num" aria-hidden="true">1</span>Cámara y mano</h2>
+          <HandSelectionOptions settings={settings} onChange={onChange} />
+          <EngineCard compact headingLevel={3} engineStatus={engineStatus} engineBusy={engineBusy} onStartEngine={onStartEngine} onStopEngine={onStopEngine} onToggleControlMode={onToggleControlMode} onTogglePause={onTogglePause} />
+        </section>
+        <section className="panel step" aria-labelledby="step2">
+          <h2 id="step2"><span className="step-num" aria-hidden="true">2</span>Prueba cada gesto</h2>
+          <p className="step-hint">Haz el gesto: se marcará como <strong>Detectado</strong>. Ábrelo para ajustarlo.</p>
+          <GestureList engineStatus={engineStatus} settings={settings} assignments={assignments} onOpen={gesture => openModal({ type: 'gesture', gesture })} onToggle={(key, value) => onChange({ ...settings, [key]: value })} />
+        </section>
+        <section className="panel step">
+          <details className="advanced">
+            <summary className="step-summary"><span className="step-num" aria-hidden="true">3</span>Ajustes finos <small>(opcional)</small></summary>
+            <p className="step-hint">Se aplican al instante al modo «{modeName}». Cámara, mano, recorrido y exigencia de detección son de este equipo y no se sincronizan.</p>
+            <AdvancedSettings settings={settings} onChange={onChange} />
+          </details>
+        </section>
+        <section className="panel step">
+          <details className="advanced">
+            <summary className="step-summary"><span className="step-num" aria-hidden="true">4</span>Qué hace cada gesto <small>(opcional)</small></summary>
+            <p className="step-hint">Asignaciones del modo «{modeName}». Solo se ofrecen las acciones que el motor ejecuta de verdad.</p>
+            <AssignmentEditor assignments={assignments} disabled={locked} onChange={onAssign} />
+          </details>
+          <ConfigStatus apply={apply} onRetry={onRetryApply} />
+        </section>
+      </div>
+    </div>
+  </main>
 }
