@@ -11,12 +11,27 @@ public final class GestureGate {
     private long epoch, lastFrame = -1, since = -1;
     private boolean tracked, released;
     private String candidate = "";
-    private final java.util.Set<String> actionable;
+    private java.util.Set<String> actionable;
 
     public GestureGate(java.util.Set<String> actionable) {
-        if (actionable.contains("Open_Palm")) throw new IllegalArgumentException("Open_Palm is the release gesture");
-        this.actionable = java.util.Collections.unmodifiableSet(new java.util.HashSet<>(actionable));
+        this.actionable = checked(actionable);
     }
+    private static java.util.Set<String> checked(java.util.Set<String> actionable) {
+        if (actionable.contains("Open_Palm")) throw new IllegalArgumentException("Open_Palm is the release gesture");
+        return java.util.Collections.unmodifiableSet(new java.util.HashSet<>(actionable));
+    }
+
+    /**
+     * Replaces the allow-list (a mode downloaded from the API). Refused during CONTROL: the caller must
+     * pause first, so a new mapping never takes effect mid-gesture. Bumps the epoch, so results already
+     * in flight are discarded, and clears any partial hold.
+     */
+    public synchronized boolean reconfigure(java.util.Set<String> next) {
+        if (state == State.CONTROL) return false;
+        actionable = checked(next);
+        epoch++; reset(); return true;
+    }
+    public synchronized java.util.Set<String> actionable() { return actionable; }
 
     public synchronized State state() { return state; }
     public synchronized long epoch() { return epoch; }

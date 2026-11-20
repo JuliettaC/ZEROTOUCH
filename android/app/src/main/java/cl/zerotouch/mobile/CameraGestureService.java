@@ -13,7 +13,10 @@ public final class CameraGestureService extends Service {
     private static final int NOTIFICATION = 12;
     private static CameraGestureService active;
     static String status = "Detenido. La cámara no está activa.";
-    private final GestureActions actions = GestureActions.defaults();
+    /** Asignaciones vigentes (por defecto o descargadas de la API) y de dónde salen; sobreviven al servicio. */
+    private static volatile GestureActions configured = GestureActions.defaults();
+    static volatile String configuredSource = "Valores por defecto del teléfono (sin modo de la API).";
+    private GestureActions actions = configured;
     private final GestureGate gate = new GestureGate(actions.gestures());
     private final Handler main = new Handler(Looper.getMainLooper());
     private FrontCamera camera;
@@ -25,6 +28,22 @@ public final class CameraGestureService extends Service {
         if (active == null) return;
         boolean enabled = active.gate.enable(SystemClock.elapsedRealtime(), GestureAccessibilityService.ready());
         active.update(enabled ? "Control activado; muestra la palma y luego sostén un gesto." : "No se activó: requiere mano reciente y accesibilidad conectada.");
+    }
+    static GestureActions configuredActions() { return configured; }
+    /**
+     * Aplica un modo nuevo (hilo principal). Nunca durante CONTROL: si el control estaba activo se pausa
+     * antes y la persona lo reactiva a mano. Devuelve true si tuvo que pausar.
+     */
+    static boolean applyActions(GestureActions next, String source) {
+        configured = next; configuredSource = source;
+        CameraGestureService service = active;
+        if (service == null || service.finishing) return false;
+        boolean wasControl = service.gate.state() == GestureGate.State.CONTROL;
+        if (wasControl) service.gate.pause();
+        if (!service.gate.reconfigure(next.gestures())) { service.finish("No se pudo aplicar el modo; control detenido.", true); return wasControl; }
+        service.actions = next;
+        service.update(wasControl ? "Modo nuevo aplicado; control en pausa: reactívalo." : "Modo nuevo aplicado.");
+        return wasControl;
     }
     static void pauseControl() { if (active != null) { active.gate.pause(); active.update("Pausado por el usuario."); } }
     static void stopControl() { if (active != null) active.finish("Detenido por el usuario.", false); }

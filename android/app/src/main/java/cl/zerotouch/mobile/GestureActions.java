@@ -80,6 +80,27 @@ public final class GestureActions {
         }
     }
 
+    private static final Map<String, String> GESTURE_LABEL;
+    static {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("Victory", "✌ dos dedos");
+        m.put("Pointing_Up", "☝ índice arriba");
+        m.put("Thumb_Down", "👎 pulgar abajo");
+        m.put("Thumb_Up", "👍 pulgar arriba");
+        GESTURE_LABEL = Collections.unmodifiableMap(m);
+    }
+
+    /** Una línea por gesto del teléfono, incluidos los deshabilitados, para mostrar en pantalla. */
+    public String describe() {
+        StringBuilder out = new StringBuilder();
+        for (Map.Entry<String, String> entry : GESTURE_LABEL.entrySet()) {
+            Action action = byGesture.get(entry.getKey());
+            if (out.length() > 0) out.append('\n');
+            out.append(entry.getValue()).append(": ").append(action == null ? "deshabilitado" : action.label);
+        }
+        return out.toString();
+    }
+
     public Action actionFor(String gesture) { return gesture == null ? null : byGesture.get(gesture); }
     public Set<String> gestures() { return byGesture.keySet(); }
     public Map<String, Action> asMap() { return byGesture; }
