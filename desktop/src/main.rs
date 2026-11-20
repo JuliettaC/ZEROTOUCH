@@ -15,6 +15,11 @@ type SharedEngine = Arc<Mutex<GestureEngineManager>>;
 const MAIN_WINDOW: &str = "main";
 /// Teclado Air-Swipe: ventana no activable y siempre visible, para escribir en otra aplicación.
 const AIRSWIPE_WINDOW: &str = "airswipe";
+/// Indicador flotante (HUD): estado del motor y última acción. No activable, siempre visible y
+/// transparente a los clics (no tapa lo que hay debajo). Solo lee `engine_status`.
+const HUD_WINDOW: &str = "hud";
+const HUD_WIDTH: f64 = 400.0;
+const HUD_HEIGHT: f64 = 60.0;
 
 fn err(code: &str, message: &str) -> BridgeError {
     BridgeError {
@@ -23,9 +28,9 @@ fn err(code: &str, message: &str) -> BridgeError {
     }
 }
 
-/// Solo las dos ventanas de la aplicación (origen https://tauri.localhost) pueden invocar comandos.
+/// Solo las ventanas de la aplicación (origen https://tauri.localhost) pueden invocar comandos.
 fn verify_origin(window: &tauri::WebviewWindow) -> Result<(), BridgeError> {
-    let label_ok = window.label() == MAIN_WINDOW || window.label() == AIRSWIPE_WINDOW;
+    let label_ok = window.label() == MAIN_WINDOW || window.label() == AIRSWIPE_WINDOW || window.label() == HUD_WINDOW;
     let origin_ok = window
         .url()
         .ok()
@@ -252,6 +257,60 @@ async fn airswipe_window_rect(window: tauri::WebviewWindow, app: tauri::AppHandl
     Ok(geometry)
 }
 
+/// Esquina superior derecha del área de trabajo del monitor principal, en píxeles lógicos.
+fn hud_position(app: &tauri::AppHandle) -> Result<(f64, f64), BridgeError> {
+    let monitor = app
+        .primary_monitor()
+        .map_err(|_| err("MONITOR", "No se pudo consultar el monitor principal."))?
+        .ok_or_else(|| err("MONITOR", "No hay monitor principal."))?;
+    let scale = monitor.scale_factor();
+    let work = monitor.work_area();
+    let x = (work.position.x as f64 + work.size.width as f64) / scale - HUD_WIDTH - 16.0;
+    let y = work.position.y as f64 / scale + 16.0;
+    Ok((x, y))
+}
+
+#[tauri::command]
+async fn hud_window_open(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    if window.label() != MAIN_WINDOW {
+        return Err(err("FORBIDDEN", "Solo la ventana principal controla el indicador."));
+    }
+    if let Some(existing) = app.get_webview_window(HUD_WINDOW) {
+        let _ = existing.show();
+        return Ok(json!({ "open": true }));
+    }
+    let (x, y) = hud_position(&app)?;
+    let hud = tauri::WebviewWindowBuilder::new(&app, HUD_WINDOW, tauri::WebviewUrl::App("index.html#hud".into()))
+        .title("ZeroTouch · HUD")
+        // Mismo origen que la principal para superar `verify_origin` (ver la overlay de Air-Swipe).
+        .use_https_scheme(true)
+        .decorations(false)
+        .always_on_top(true)
+        .focused(false)
+        .focusable(false)
+        .skip_taskbar(true)
+        .resizable(false)
+        .inner_size(HUD_WIDTH, HUD_HEIGHT)
+        .position(x, y)
+        .build()
+        .map_err(|_| err("HUD_WINDOW", "No se pudo abrir el indicador flotante."))?;
+    // Los clics atraviesan el indicador: nunca bloquea lo que hay debajo ni se le puede hacer clic por error.
+    let _ = hud.set_ignore_cursor_events(true);
+    Ok(json!({ "open": true }))
+}
+
+#[tauri::command]
+async fn hud_window_close(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    if let Some(existing) = app.get_webview_window(HUD_WINDOW) {
+        existing
+            .close()
+            .map_err(|_| err("HUD_WINDOW", "No se pudo cerrar el indicador flotante."))?;
+    }
+    Ok(json!({ "closed": true }))
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .setup(|app| {
@@ -309,7 +368,9 @@ fn main() {
             engine_gaze_calibrate,
             airswipe_window_open,
             airswipe_window_close,
-            airswipe_window_rect
+            airswipe_window_rect,
+            hud_window_open,
+            hud_window_close
         ])
         .build(tauri::generate_context!())
         .expect("No se pudo iniciar ZEROTOUCH");

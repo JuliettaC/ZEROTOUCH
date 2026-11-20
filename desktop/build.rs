@@ -34,6 +34,8 @@ fn main() {
             "airswipe_window_open",
             "airswipe_window_close",
             "airswipe_window_rect",
+            "hud_window_open",
+            "hud_window_close",
         ]),
     ))
     .expect("No se pudo generar la política de comandos");

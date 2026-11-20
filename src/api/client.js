@@ -65,4 +65,7 @@ export const api = {
   airswipeWindowOpen: edge => invoke('airswipe_window_open', edge ? { edge } : {}),
   airswipeWindowClose: () => invoke('airswipe_window_close'),
   airswipeWindowRect: () => invoke('airswipe_window_rect'),
+  // Indicador flotante (HUD) con el estado del motor y su última acción.
+  hudWindowOpen: () => invoke('hud_window_open'),
+  hudWindowClose: () => invoke('hud_window_close'),
 }

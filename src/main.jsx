@@ -12,6 +12,12 @@ if (window.location.hash === '#airswipe') {
   import('./airswipe/AirSwipeOverlay.jsx').then(({ default: AirSwipeOverlay }) => {
     root.render(<StrictMode><AirSwipeOverlay /></StrictMode>)
   })
+} else if (window.location.hash === '#hud') {
+  // Indicador flotante (HUD): solo lee el estado del motor.
+  document.title = 'ZeroTouch · HUD'
+  import('./hud/Hud.jsx').then(({ default: Hud }) => {
+    root.render(<StrictMode><Hud /></StrictMode>)
+  })
 } else {
   root.render(<StrictMode><App /></StrictMode>)
 }

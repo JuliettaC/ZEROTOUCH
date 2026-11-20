@@ -46,7 +46,7 @@ $callback = [W+EnumProc]{
     [void]$rows.Add([pscustomobject]@{
       title = $title.ToString(); class = $class.ToString(); visible = [W]::IsWindowVisible($h)
       x = $r.L; y = $r.T; width = $r.R - $r.L; height = $r.B - $r.T
-      noActivate = (($ex -band 0x08000000) -ne 0); topmost = (($ex -band 0x8) -ne 0); toolWindow = (($ex -band 0x80) -ne 0)
+      noActivate = (($ex -band 0x08000000) -ne 0); topmost = (($ex -band 0x8) -ne 0); toolWindow = (($ex -band 0x80) -ne 0); clickThrough = (($ex -band 0x20) -ne 0)
       caption = (($st -band 0x00C00000) -ne 0); styleHex = ("0x{0:X}" -f $st); exStyleHex = ("0x{0:X}" -f $ex); clientX = $p.X; clientY = $p.Y; clientWidth = $c.R - $c.L; clientHeight = $c.B - $c.T; dpi = [W]::GetDpiForWindow($h); foreground = ($h -eq $foreground)
     })
   }

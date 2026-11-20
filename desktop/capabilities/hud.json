@@ -1,0 +1,6 @@
+{
+  "identifier": "hud",
+  "description": "Indicador flotante: solo lee el estado del motor; no puede enviar comandos, ni a la API ni al motor.",
+  "windows": ["hud"],
+  "permissions": ["allow-engine-status"]
+}

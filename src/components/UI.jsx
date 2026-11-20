@@ -56,7 +56,7 @@ export function Header({ path, navigate, engineStatus, account, onOpenAccount })
 }
 
 /** Panel principal de la cámara: estado + acciones, siempre en el mismo orden. */
-export function EngineCard({ engineStatus, engineBusy, onStartEngine, onStopEngine, onToggleControlMode, onTogglePause, compact = false, headingLevel = 2 }) {
+export function EngineCard({ engineStatus, engineBusy, onStartEngine, onStopEngine, onToggleControlMode, onTogglePause, hud, compact = false, headingLevel = 2 }) {
   const state = getEngineState(engineStatus)
   const hand = describeHand(engineStatus)
   const Heading = `h${headingLevel}`
@@ -84,6 +84,7 @@ export function EngineCard({ engineStatus, engineBusy, onStartEngine, onStopEngi
         <div className="engine-secondary">
           {state.cameraOpen && onTogglePause && <button type="button" className="button secondary" disabled={engineBusy} onClick={onTogglePause}>{engineStatus.paused ? 'Reanudar' : 'Pausar'}</button>}
           <button type="button" className="button danger-text" disabled={engineBusy} onClick={onStopEngine}>Apagar cámara</button>
+          {hud && <button type="button" className="button secondary hud-toggle" aria-pressed={hud.enabled} onClick={hud.toggle}>{hud.enabled ? 'Ocultar indicador flotante' : 'Mostrar indicador flotante'}</button>}
         </div>
       </>}
     </div>

@@ -41,8 +41,9 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 // ---------------------------------------------------------------- CDP (WebView2 de la app real)
 const targets = async () => (await (await fetch(`http://127.0.0.1:${CDP_PORT}/json`)).json()).filter(t => t.type === 'page')
 const findTarget = async predicate => (await targets()).find(predicate)
-const isMain = t => t.url.includes('tauri.localhost') && !t.url.includes('#airswipe')
+const isMain = t => t.url.includes('tauri.localhost') && !t.url.includes('#airswipe') && !t.url.includes('#hud')
 const isOverlay = t => t.url.includes('#airswipe')
+const isHud = t => t.url.includes('#hud')
 function cdp(target, method, params = {}) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(target.webSocketDebuggerUrl)
@@ -267,6 +268,22 @@ try {
   check('sin cámara el motor se niega a pasar a CONTROL (no puede inyectar entradas)', !control.ok && /CAMERA_NOT_OPEN|EMERGENCY_HOTKEY_UNAVAILABLE/.test(control.code ?? ''), control)
   await run(page, async () => settle(() => invoke('engine_set_mode', { mode: 'OBSERVATION' })))
 
+  // 7b. Indicador flotante (HUD): la ventana principal lo abre sola al estar el motor en marcha.
+  let hud
+  for (let i = 0; i < 30 && !hud; i += 1) { await delay(500); hud = await findTarget(isHud) }
+  check('el HUD real se abre en #hud al arrancar el motor', hud, hud?.url)
+  const hudView = await run(hud, async () => { await until(() => document.querySelector('.hud-state')?.textContent, 10000); return { state: document.querySelector('.hud-state')?.textContent, action: document.querySelector('.hud-action')?.textContent ?? '', origin: location.origin, w: innerWidth, h: innerHeight } })
+  const realStatus = await run(page, async () => invoke('engine_status'))
+  // Con la cámara 9 (inexistente) el estado real es «Cámara no disponible»: el HUD debe decir eso, no inventar otro.
+  check('el HUD muestra el estado REAL del motor (cámara inexistente → «Cámara no disponible») y la última acción', /Cámara no disponible/.test(hudView.state) && realStatus.running && !realStatus.cameraOpen && /^Última acción: /.test(hudView.action), { hud: hudView, motor: { running: realStatus.running, cameraOpen: realStatus.cameraOpen, lastEvent: realStatus.lastEvent } })
+  check('el HUD usa el origen de la aplicación', hudView.origin === 'https://tauri.localhost', hudView.origin)
+  const hudPerms = await run(hud, async () => ({ status: await settle(() => invoke('engine_status')), stop: await settle(() => invoke('engine_stop')), open: await settle(() => invoke('airswipe_window_open')), api: await settle(() => invoke('profiles', { offset: 0 })) }))
+  const afterHudStop = await run(page, async () => invoke('engine_status'))
+  check('el HUD solo puede LEER el estado: engine_stop, abrir el teclado y la API se rechazan desde él', hudPerms.status.ok && !hudPerms.stop.ok && !hudPerms.open.ok && !hudPerms.api.ok && afterHudStop.running, { status: hudPerms.status.ok, stop: hudPerms.stop.message, open: hudPerms.open.message, api: hudPerms.api.message, motorSigue: afterHudStop.running })
+  const hudWin = winState(app.pid).windows.find(w => w.title.includes('HUD'))
+  check('HUD nativo: sin barra de título, siempre encima, NO activable, transparente a los clics y sin foco', hudWin && hudWin.noActivate && hudWin.topmost && hudWin.clickThrough && !hudWin.caption && !hudWin.foreground && hudWin.visible, { estiloEx: hudWin?.exStyleHex, estilo: hudWin?.styleHex, foco: hudWin?.foreground })
+  await screenshot(hud, 'hud-real')
+
   // 8. Ventana overlay real del teclado Air-Swipe.
   // La aplicación abre el teclado con `openKeyboard`, que da 8 s de margen hasta el primer latido de la overlay; llamar
   // directamente a los comandos se saltaría ese margen y el guardia de huérfanos cerraría la ventana mientras carga.
@@ -335,6 +352,9 @@ try {
   await delay(1500)
   const python = execFileSync('powershell', ['-NoProfile', '-Command', "(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -match 'motor_local' } | Measure-Object).Count"], { encoding: 'utf8' }).trim()
   check('tras engine_stop no queda ningún proceso del motor', python === '0', { procesos: python })
+  let hudGone = false
+  for (let i = 0; i < 20 && !hudGone; i += 1) { await delay(500); hudGone = !(await findTarget(isHud)) && !winState(app.pid).windows.some(w => w.title.includes('HUD')) }
+  check('con el motor detenido el HUD se cierra (CDP y Windows)', hudGone)
 
   // 14. Cerrar la ventana principal con la overlay abierta y el motor en marcha debe cerrarlo TODO (si no, la cámara
   //     quedaba encendida sin ventana principal desde la que controlarla). Motor otra vez con la cámara inexistente.

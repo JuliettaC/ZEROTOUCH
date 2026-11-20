@@ -39,7 +39,7 @@ const modeStatus = mode => (mode.version === null ? 'Sin subir' : mode.dirty ? '
 export default function DashboardPage({
   view, settings, assignments, locked, apply, onRetryApply, syncSummary, account,
   onSelectProfile, onSelectMode, onDeleteMode, onDeleteProfile, openModal, navigate,
-  engineStatus, engineBusy, onStartEngine, onStopEngine, onToggleControlMode, onTogglePause,
+  engineStatus, engineBusy, onStartEngine, onStopEngine, onToggleControlMode, onTogglePause, hud,
   tools, onChangeTimerMinutes,
 }) {
   const radioName = useId()
@@ -47,7 +47,7 @@ export default function DashboardPage({
   const { profiles, activeProfile, modes, activeModeId, tombstones } = view
   return <main id="main" tabIndex={-1} className="page home-page">
     <h1 className="sr-only">Inicio</h1>
-    <EngineCard engineStatus={engineStatus} engineBusy={engineBusy} onStartEngine={onStartEngine} onStopEngine={onStopEngine} onToggleControlMode={onToggleControlMode} onTogglePause={onTogglePause} />
+    <EngineCard engineStatus={engineStatus} engineBusy={engineBusy} onStartEngine={onStartEngine} onStopEngine={onStopEngine} onToggleControlMode={onToggleControlMode} onTogglePause={onTogglePause} hud={hud} />
     <div className="save-status-line">
       <ConfigStatus apply={apply} onRetry={onRetryApply} />
       <p className={`sync-summary sync-${syncSummary.tone}`}>{account ? 'Cuenta: ' : ''}{syncSummary.text}</p>

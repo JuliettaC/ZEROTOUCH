@@ -17,6 +17,7 @@ import { useEngine } from './hooks/useEngine'
 import { useAccount } from './hooks/useAccount'
 import { useAirswipeLink } from './hooks/useAirswipeLink'
 import { useAppEvents } from './hooks/useAppEvents'
+import { useHudWindow } from './hooks/useHudWindow'
 import { TimerDock } from './components/AppTools'
 import './App.css'
 import './ui-refresh.css'
@@ -55,6 +56,7 @@ export default function App() {
   const keyboard = useAirswipeLink({ onNotice: setNotice })
   const engine = useEngine({ desired, isKeyboardOpen: keyboard.isKeyboardOpen, onNotice: setNotice })
   const { engineStatus } = engine
+  const hud = useHudWindow({ running: Boolean(engineStatus.running), onNotice: setNotice })
   const acct = useAccount({ workspace, onNotice: setNotice })
   const { account } = acct
   // Temporizadores y avisos de los eventos del motor (multimedia, ventanas, precisión).
@@ -160,6 +162,7 @@ export default function App() {
     onStopEngine: engine.stopEngine,
     onToggleControlMode: engine.toggleControl,
     onTogglePause: engine.togglePause,
+    hud,
   }
   return <div className="app">
     <Header path={path} navigate={navigate} engineStatus={engineStatus} account={account} onOpenAccount={openAccount} />
