@@ -362,3 +362,21 @@ Implementación asistida por Claude; revisión humana pendiente.
 ### 2ª iteración del QA (19-11-2026)
 
 Comentario tras probarlo: «se siente más raro»: cursor lento o pegajoso, gestos raros y mucho brazo para las esquinas. Reproducido en el banco y corregido: la regla de pinza bloqueaba pinzas reales con el índice doblado (0/10 → 10/10); aceleración tipo mouse en vez de solo reducir; la posición se recortaba antes de la aceleración y congelaba el cursor. Detalle en `docs/qa-comodidad-19-11.md`. Verificación: pytest 178 pasan, 2 omitidas; frontend sin cambios. Sin prueba con manos reales.
+
+## Bloque Claude — cierre hacia la presentación del martes 24-11 (20-11-2026)
+
+Contexto: entrega y presentación el **martes 24-11-2026**; la demo es el software funcionando. Plan y responsables en la hoja «ZEROTOUCH · Tareas hasta el martes 24-11» (claude.ai) con una pestaña «Compromisos Informe 1» (24 compromisos del Informe del Hito 1 cruzados con el código).
+
+**Decisiones**
+- **No migrar a Supabase** antes del martes: obligaría a rehacer autenticación, sincronización, puente Tauri y pruebas. PC y teléfono se conectan a la misma API Express por la red local (hotspot del teléfono). Desplegar la API con HTTPS (servidor remoto prometido en el Informe §4.1) es la tarea 23, opcional.
+- No hay «front compartido» con Android: la app Android es Java nativo. Lo compartido es la API, `contracts/capacidades.json` y los modos con `plataforma = 'movil'`. La web móvil queda fuera de alcance (declararlo).
+- El documento `movil-arquitectura.md` del proyecto en claude.ai describe una app Kotlin que **no existe** en este repositorio: no usarlo como evidencia.
+
+**Hecho (commits sin push: el entorno no alcanza github.com)**
+- 6 commits que guardan todo el trabajo previo sin confirmar (d8c191a…c08760e). `public/` quedó fuera: solo cambios de fin de línea. Commits hechos con `core.autocrlf=true`.
+- 09f5ab9 `LAN_HOST` (backend): segundo punto de escucha opcional en una IPv4 privada; HOST sigue en loopback para Tauri; 0.0.0.0 e IP públicas rechazadas; cierre espera a ambos. `backend/test/resources/red-local.test.js` (5/5 en Node 22 Linux).
+- 1822846 Android: `GestureActions` (lista blanca) + `GestureGate` genérico. ✌ Victory baja, ☝ Pointing_Up sube, 👎 Thumb_Down Volver, 👍 Thumb_Up multimedia; el puño ya no actúa. `canPerformGestures` en accesibilidad. `GestureGateTest` 95 y `GestureActionsTest` 38 pasan en JVM. **No compilado con el SDK de Android ni probado en el teléfono.**
+
+**No ejecutado**: suites en Windows, `cargo test`, `desktop:build`, `verify:tauri`, compilación de la APK, prueba física de escritorio y del A26.
+
+Implementación asistida por Claude; revisión humana pendiente.
