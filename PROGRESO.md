@@ -435,3 +435,13 @@ Implementación asistida por Claude; revisión humana pendiente.
 ### Reversión de la paleta (20-11-2026, noche)
 
 La persona usuaria no reconoció la interfaz con la paleta del Informe y pidió **volver a la gris grafito**. Se revirtió `bc49fdd` (las hojas de `src/` quedan idénticas al estado anterior a la sesión) y el HUD pasó a la misma paleta gris. `docs/matriz-hito1.md`: la paleta del Informe queda como «No aplicada», por decisión. Verificación: frontend 147/147, `lint` y `verify:separation` pasan. `npm run desktop:build` no pudo reemplazar el `.exe` porque había una instancia abierta por la persona usuaria (no se cerró). `verify:tauri` anterior: se detuvo en una excepción (12 comprobaciones correctas, `click` sobre un elemento inexistente, línea 222 del script) antes de llegar al HUD; **sin investigar todavía**.
+
+### `verify:tauri` con el HUD (20-11-2026, noche)
+
+Tras recompilar (`npm run desktop:build`, con la paleta gris) se ejecutó `npm run verify:tauri` cuatro veces:
+1. **12/13**: excepción en el paso 5. El script pulsaba el primer `.icon-button` de la fila del modo, que desde el 16-11 es el lápiz «Editar», no la ✕. **Fallo del script**, no de la app: ahora usa `aria-label^="Eliminar"`.
+2. **44/45**: falló solo la comprobación nativa del HUD porque exigía que no estuviera el bit `WS_CAPTION`; Tauri lo conserva en ventanas sin decoración. Ahora mide el desfase real del contenido (2 px), como la prueba de la overlay. Estilo extendido `0x80C0138`: NOACTIVATE, TOPMOST y TRANSPARENT presentes.
+3. **24/26**: la overlay Air-Swipe no apareció en 20 s (y el resto se abortó). El mismo paso pasó en las ejecuciones 2 y 4 sin cambios de código: **intermitente, causa sin investigar** (puede ser de tiempos al abrir una ventana más, el HUD).
+4. **45/45**, incluidas las 6 del HUD: se abre en `#hud` con el motor en marcha; muestra el estado real (cámara 9 inexistente → «Cámara no disponible», «Última acción: Mano perdida»); mismo origen; desde el HUD se rechazan `engine_stop`, `airswipe_window_open` y la API (solo `engine_status` pasa); no activable, encima, transparente a los clics, sin foco; se cierra al detener el motor.
+
+Sin cámara ni entradas en ninguna ejecución. Falta ver el HUD con manos reales.

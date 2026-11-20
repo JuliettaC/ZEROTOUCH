@@ -171,7 +171,8 @@ try {
   const closeDialog = () => run(page, async () => { document.querySelector('dialog[open] .close-dialog')?.click(); await wait(300) })
   const deleteModeUi = name => run(page, async ({ name }) => {
     const row = [...document.querySelectorAll('.mode-option')].find(o => o.textContent.includes(name))
-    row.querySelector('.icon-button').click(); await wait(200)
+    // Por la etiqueta accesible: desde el 16-11 la fila tiene antes el botón ✎ «Editar …».
+    row.querySelector('.icon-button[aria-label^="Eliminar"]').click(); await wait(200)
     row.querySelector('.tiny-button.danger').click(); await wait(300)
   }, { name })
   const listProfiles = async () => (await http('GET', '/perfiles', undefined, other)).body.data
@@ -281,7 +282,9 @@ try {
   const afterHudStop = await run(page, async () => invoke('engine_status'))
   check('el HUD solo puede LEER el estado: engine_stop, abrir el teclado y la API se rechazan desde él', hudPerms.status.ok && !hudPerms.stop.ok && !hudPerms.open.ok && !hudPerms.api.ok && afterHudStop.running, { status: hudPerms.status.ok, stop: hudPerms.stop.message, open: hudPerms.open.message, api: hudPerms.api.message, motorSigue: afterHudStop.running })
   const hudWin = winState(app.pid).windows.find(w => w.title.includes('HUD'))
-  check('HUD nativo: sin barra de título, siempre encima, NO activable, transparente a los clics y sin foco', hudWin && hudWin.noActivate && hudWin.topmost && hudWin.clickThrough && !hudWin.caption && !hudWin.foreground && hudWin.visible, { estiloEx: hudWin?.exStyleHex, estilo: hudWin?.styleHex, foco: hudWin?.foreground })
+  // Tauri conserva el bit WS_CAPTION en ventanas sin decoración: como en la overlay, se mide el desfase real del contenido.
+  const hudTitleBar = hudWin ? hudWin.clientY - hudWin.y : null
+  check('HUD nativo: sin barra de título, siempre encima, NO activable, transparente a los clics y sin foco', hudWin && hudWin.noActivate && hudWin.topmost && hudWin.clickThrough && hudTitleBar < 20 && !hudWin.foreground && hudWin.visible, { desfaseVerticalDelContenido: hudTitleBar, estiloEx: hudWin?.exStyleHex, foco: hudWin?.foreground })
   await screenshot(hud, 'hud-real')
 
   // 8. Ventana overlay real del teclado Air-Swipe.
