@@ -30,7 +30,7 @@ TOGGLE_DEFAULTS: dict[str, bool] = dict(CAPABILITIES["predeterminados_interfaz"]
 # Acción -> combinación de teclas permitida (única vía hacia el teclado del SO).
 ALLOWED_KEYS: dict[str, tuple[str, ...]] = {accion: tuple(keys) for accion, keys in CAPABILITIES["teclas_permitidas"].items()}
 # Gestos locales del equipo (no se sincronizan ni están en el catálogo de la base) -> teclas permitidas.
-# Hoy: pulgar y meñique hacia abajo/arriba para cambiar de pestaña.
+# Hoy: abanico con la mano ladeada -> pestaña siguiente (Ctrl+Tab). La anterior queda permitida pero sin gesto.
 DEVICE_KEYS: dict[str, tuple[str, ...]] = {nombre: tuple(keys) for nombre, keys in CAPABILITIES.get("teclas_equipo", {}).items()}
 # Acciones que no tocan el SO: se entregan a la interfaz de ZeroTouch.
 APP_ACTIONS: frozenset[str] = frozenset(CAPABILITIES["eventos_interfaz"])

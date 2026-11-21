@@ -1,7 +1,9 @@
-"""Gestos locales del equipo para PC: pestañas (pulgar y meñique hacia abajo/arriba) y clic derecho
-(pinza pulgar-medio). Todo sintético: sin cámara ni sistema operativo real."""
+"""Gestos locales del equipo para PC: pestaña siguiente (abanico con la mano abierta y ladeada; antes pulgar y
+meñique) y clic derecho (pinza pulgar-medio). Todo sintético: sin cámara ni sistema operativo real."""
 
 from __future__ import annotations
+
+import math
 
 from motor_local import capabilities as caps
 from motor_local.action_engine import MODE_CONTROL, MODE_OBSERVATION, LogicalActionEngine
@@ -74,37 +76,99 @@ def types(events: list[LogicalEvent]) -> list[str]:
 
 # ------------------------------------------------------------ pestañas
 
-def test_bajar_la_mano_con_pulgar_y_menique_avanza_pestanas() -> None:
+FAN_MS = 1000.0 / 15  # la webcam de los videos del abanico graba a 15 fps
+
+
+def make_fan_hand(tilt: float = 60.0, bend: float = 0.0, cx: float = 0.5, cy: float = 0.6, handedness: str = "Right") -> HandLandmarks:
+    """Mano abierta con el palmo (muñeca -> nudillo del medio) a `tilt` grados (90 = vertical) y los dedos girados
+    `bend` grados respecto del palmo (negativo = horario, hacia el pulgar de la mano derecha en espejo)."""
+    t = math.radians(tilt)
+    u = (math.cos(t), -math.sin(t))              # eje del palmo (y de la imagen hacia abajo)
+    p = (math.sin(t), math.cos(t))               # perpendicular
+    f = (math.cos(t + math.radians(bend)), -math.sin(t + math.radians(bend)))
+    wrist = Point3D(cx, cy)
+    lms = [wrist] * 21
+    for (mcp, pip, dip, tip), off in zip(((5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16), (17, 18, 19, 20)), (-0.04, 0.0, 0.03, 0.06)):
+        base = (cx + 0.16 * u[0] + off * p[0], cy + 0.16 * u[1] + off * p[1])
+        for idx, d in ((mcp, 0.0), (pip, 0.06), (dip, 0.10), (tip, 0.14)):
+            lms[idx] = Point3D(base[0] + d * f[0], base[1] + d * f[1])
+    thumb = (math.cos(t + 0.9), -math.sin(t + 0.9))
+    lms[2] = Point3D(cx + 0.05 * thumb[0], cy + 0.05 * thumb[1])
+    lms[3] = Point3D(cx + 0.09 * thumb[0], cy + 0.09 * thumb[1])
+    lms[4] = Point3D(cx + 0.13 * thumb[0], cy + 0.13 * thumb[1])
+    return HandLandmarks(landmarks=lms, handedness=handedness, confidence=0.95)
+
+
+def fan(bends, start: float = 0.0, **kwargs):
+    """Una muestra por fotograma a 15 fps con los giros de dedos dados."""
+    return [(make_fan_hand(bend=b, **kwargs), start + i * FAN_MS) for i, b in enumerate(bends)]
+
+
+# Abanico medido: ida rápida hacia el pulgar (-45° en un fotograma ≈ -680 °/s), regreso, mano quieta.
+ONE_FAN = [0, 0, 0, -45, -55, -30, -5, 0, 0, 0]
+
+
+def test_un_abanico_con_la_mano_ladeada_pasa_una_pestana() -> None:
     interp = armed()
-    events = run(interp, hold(make_tab_pose, 200.0))
-    assert EVENT_NEXT_TAB not in types(events) and EVENT_PREV_TAB not in types(events)
-    # Palma: 0,16 de alto; un paso = 0,5 palmas = 0,08. Bajar 0,2 en 0,8 s = 2 pestañas.
-    events = run(interp, glide(make_tab_pose, 800.0, 0.5, 0.7, start=200.0))
-    assert types(events).count(EVENT_NEXT_TAB) == 2
+    events = run(interp, fan(ONE_FAN))
+    assert types(events).count(EVENT_NEXT_TAB) == 1, "el regreso del abanico no cuenta como otra pestaña"
     assert EVENT_PREV_TAB not in types(events)
-    assert EVENT_MOVE_CURSOR not in types(events), "el cursor no se mueve mientras se cambian pestañas"
+    assert EVENT_LEFT_CLICK not in types(events)
+
+
+def test_dos_abanicos_pasan_dos_pestanas() -> None:
+    interp = armed()
+    events = run(interp, fan(ONE_FAN + ONE_FAN))
+    assert types(events).count(EVENT_NEXT_TAB) == 2
+
+
+def test_el_cursor_no_se_mueve_durante_el_abanico() -> None:
+    interp = armed()
+    run(interp, fan([0, 0, 0]))
+    events = run(interp, fan([-45, -55, -30, -5, 0], start=3 * FAN_MS))
+    assert EVENT_MOVE_CURSOR not in types(events)
     assert interp.telemetry.gesture == "PESTANAS"
 
 
-def test_subir_la_mano_retrocede_pestanas() -> None:
+def test_con_la_mano_vertical_el_mismo_giro_no_pasa_pestana() -> None:
     interp = armed()
-    run(interp, hold(make_tab_pose, 200.0, cy=0.7))
-    events = run(interp, glide(make_tab_pose, 800.0, 0.7, 0.5, start=200.0))
-    assert types(events).count(EVENT_PREV_TAB) == 2
+    events = run(interp, fan(ONE_FAN, tilt=95.0))
+    assert EVENT_NEXT_TAB not in types(events), "en los videos los demás gestos tienen el palmo a 91-107°"
+
+
+def test_mano_que_se_desplaza_no_es_un_abanico() -> None:
+    interp = armed()
+    frames = [(make_fan_hand(bend=b, cx=0.3 + 0.06 * i), i * FAN_MS) for i, b in enumerate(ONE_FAN)]
+    assert EVENT_NEXT_TAB not in types(run(interp, frames))
+
+
+def test_giro_hacia_el_otro_lado_no_pasa_pestana() -> None:
+    interp = armed()
+    events = run(interp, fan([0, 0, 0, 45, 55, 30, 5, 0, 0]))
     assert EVENT_NEXT_TAB not in types(events)
+
+
+def test_mano_izquierda_en_espejo() -> None:
+    interp = armed(EngineConfig.from_dict({"preferredHand": "LEFT"}))
+    events = run(interp, fan([-b for b in ONE_FAN], tilt=120.0, handedness="Left"))
+    assert types(events).count(EVENT_NEXT_TAB) == 1
+    interp = armed(EngineConfig.from_dict({"preferredHand": "LEFT"}))
+    assert EVENT_NEXT_TAB not in types(run(interp, fan(ONE_FAN, tilt=60.0, handedness="Left")))
 
 
 def test_postura_de_pestanas_quieta_no_hace_nada() -> None:
     interp = armed()
-    events = run(interp, hold(make_tab_pose, 2000.0))
+    events = run(interp, hold(make_tab_pose, 2000.0) )
     assert not {EVENT_NEXT_TAB, EVENT_PREV_TAB, EVENT_PRECISION, EVENT_LEFT_CLICK} & set(types(events))
     assert not interp.paused, "pulgar y meñique no es un puño"
+    interp = armed()
+    events = run(interp, fan([0] * 30))
+    assert EVENT_NEXT_TAB not in types(events), "la mano ladeada quieta no pasa pestañas"
 
 
 def test_pestanas_respetan_el_interruptor_del_equipo() -> None:
     interp = armed(EngineConfig.from_dict({"tabGestures": False}))
-    run(interp, hold(make_tab_pose, 200.0))
-    events = run(interp, glide(make_tab_pose, 800.0, 0.5, 0.7, start=200.0))
+    events = run(interp, fan(ONE_FAN + ONE_FAN))
     assert EVENT_NEXT_TAB not in types(events)
 
 

@@ -211,7 +211,7 @@ class EngineConfig:
     airswipe_enabled: bool = True      # trazo_airswipe, solo con el teclado Air-Swipe abierto
     window_gestures_enabled: bool = False  # tres dedos: minimizar/restaurar ventanas (opt-in local)
     window_swipe_enabled: bool = False     # mano abierta rápida hacia abajo/arriba: minimizar/restaurar ventana (opt-in: QA 19-11)
-    tab_gestures_enabled: bool = True      # pulgar y meñique hacia abajo/arriba: pestaña siguiente/anterior (local)
+    tab_gestures_enabled: bool = True      # abanico con la mano ladeada: pestaña siguiente (local)
     right_click_enabled: bool = True       # pinza pulgar-medio: clic derecho (local)
     pointer_acceleration: bool = True      # movimientos lentos más finos, rápidos completos (local, QA 19-11)
     precision_mode: bool = False   # Ganancia fina fija desde configuración (el gesto la alterna en tiempo de ejecución)

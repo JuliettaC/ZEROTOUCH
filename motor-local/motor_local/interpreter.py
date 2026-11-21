@@ -57,8 +57,8 @@ EVENT_NAVIGATION = "NAVIGATION"        # navegacion: vuelve al puntero normal (e
 EVENT_MINIMIZE_WINDOW = "MINIMIZE_WINDOW"  # tres dedos hacia abajo: ventana activa
 EVENT_RESTORE_WINDOW = "RESTORE_WINDOW"    # tres dedos hacia arriba: última ventana minimizada por el motor
 EVENT_AIRSWIPE_TRACE = "AIRSWIPE_TRACE"    # trazo terminado sobre el teclado Air-Swipe (puntos normalizados)
-EVENT_NEXT_TAB = "NEXT_TAB"            # pulgar y meñique hacia abajo: pestaña siguiente (Ctrl+Tab)
-EVENT_PREV_TAB = "PREV_TAB"            # pulgar y meñique hacia arriba: pestaña anterior (Ctrl+Shift+Tab)
+EVENT_NEXT_TAB = "NEXT_TAB"            # abanico con la mano ladeada: pestaña siguiente (Ctrl+Tab)
+EVENT_PREV_TAB = "PREV_TAB"            # pestaña anterior (Ctrl+Shift+Tab): sin gesto desde el 21-11-2026 (se conserva la tecla)
 EVENT_RIGHT_CLICK = "RIGHT_CLICK"      # pinza pulgar-medio: clic derecho en la posición del puntero
 
 # Acción del catálogo -> tipo de evento lógico.
@@ -158,13 +158,18 @@ TRACE_MIN_POINTS = 4
 TRACE_MIN_LENGTH = 0.02        # recorrido mínimo en pantalla normalizada
 TRACE_MAX_POINTS = 600
 
-# Pestañas (gesto local del equipo): pulgar y meñique extendidos, índice, medio y anular plegados.
-# Cada TAB_STEP_PALM de recorrido vertical cambia UNA pestaña; seguir moviendo la mano cambia más.
-TAB_CONFIRM_FRAMES = 3
-TAB_CONFIRM_MS = 60.0
-TAB_STEP_PALM = 0.5            # recorrido vertical por pestaña, en longitudes de palma
-TAB_REPEAT_MS = 220.0          # intervalo mínimo entre dos cambios de pestaña
-TAB_THUMB_OUT = 0.4            # punta del pulgar separada de la base del índice (en palmas; en 4:3 lo horizontal mide menos)
+# Pestaña siguiente (gesto local del equipo, 21-11-2026, medido en videos reales): «abanico». Mano abierta y LADEADA
+# (palmo muñeca->nudillo del medio a menos de TAB_FAN_TILT grados; vertical = 90), casi quieta, y los dedos giran
+# rápido hacia el lado del pulgar. Una pestaña por abanico; el regreso (giro contrario) no cuenta. Videos: palmo
+# 45-71° en el abanico y 91-107° en los demás gestos; giro de ida -520 a -1835 °/s.
+TAB_FAN_TILT = 80.0            # grados; mano derecha (la izquierda, en espejo: más de 180 - TAB_FAN_TILT)
+TAB_FAN_MIN_SPEED = 500.0      # giro de los dedos (nudillo -> punta del medio), grados por segundo
+TAB_FAN_MAX_HAND_SPEED = 3.0   # el centro de la mano casi no se desplaza: tamaños de mano por segundo
+TAB_FAN_REARM_SPEED = 250.0    # el giro debe calmarse por debajo de esto antes del siguiente abanico. Defensa
+                               # redundante: dentro del giro posible de los dedos (~100°) un giro rápido no dura más
+                               # que TAB_FAN_COOLDOWN_MS ni a 15 ni a 30 fps, así que hoy lo decide el enfriamiento.
+TAB_FAN_COOLDOWN_MS = 350.0
+TAB_FAN_MAX_GAP_MS = 200.0     # dos muestras más separadas que esto no se comparan (mano perdida)
 
 # Clic derecho (gesto local del equipo): punta del pulgar con punta del medio, índice extendido.
 RIGHT_PINCH_CONFIRM_FRAMES = 2
@@ -475,10 +480,9 @@ class GestureInterpreter:
         self._accel_prev: tuple[float, float, float] | None = None     # posición absoluta filtrada anterior (x, y, t)
         self._accel_out: tuple[float, float] | None = None              # posición acelerada (la que sigue el cursor)
         self._cursor_settled: bool = False
-        self._tab_frames: int = 0
-        self._tab_start_ms: float | None = None
-        self._tab_anchor_y: float | None = None
-        self._tab_last_step_ms: float = -1e9
+        self._fan_prev: tuple[float, float, float, float] | None = None  # (ms, dirección de los dedos, cx, cy)
+        self._fan_armed: bool = True
+        self._fan_last_ms: float = -1e9
         self._rpinch_count: int = 0
         self._rpinch_start_ms: float | None = None
         self._rpinch_active: bool = False
@@ -614,9 +618,7 @@ class GestureInterpreter:
         for hold in (self._thumb_up, self._thumb_down, self._precision_hold, self._palm_hold):
             hold.cancel()
         self._discrete_locked_pos = None
-        self._tab_frames = 0
-        self._tab_start_ms = None
-        self._tab_anchor_y = None
+        self._fan_prev = None
         self._clear_right_pinch()
 
     # ------------------------------------------------------------ acciones discretas
@@ -674,29 +676,33 @@ class GestureInterpreter:
             self._win_anchor_y = palm_y
         return events
 
-    def _tab_step(self, pose: bool, palm_y: float, scale: float, now_ms: float) -> list[LogicalEvent]:
-        """Pulgar y meñique: bajar la mano = pestaña siguiente; subirla = anterior. Un cambio por cada
-        TAB_STEP_PALM recorrido; la postura quieta no hace nada."""
-        if not pose:
-            self._tab_frames = 0
-            self._tab_start_ms = None
-            self._tab_anchor_y = None
-            return []
-        self._tab_frames += 1
-        if self._tab_start_ms is None or self._tab_anchor_y is None:
-            self._tab_start_ms = now_ms
-            self._tab_anchor_y = palm_y
-            return []
-        if not _confirmed(self._tab_frames, self._tab_start_ms, now_ms, TAB_CONFIRM_FRAMES, TAB_CONFIRM_MS):
-            self._tab_anchor_y = palm_y  # el ancla se fija cuando la postura ya está confirmada
-            return []
-        dy = (palm_y - self._tab_anchor_y) / scale  # positivo = hacia abajo
-        if abs(dy) < TAB_STEP_PALM or (now_ms - self._tab_last_step_ms) < TAB_REPEAT_MS:
-            return []
-        self._tab_last_step_ms = now_ms
-        self._tab_anchor_y += math.copysign(TAB_STEP_PALM * scale, dy)
-        kind = EVENT_NEXT_TAB if dy > 0 else EVENT_PREV_TAB
-        return [LogicalEvent(kind, {"dy_palm": round(dy, 3)})]
+    def _fan_step(self, lms: list[Point3D], handedness: str, open_hand: bool, now_ms: float) -> tuple[bool, list[LogicalEvent]]:
+        """Abanico de pestaña (ver TAB_FAN_*). Devuelve (postura en curso, eventos): mientras la mano abierta y ladeada
+        está casi quieta, el cursor no se mueve, para que el abanico no lo arrastre."""
+        size = max(_dist2d(lms[0], lms[5]), _dist2d(lms[0], lms[17]), _dist2d(lms[5], lms[17])) or 1e-6
+        finger_dir = math.degrees(math.atan2(-(lms[12].y - lms[9].y), lms[12].x - lms[9].x))
+        palm_dir = math.degrees(math.atan2(-(lms[9].y - lms[0].y), lms[9].x - lms[0].x))
+        cx = (lms[0].x + lms[5].x + lms[17].x) / 3.0
+        cy = (lms[0].y + lms[5].y + lms[17].y) / 3.0
+        prev, self._fan_prev = self._fan_prev, (now_ms, finger_dir, cx, cy)
+        right = handedness != "Left"
+        tilted = palm_dir < TAB_FAN_TILT if right else palm_dir > 180.0 - TAB_FAN_TILT
+        if not (open_hand and tilted) or prev is None or not (0.0 < now_ms - prev[0] <= TAB_FAN_MAX_GAP_MS):
+            if not (open_hand and tilted):
+                self._fan_armed = True
+            return False, []
+        dt = (now_ms - prev[0]) / 1000.0
+        turn = ((finger_dir - prev[1] + 180.0) % 360.0 - 180.0) / dt   # grados por segundo; negativo = horario
+        still = math.hypot(cx - prev[2], cy - prev[3]) / size / dt < TAB_FAN_MAX_HAND_SPEED
+        if abs(turn) < TAB_FAN_REARM_SPEED:
+            self._fan_armed = True
+        toward_thumb = -turn if right else turn
+        if (still and self._fan_armed and toward_thumb >= TAB_FAN_MIN_SPEED
+                and (now_ms - self._fan_last_ms) >= TAB_FAN_COOLDOWN_MS):
+            self._fan_armed = False
+            self._fan_last_ms = now_ms
+            return True, [LogicalEvent(EVENT_NEXT_TAB, {"giro_grados_s": round(turn), "gesto": "abanico"})]
+        return still, []
 
     def _accelerate(self, x: float, y: float, now_ms: float) -> tuple[float, float]:
         """Aplica la aceleración del puntero a la posición absoluta filtrada (ver ACCEL_*)."""
@@ -1132,17 +1138,12 @@ class GestureInterpreter:
         palm_cx = (lms[0].x + lms[5].x + lms[9].x + lms[17].x) * 0.25
         palm_cy = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25
 
-        # 4·0a. Pestañas (gesto local): pulgar y meñique extendidos; índice, medio y anular plegados.
-        #       Mientras dura la postura, el cursor no se mueve.
-        if self.config.tab_gestures_enabled:
-            index_folded = _is_finger_folded(lms, 8, 6, 5)
-            tab_pose = (
-                pinky_ext and index_folded and middle_folded and ring_folded
-                and (not index_ext) and (not middle_ext) and (not ring_ext)
-                and thumb_out_dist > TAB_THUMB_OUT
-                and (not self._dragging) and (not pinch_is_active)
-            )
-            events.extend(self._tab_step(tab_pose, palm_cy, scale, now_ms))
+        # 4·0a. Pestaña siguiente (gesto local): abanico con la mano abierta y ladeada (ver TAB_FAN_*). Sustituye
+        #       al gesto de pulgar y meñique (21-11-2026). Mientras la mano ladeada está quieta, el cursor no se mueve.
+        if self.config.tab_gestures_enabled and not self._dragging and not pinch_is_active and not self.airswipe_active:
+            open_hand = sum((index_ext, middle_ext, ring_ext, pinky_ext)) >= 3
+            tab_pose, tab_events = self._fan_step(lms, hand.handedness, open_hand, now_ms)
+            events.extend(tab_events)
             if tab_pose:
                 self._reset_scroll()
                 self.telemetry = self._telemetry(hand, "PESTANAS", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)

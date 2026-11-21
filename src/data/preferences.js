@@ -36,7 +36,7 @@ export const deviceDefaults = Object.freeze({
   // Mano abierta rápida hacia abajo/arriba: minimizar la ventana activa / traerla de vuelta.
   // Apagado por defecto: un movimiento rápido del cursor hacia abajo minimizaba ventanas sin querer.
   windowSwipe: false,
-  // Pulgar y meñique hacia abajo/arriba: pestaña siguiente/anterior (Ctrl+Tab / Ctrl+Shift+Tab).
+  // Abanico con la mano abierta y ladeada: pestaña siguiente (Ctrl+Tab). Antes, pulgar y meñique (hasta el 21-11-2026).
   tabGestures: true,
   // Pinza pulgar-medio: clic derecho.
   rightClick: true,

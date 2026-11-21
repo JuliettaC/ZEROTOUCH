@@ -104,7 +104,7 @@ Comprueba antes de seguir:
 | Pulgar arriba / abajo | Puño con el pulgar extendido ~0,5 s | Intro / Escape | **Apagado** |
 | Mano abajo / arriba | Mano abierta: bájala **muy rápido y de una vez** (o súbela) | Minimizar la ventana activa / traerla de vuelta | **Apagado** (desde el QA del 19-11) |
 | Tres dedos | Índice, medio y anular extendidos; baja o sube la mano | Minimizar / restaurar ventana | **Apagado** |
-| Pulgar y meñique (🤙) | Solo pulgar y meñique extendidos; **baja** la mano o **súbela** (cada tramo corto = una pestaña) | Pestaña siguiente (Ctrl+Tab) / anterior (Ctrl+Shift+Tab) | Activo |
+| Abanico (👋) | Mano abierta y **ladeada**, casi quieta: dobla la muñeca rápido hacia el lado del pulgar (el regreso no cuenta) | Pestaña siguiente (Ctrl+Tab) | Activo |
 | Pinza con el medio | Índice extendido; junta un instante pulgar y **medio** | Clic derecho | Activo |
 | Apuntar con el índice | Índice extendido, los demás plegados | Trazo del teclado Air-Swipe | Solo con el teclado abierto |
 
@@ -193,7 +193,7 @@ Actívalos en **Calibrar → Prueba cada gesto** (interruptores) y **Qué hace c
 | M6.4 | **Pulgar arriba / abajo** | Con el Bloc de notas enfocado: pulgar arriba ~0,5 s | **Intro** / **Escape** | Aciertos; confusión con el puño de la pausa (¡cuidado!) |
 | M6.5 | **Tres dedos** (activa «Tres dedos» en la lista) | Con el **Bloc de notas** enfocado, baja la mano con tres dedos | **Minimiza** solo esa ventana; al subirla, **restaura** la última minimizada | ¿Minimizó la ventana correcta? ¿El foco volvió? |
 | M6.5b | **Mano abajo / arriba** | Con el **Bloc de notas** enfocado, mano abierta y bájala rápido; espera quieta ~0,3 s y súbela rápido | **Minimiza** el Bloc de notas y luego lo **trae de vuelta** | Aciertos/20; ¿se minimizó algo al mover el cursor de arriba abajo con normalidad? |
-| M6.5c | **Pulgar y meñique** | Abre 4–5 pestañas en el navegador; arma el puntero, haz 🤙 y baja la mano un palmo | Avanza **una pestaña por tramo** (~media palma); al subirla, retrocede. El cursor no se mueve mientras dura la postura | Aciertos/20; ¿se confunde con el puño o con índice + meñique (precisión)? ¿Pestañas de más? |
+| M6.5c | **Abanico** | Abre 4–5 pestañas en el navegador; arma el puntero, ladea la mano abierta y haz un abanico hacia el lado del pulgar | Avanza **una pestaña por abanico**; el regreso no cuenta. Mover el cursor con la mano vertical no cambia pestañas | Aciertos/20; ¿pestañas de más al mover el cursor? ¿se pierde con la mano a 70–90 cm? |
 | M6.5d | **Pinza con el medio** | Sobre el escritorio o un archivo: índice extendido, toca pulgar con medio y separa rápido | Aparece el **menú contextual** donde apuntaba el cursor; sin clic izquierdo | Aciertos/20; ¿clics derechos falsos al apuntar con el índice o al escribir con Air-Swipe? |
 | M6.6 | **Reasignar** | En «Qué hace cada gesto» cambia *Palma abierta* a «Reproducir o pausar multimedia» y prueba con un reproductor | Pausa/reproduce | ¿Llega la tecla multimedia? |
 | M6.7 | Devuelve todo a los valores iniciales | Interruptores como en 0.5 | — | — |

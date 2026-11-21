@@ -21,7 +21,7 @@ material que se crea una sola vez y la app no guarda video de nadie.
 | Pausar o reanudar | `pausar.mp4` | Cierra el puño y mantenlo |
 | Arrastrar *(opcional)* | `arrastrar.mp4` | Pinza sostenida mientras mueves la mano |
 | Clic derecho *(opcional)* | `clic-derecho.mp4` | Pinza de pulgar y dedo medio |
-| Cambiar de pestaña *(opcional)* | `pestanas.mp4` | Pulgar y meñique extendidos, baja la mano |
+| Pestaña siguiente *(opcional)* | `pestanas.mp4` | Mano abierta y ladeada: un abanico rápido hacia el lado del pulgar |
 
 5. Avísale a Claude o actívalos tú en `src/data/gestureMedia.js` (por ejemplo `pointer: 'mover.mp4'`). La app
    los muestra sin sonido y en bucle. Si un archivo falta o no se puede reproducir, vuelve al emoji.

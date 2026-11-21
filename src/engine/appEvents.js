@@ -58,7 +58,7 @@ export function describeEvent(event) {
     case 'NEXT_TAB':
     case 'PREV_TAB': {
       const label = event.event === 'NEXT_TAB' ? 'Pestaña siguiente' : 'Pestaña anterior'
-      return event.injected ? { text: `🤙 ${label}`, tone: 'info' } : { text: `🤙 ${label} (no enviado: activa Controlar)`, tone: 'warn' }
+      return event.injected ? { text: `👋 ${label}`, tone: 'info' } : { text: `👋 ${label} (no enviado: activa Controlar)`, tone: 'warn' }
     }
     case 'PRECISION':
       return { text: event.active ? 'Modo precisión activado: el cursor va más lento.' : 'Modo precisión desactivado.', tone: 'info' }

@@ -10,7 +10,7 @@ export const GESTURE_LABELS = {
   PAUSE: 'Puño',
   FIST_HOLD: 'Puño…',
   TRES_DEDOS: 'Tres dedos',
-  PESTANAS: 'Pulgar y meñique',
+  PESTANAS: 'Abanico',
   PINZA_MEDIO: 'Pinza con el medio',
   RIGHT_CLICK: 'Clic derecho',
   PULGAR: 'Pulgar',
