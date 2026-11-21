@@ -466,3 +466,26 @@ Pedido: «el teclado me tapa toda la pantalla cuando se pone». Antes ocupaba ~5
 - Ventana nativa `.transparent(true)` (Tauri 2.12.5, Windows sin funciones extra) y `overlay.css` con página transparente: fondo del teclado `rgba(52,57,66,0.45)`, barra 0,85, teclas 0,78, propuestas 0,9, texto blanco con sombra para leerse sobre fondos claros u oscuros. Bordes redondeados.
 - `npm run verify:tauri` **49/49** (+1: página transparente, fondo 0,45, teclas 0,78). En esta ejecución la escala fue 150 %: compacto 768×256, grande 1056×359; el área cliente nativa coincide con el puente y sigue NO activable.
 - **No comprobado**: cómo se ve sobre otra aplicación (requeriría capturar la pantalla) ni la legibilidad sobre una página blanca con manos reales. Si el trazo verde o las letras se pierden, subir la opacidad en `src/airswipe/overlay.css`.
+
+## Bloque Claude — inicio sencillo: bienvenida una vez y «Empezar» en un clic (21-11-2026)
+
+Pedido: «siento que tengo que seguir muchos pasos para usarlo en el momento; esos pasos solo al inicio, cuando uno recién empieza».
+
+**Antes**: cada uso exigía Activar cámara → (Observar) → Controlar → mano abierta, con dos clics de ratón (contradictorio en la cocina). El inicio mezclaba uso diario y configuración: 28 botones, ~1820 px de alto.
+
+**Trabajo de Codex sin confirmar**: una vista y grabación WebM de la cámara dentro de Calibrar (`engine_preview`, `CalibrationCamera.jsx`, cambios en el motor). Con la persona usuaria se decidió no incluirla (grabar ejemplos es algo de una vez y choca con «no se guarda vídeo»): respaldada en la rama `respaldo/codex-calibracion-20261121` (+ `tmp/respaldo-codex-20261121/` para los 4 archivos nuevos) y retirada del árbol.
+
+**Hecho**
+- **Bienvenida de primera vez** (`src/pages/WelcomePage.jsx`, lógica en `src/onboarding/onboarding.js`): 5 pasos (bienvenida y privacidad → cámara y mano con la vista de puntos → práctica de mover, clic, desplazar y pausar, que se marcan al reconocerlos → elegir Cocina/Escritorio/Asistencia → resumen). Todo en Observar. Una vez por equipo (`zerotouch:bienvenida`, no se sincroniza); «Saltar» y «Repetir la configuración inicial» en Ajustes.
+- **Inicio de un botón** (`DashboardPage.jsx`): «Empezar» = cámara + control en una acción explícita (`useEngine.quickStart`, plan puro en `src/engine/quickStart.js`): espera hasta 8 s a que el motor confirme la cámara antes de pedir CONTROL; ante cualquier fallo (cámara, Ctrl+Alt+Z) avisa con la causa y se queda en Observar. Con el control confirmado minimiza la ventana (solo si el indicador flotante está activo; capacidad `ventana-principal` con `core:window:allow-minimize`). Debajo: modo actual, Pausar/Detener y los 4 gestos básicos. Con la cámara apagada el inicio tiene **1 botón**.
+- **Ajustes** (`SettingsPage.jsx`, ruta `/ajustes`): perfiles y modos, lista de gestos, «Al empezar» (minimizar, indicador flotante, repetir bienvenida) y temporizadores. Menú: Inicio · Calibrar · Teclado · Ajustes.
+- **Ilustraciones**: `GestureMedia` muestra un clip en bucle de una mano real si está en `src/data/gestureMedia.js` (archivo en `public/gestos/`) y, si no, el emoji. Guía para grabarlos con la app Cámara de Windows: `docs/grabar-gestos.md`. **Aún no hay clips.**
+- El motor no cambió: sigue arrancando en Observar y solo pasa a CONTROL por la orden explícita.
+
+**Verificación**
+- `tests/frontend/inicio-sencillo.test.js` (8): plan de «Empezar», espera y tiempo límite de la cámara, mensajes por código, preferencia de minimizar, estado de la bienvenida (dañado, otra versión, bloqueado), pasos y práctica acumulativa. Frontend **159/159**; `npm run lint` 0 errores (aviso previo de `prototype/`); `verify:separation` pasa; `cargo test` 10/10.
+- Navegador con motor simulado (probado manualmente con puente falso): bienvenida completa; práctica 3 de 4 y 4 de 4; elegir modo; «Ir al inicio» la guarda; **Empezar** con cámara que abre a los 0,7 s → `engine_start` → `engine_set_mode CONTROL` → minimizar; cámara que nunca abre → aviso, sin CONTROL ni minimizar; «Repetir» y «Saltar»; tras recargar no vuelve la bienvenida.
+- `npm run verify:tauri` **51/51** dos veces (+2): bienvenida en un perfil de WebView2 nuevo y «Saltar» → inicio con un solo botón; «Empezar» real con la cámara 9 → «La cámara no se abrió», sigue en OBSERVATION y la ventana no se minimiza. El script ahora gestiona perfiles y modos desde `/ajustes`.
+- **No probado**: con cámara y manos (guía B1–B5 en `docs/prueba-manual-hardware.md`), la minimización real tras un CONTROL confirmado (sin cámara nunca se llega a CONTROL) y la opinión de otras personas sobre si es más sencillo.
+
+Implementación asistida por Claude; revisión humana pendiente.

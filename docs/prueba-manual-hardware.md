@@ -4,6 +4,19 @@ Esta guía cubre **solo lo que ninguna prueba automática puede comprobar**: que
 
 **Regla de oro del proyecto:** nada de lo que anotes aquí es una afirmación hasta que lo hayas medido. Anota lo que ves, con las condiciones (luz, distancia, mano), y no lo que esperabas ver.
 
+## Flujo nuevo del 21-11-2026: bienvenida y «Empezar» (≈ 10 min)
+
+Lo automático (`npm run verify:tauri`, sin cámara) ya comprueba que la bienvenida aparece en un equipo nuevo, que
+«Saltar» deja un inicio con un solo botón y que «Empezar» sin cámara avisa y se queda en Observar. Falta con manos:
+
+- **B1.** Ajustes → «Repetir la configuración inicial». Recorre los 5 pasos: en «Cámara y mano» debe decir «Te
+  vemos la mano»; en «Practica» cada gesto se marca al hacerlo (anota cuáles no se marcaron y por qué).
+- **B2.** «Ir al inicio». Mueve la mano: el cursor **no** debe moverse (sigue en Observar).
+- **B3.** Pulsa **Empezar a controlar** (o **Empezar** con la cámara apagada): un solo clic, la ventana se minimiza y
+  queda el indicador flotante; mano abierta un momento → el cursor se mueve.
+- **B4.** Puño → pausa; puño otra vez → reanuda. `Ctrl`+`Alt`+`Z` → se detiene todo.
+- **B5.** Cierra y vuelve a abrir ZeroTouch: **no** debe aparecer la bienvenida; solo «Empezar».
+
 ## Prueba rápida tras los ajustes del 16-11-2026 (≈ 15 min)
 
 Primero lee la sección 0.2 (seguridad). Después, con el **Bloc de notas** abierto detrás de ZeroTouch, **Inicio › Activar cámara › Controlar**, a 50–70 cm de la cámara y con buena luz de frente. Anota cada fila con el formato «aciertos / intentos» y cualquier comentario.
