@@ -460,3 +460,9 @@ Pedido: «el teclado me tapa toda la pantalla cuando se pone». Antes ocupaba ~5
 - **Botón ⤢/⤡ en el teclado** para pasar al tamaño grande (el anterior) cuando cueste trazar; se recuerda por equipo (`zerotouch:airswipe:size`, `src/airswipe/link.js`). El ▲/▼ conserva el tamaño y el ⤢/⤡ conserva el borde.
 - Pruebas: `cargo test` 10/10 (+2 de `airswipe_size`); frontend 151/151 (+4 `airswipe-size.test.js`, incluida la geometría de las 27 teclas en 768×256 sin solapes y ≥ 30 px); `npm run verify:tauri` **48/48** (+3: abre compacto, ⤢ agranda a 920×313 con el área cliente nativa igual al puente, ⤡ vuelve a 760×250 sin foco y guarda la preferencia). Primer latido de la overlay: 556 ms.
 - **Sin probar con manos**: con teclas más pequeñas el trazo puede costar más; para eso está ⤢.
+
+### Teclado Air-Swipe con fondo semitransparente (20-11-2026, noche)
+
+- Ventana nativa `.transparent(true)` (Tauri 2.12.5, Windows sin funciones extra) y `overlay.css` con página transparente: fondo del teclado `rgba(52,57,66,0.45)`, barra 0,85, teclas 0,78, propuestas 0,9, texto blanco con sombra para leerse sobre fondos claros u oscuros. Bordes redondeados.
+- `npm run verify:tauri` **49/49** (+1: página transparente, fondo 0,45, teclas 0,78). En esta ejecución la escala fue 150 %: compacto 768×256, grande 1056×359; el área cliente nativa coincide con el puente y sigue NO activable.
+- **No comprobado**: cómo se ve sobre otra aplicación (requeriría capturar la pantalla) ni la legibilidad sobre una página blanca con manos reales. Si el trazo verde o las letras se pierden, subir la opacidad en `src/airswipe/overlay.css`.

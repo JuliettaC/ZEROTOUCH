@@ -312,6 +312,8 @@ try {
   await run(overlay, async () => { await until(() => document.querySelectorAll('.as-key').length === 27, 30000) })
   const keys = await run(overlay, async () => ({ keys: document.querySelectorAll('.as-key').length, message: document.querySelector('.as-message')?.textContent, buttons: [...document.querySelectorAll('.as-action')].map(b => b.textContent.trim()) }))
   check('la overlay carga el léxico y dibuja las 27 teclas en WebView2 real', keys.keys === 27, keys)
+  const alpha = await run(overlay, async () => { const a = c => { const m = c.match(/rgba?\(([^)]+)\)/); const p = m ? m[1].split(',').map(Number) : []; return p.length === 4 ? p[3] : 1 }; return { body: a(getComputedStyle(document.body).backgroundColor), fondo: a(getComputedStyle(document.querySelector('.as-overlay')).backgroundColor), tecla: a(getComputedStyle(document.querySelector('.as-key')).backgroundColor) } })
+  check('fondo del teclado semitransparente (página transparente, fondo < 1 y teclas más opacas que el fondo)', alpha.body === 0 && alpha.fondo > 0 && alpha.fondo < 1 && alpha.tecla > alpha.fondo, alpha)
 
   // 9. LA SUPOSICIÓN CLAVE: ¿comparten localStorage la ventana principal y la overlay?
   await delay(2200)

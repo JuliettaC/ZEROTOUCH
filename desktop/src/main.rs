@@ -262,6 +262,8 @@ async fn airswipe_window_open(window: tauri::WebviewWindow, app: tauri::AppHandl
         // teclado) y supera `verify_origin`. Sin esto la overlay cargaba en http:// y todos sus comandos fallaban.
         .use_https_scheme(true)
         .decorations(false)
+        // Ventana transparente: el fondo semitransparente de overlay.css deja ver la aplicación de debajo.
+        .transparent(true)
         .always_on_top(true)
         // Ni activable ni con el foco al crearse: el texto debe seguir yendo a la aplicación que la persona usa.
         .focused(false)
