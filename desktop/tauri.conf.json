@@ -18,7 +18,7 @@
       "useHttpsScheme": true
     }],
     "security": {
-      "capabilities": ["main", "hud"],
+      "capabilities": ["main", "hud", "ventana-principal"],
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'"
     }
   },

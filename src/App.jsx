@@ -5,6 +5,11 @@ import DashboardPage from './pages/DashboardPage'
 import CalibrationPage from './pages/CalibrationPage'
 import GestureKeyboardPage from './pages/GestureKeyboardPage'
 import GesturePlaygroundPage from './pages/GesturePlaygroundPage'
+import WelcomePage from './pages/WelcomePage'
+import SettingsPage from './pages/SettingsPage'
+import { markOnboardingDone, needsOnboarding, resetOnboarding } from './onboarding/onboarding'
+import { readMinimizeOnStart, writeMinimizeOnStart } from './engine/quickStart'
+import { api } from './api/client'
 import {
   addMode, addProfile, clearTombstone, getActiveAssignments, getActiveMode, getActiveProfile, getEffectiveSettings, modesOf, removeMode, removeProfile,
   selectMode, selectProfile, setAssignment, setToggle, settingsPatch, updateActiveSettings, updateMode, updateProfile,
@@ -22,8 +27,10 @@ import { TimerDock } from './components/AppTools'
 import './App.css'
 import './ui-refresh.css'
 import './state-ui.css'
+import './inicio-sencillo.css'
 
-const PAGE_TITLES = { '/': 'Inicio', '/calibracion': 'Calibrar', '/teclado': 'Teclado Air-Swipe', '/prueba': 'Prueba' }
+const PAGE_TITLES = { '/': 'Inicio', '/bienvenida': 'Configuración inicial', '/calibracion': 'Calibrar', '/teclado': 'Teclado Air-Swipe', '/ajustes': 'Ajustes', '/prueba': 'Prueba' }
+const storage = () => globalThis.localStorage
 const SYNCED_NOTE = 'Se quitará de tu cuenta al sincronizar, solo si no cambió en otro equipo.'
 
 export default function App() {
@@ -62,6 +69,9 @@ export default function App() {
   // Temporizadores y avisos de los eventos del motor (multimedia, ventanas, precisión).
   const tools = useAppEvents({ engineStatus, timerMinutes: settings.timerMinutes ?? 5, onNotice: setNotice })
   const summary = syncSummary(state, { account, locked })
+  // Configuración de primera vez (una vez por equipo) y preferencia de minimizar al empezar.
+  const [onboarded, setOnboarded] = useState(() => !needsOnboarding(storage()))
+  const [minimizeOnStart, setMinimizeOnStart] = useState(() => readMinimizeOnStart(storage()))
 
   useEffect(() => {
     document.title = `${PAGE_TITLES[path] || 'Página no encontrada'} · ZeroTouch`
@@ -164,13 +174,32 @@ export default function App() {
     onTogglePause: engine.togglePause,
     hud,
   }
+  // «Empezar»: cámara + control en una acción. Solo si el motor confirmó CONTROL se minimiza la ventana, y solo
+  // con el indicador flotante activo, para que el estado siga a la vista.
+  const quickStart = async () => {
+    const result = await engine.quickStart()
+    if (result.ok && minimizeOnStart && hud.enabled) api.minimizeMainWindow().catch(() => {})
+  }
+  const finishOnboarding = ({ skipped }) => {
+    if (!markOnboardingDone(storage(), Date.now(), { skipped })) setNotice('No se pudo guardar en este equipo que ya configuraste ZeroTouch; se volverá a mostrar la bienvenida.', 'error')
+    setOnboarded(true)
+    navigate('/')
+  }
+  const repeatOnboarding = () => { resetOnboarding(storage()); setOnboarded(false); navigate('/bienvenida') }
+  const selectModeById = id => edit(current => selectMode(current, id))
+  const showWelcome = path === '/bienvenida' || (path === '/' && !onboarded)
   return <div className="app">
-    <Header path={path} navigate={navigate} engineStatus={engineStatus} account={account} onOpenAccount={openAccount} />
+    <Header path={showWelcome ? '/bienvenida' : path} navigate={navigate} engineStatus={engineStatus} account={account} onOpenAccount={openAccount} />
     {storageFailed && <p className="storage-warning" role="alert">No se pudo guardar en este equipo (almacenamiento lleno o bloqueado). Tus cambios siguen en memoria: no cierres la aplicación hasta resolverlo.</p>}
-    {path === '/' && <DashboardPage {...engineProps} view={view} settings={settings} assignments={assignments} locked={locked} apply={engine.apply} onRetryApply={engine.retryApply} syncSummary={summary} account={account}
-      onSelectProfile={id => edit(current => selectProfile(current, id))} onSelectMode={id => edit(current => selectMode(current, id))}
-      onDeleteMode={deleteMode} onDeleteProfile={deleteProfile} openModal={setModal} navigate={navigate}
-      tools={tools} onChangeTimerMinutes={value => edit(current => updateActiveSettings(current, { timerMinutes: value }))} />}
+    {showWelcome && <WelcomePage settings={settings} onChangeSettings={changeSettings} engineStatus={engineStatus} engineBusy={engine.engineBusy} onStartEngine={engine.startEngine}
+      modes={view.modes} activeModeId={view.activeModeId} onSelectMode={selectModeById} onFinish={finishOnboarding} />}
+    {path === '/' && !showWelcome && <DashboardPage {...engineProps} view={view} assignments={assignments} locked={locked} apply={engine.apply} onRetryApply={engine.retryApply}
+      onSelectMode={selectModeById} navigate={navigate} onQuickStart={quickStart} />}
+    {path === '/ajustes' && <SettingsPage view={view} settings={settings} assignments={assignments} locked={locked} apply={engine.apply} onRetryApply={engine.retryApply} syncSummary={summary} account={account}
+      onSelectProfile={id => edit(current => selectProfile(current, id))} onSelectMode={selectModeById}
+      onDeleteMode={deleteMode} onDeleteProfile={deleteProfile} openModal={setModal} navigate={navigate} engineStatus={engineStatus}
+      tools={tools} onChangeTimerMinutes={value => edit(current => updateActiveSettings(current, { timerMinutes: value }))}
+      hud={hud} minimizeOnStart={minimizeOnStart} onToggleMinimize={value => { writeMinimizeOnStart(storage(), value); setMinimizeOnStart(value) }} onRepeatOnboarding={repeatOnboarding} />}
     {path === '/calibracion' && <CalibrationPage {...engineProps} settings={settings} assignments={assignments} modeName={mode?.nombre ?? 'sin modo'} locked={locked} apply={engine.apply} onRetryApply={engine.retryApply}
       onChangeSettings={changeSettings} onAssign={assign} openModal={setModal} />}
     {path === '/teclado' && <GestureKeyboardPage navigate={navigate} engineStatus={engineStatus} settings={settings} keyboard={keyboard} />}
@@ -182,7 +211,7 @@ export default function App() {
     {modal?.type === 'account' && <OptionalAccountDialog initialRegister={modal.register} account={account} summary={summary} syncWarning={acct.warning} report={acct.report} outcomeText={acct.outcomeText} locked={locked} busy={acct.authBusy}
       onLogin={async credentials => { const result = await acct.login(credentials); if (result.ok) setModal(null); return result }} onRegister={acct.register} onAccountAction={acct.accountAction} onLogout={acct.logout}
       onSync={acct.sync} onCancelDelete={cancelDelete} onImportGuest={acct.importGuest} onClearWarning={acct.clearWarning} onClose={() => setModal(null)} />}
-    {path !== '/' && <TimerDock tools={tools} onOpen={() => navigate('/')} />}
+    {path !== '/ajustes' && <TimerDock tools={tools} onOpen={() => navigate('/ajustes')} />}
     <div className="toast-region" aria-live="polite">
       {notice && notice.tone !== 'error' && <div className="toast">{notice.text}</div>}
     </div>

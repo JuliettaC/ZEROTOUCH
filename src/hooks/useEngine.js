@@ -11,6 +11,7 @@ import { api, isDesktop } from '../api/client'
 import { DEFAULT_ENGINE_STATUS } from '../data/engineStatus'
 import { appliedMatches, applyState, shouldSend } from '../engine/engineApply'
 import { closeAirswipe, isOrphanedAirswipe } from '../airswipe/session'
+import { CAMERA_POLL_MS, QUICK_START_MESSAGES, cameraReadiness, quickStartError, quickStartPlan } from '../engine/quickStart'
 
 const POLL_MS = 150
 const ORPHAN_RETRY_MS = 2000
@@ -91,7 +92,39 @@ export function useEngine({ desired, isKeyboardOpen = () => false, onNotice }) {
     if (status) setEngineStatus(status)
   }, [run, engineStatus.paused])
 
+  // «Empezar»: cámara + control en una sola acción explícita (plan y esperas en src/engine/quickStart.js).
+  // Devuelve { ok }: solo es ok si el motor confirmó CONTROL; ante cualquier fallo se queda en Observar y lo dice.
+  const quickStart = useCallback(async () => {
+    setEngineBusy(true)
+    try {
+      let status = await api.engineStatus()
+      const plan = quickStartPlan(status)
+      if (!plan.length) { onNotice(QUICK_START_MESSAGES.already); return { ok: true } }
+      if (plan.includes('stop')) status = await api.engineStop()
+      if (plan.includes('start')) { status = await api.engineStart(desired); setRejection(null) }
+      setEngineStatus(status)
+      const started = Date.now()
+      let readiness = cameraReadiness(status, 0)
+      while (readiness === 'wait') {
+        await new Promise(resolve => window.setTimeout(resolve, CAMERA_POLL_MS))
+        status = await api.engineStatus()
+        setEngineStatus(status)
+        readiness = cameraReadiness(status, Date.now() - started)
+      }
+      if (readiness !== 'ready') { onNotice(readiness === 'timeout' ? QUICK_START_MESSAGES.cameraTimeout : QUICK_START_MESSAGES.stopped, 'error'); return { ok: false } }
+      status = await api.engineSetMode('CONTROL')
+      setEngineStatus(status)
+      onNotice(QUICK_START_MESSAGES.ok)
+      return { ok: true }
+    } catch (error) {
+      onNotice(quickStartError(error), 'error')
+      return { ok: false, code: error?.code }
+    } finally {
+      setEngineBusy(false)
+    }
+  }, [desired, onNotice])
+
   const retryApply = useCallback(() => setRejection(null), [])
 
-  return { engineStatus, engineBusy, apply, retryApply, startEngine, stopEngine, toggleControl, togglePause }
+  return { engineStatus, engineBusy, apply, retryApply, startEngine, stopEngine, toggleControl, togglePause, quickStart }
 }

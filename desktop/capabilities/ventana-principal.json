@@ -1,0 +1,6 @@
+{
+  "identifier": "ventana-principal",
+  "description": "La ventana principal puede minimizarse a sí misma al pulsar «Empezar» (el estado queda en el indicador flotante).",
+  "windows": ["main"],
+  "permissions": ["core:window:allow-minimize"]
+}

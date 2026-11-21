@@ -3,6 +3,7 @@ import { describeHand, getEngineState, HAND_LABELS, isGestureLive } from '../dat
 import { GESTURE_HELP, gestureActionLabel, gestures, settingLabels } from '../data/gestures'
 import { GESTURE_CODES, NO_ACTION, actionName, allowedActions, capabilities, gestureName } from '../data/capabilities'
 import { APPLY, APPLY_LABELS } from '../engine/engineApply'
+import GestureMedia from './GestureMedia'
 
 const ASSETS = `${import.meta.env.BASE_URL}assets/`
 const iconFiles = { logo: 'home-imgImg2', eye: 'home-imgImg', eyeOff: 'home-imgImg1', wand: 'home-imgImg3', kitchen: 'home-imgImg4', moon: 'home-imgImg5', grid: 'home-imgImg6', desk: 'home-imgImg7', bolt: 'home-imgImg8', check: 'home-imgImg9', assistance: 'home-imgImg10', target: 'home-imgImg11', plus: 'home-imgImg12', phone: 'home-imgImg13', chevron: 'home-imgImg14', tip: 'home-imgImg15', back: 'calibration-imgImg3', next: 'calibration-imgImg4', hand: 'calibration-imgImg1', stable: 'calibration-imgImg2', laptop: 'mobile-calibration-imgLaptop', mobileBack: 'mobile-calibration-imgImg', fullscreen: 'mobile-calibration-imgImg1', mobileHand: 'mobile-calibration-imgImg2', fist: 'mobile-calibration-imgImg4', mobileNext: 'mobile-imgSvg1', close: 'gesture-imgImg', pinch: 'gesture-imgImg1', testHand: 'gesture-imgImg2', ergonomic: 'ergonomic-imgImg', rest: 'ergonomic-imgImg1', pause: 'playground-imgImg1' }
@@ -34,7 +35,7 @@ export function StatusBadge({ state, className = '' }) {
 export function Header({ path, navigate, engineStatus, account, onOpenAccount }) {
   const state = getEngineState(engineStatus)
   const accountName = account?.nombre_usuario || account?.username
-  const links = [['/', 'Inicio'], ['/calibracion', 'Calibrar'], ['/teclado', 'Teclado']]
+  const links = [['/', 'Inicio'], ['/calibracion', 'Calibrar'], ['/teclado', 'Teclado'], ['/ajustes', 'Ajustes']]
   return <>
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <header className="app-header">
@@ -212,7 +213,7 @@ export function GestureList({ engineStatus, settings, assignments, onOpen, onTog
       const badge = !enabled ? 'Apagado' : live ? 'Detectado' : running ? 'Listo' : ''
       return <li key={id} className={`gesture-item ${live ? 'live' : ''} ${enabled ? '' : 'disabled'}`}>
         <button type="button" className="gesture-open" onClick={() => onOpen(id)} aria-label={`${gestureActionLabel(id, assignments)}: ${g.title}. Ajustar`}>
-          <span className="emoji-icon" aria-hidden="true">{g.emoji}</span>
+          <GestureMedia id={id} size="sm" />
           <span className="gesture-text"><strong>{gestureActionLabel(id, assignments)}</strong><small>{g.title}</small></span>
           {badge && <span className={`gesture-badge ${live ? 'live' : ''}`}>{live && <i aria-hidden="true">✓ </i>}{badge}</span>}
           <Icon name="chevron" />

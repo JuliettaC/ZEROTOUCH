@@ -135,6 +135,17 @@ try {
   page = await main()
   await run(page, async () => { await until(() => document.querySelector('.app-header')) })
 
+  // 3b. Primera vez en este equipo (perfil de WebView2 nuevo): aparece la bienvenida; «Saltar» la cierra para siempre
+  //     y deja el inicio de un solo botón. Perfiles y modos viven ahora en Ajustes.
+  const welcome = await run(page, async () => { await until(() => document.querySelector('#welcome-title')); return document.querySelector('#welcome-title').textContent })
+  const skipped = await run(page, async () => {
+    clickText('button', 'Ya lo configuré: saltar')
+    await until(() => document.querySelector('.start-button'))
+    return { boton: document.querySelector('.start-button').textContent.trim(), botones: document.querySelectorAll('main button').length, guardado: JSON.parse(localStorage.getItem('zerotouch:bienvenida') ?? 'null') }
+  })
+  check('primera vez: aparece la bienvenida y «Saltar» deja un inicio con un solo botón, «Empezar»', /bienvenida/.test(welcome) && skipped.boton === 'Empezar' && skipped.botones === 1 && skipped.guardado?.done === true, { titulo: welcome, ...skipped })
+  await run(page, async () => { window.history.pushState({}, '', '/ajustes'); window.dispatchEvent(new PopStateEvent('popstate')); await until(() => document.querySelector('.mode-option')) })
+
   // 4. Inicio de sesión y sincronización por la interfaz real (bridge Rust → HTTP → backend).
   const logged = await run(page, async ({ user, pass }) => {
     document.querySelector('.account-button').click()
@@ -268,6 +279,20 @@ try {
   const control = await run(page, async () => settle(() => invoke('engine_set_mode', { mode: 'CONTROL' })))
   check('sin cámara el motor se niega a pasar a CONTROL (no puede inyectar entradas)', !control.ok && /CAMERA_NOT_OPEN|EMERGENCY_HOTKEY_UNAVAILABLE/.test(control.code ?? ''), control)
   await run(page, async () => settle(() => invoke('engine_set_mode', { mode: 'OBSERVATION' })))
+
+  // 7c. «Empezar» por la interfaz real con la cámara 9: como el motor ya corre, solo pide el control (no vuelve a
+  //     arrancarlo). Debe esperar la cámara, avisar que no se abrió y quedarse en Observar, sin minimizar nada.
+  const quick = await run(page, async () => {
+    window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate'))
+    await until(() => document.querySelector('.start-button'))
+    const label = document.querySelector('.start-button').textContent.trim()
+    document.querySelector('.start-button').click()
+    await until(() => document.querySelector('.toast-error'), 15000)
+    return { boton: label, aviso: document.querySelector('.toast-error').innerText, estado: (await invoke('engine_status')).mode, titulo: document.querySelector('#start-title')?.textContent }
+  })
+  const afterQuick = winState(app.pid).windows.find(w => w.title === 'ZEROTOUCH')
+  check('«Empezar» real sin cámara: avisa que la cámara no se abrió, sigue en Observar y no minimiza la ventana', quick.boton === 'Empezar a controlar' && /cámara no se abrió/.test(quick.aviso) && quick.estado === 'OBSERVATION' && afterQuick?.visible && afterQuick.width > 400, { ...quick, ventana: afterQuick && [afterQuick.width, afterQuick.height] })
+  await run(page, async () => { document.querySelector('.toast-error button')?.click() })
 
   // 7b. Indicador flotante (HUD): la ventana principal lo abre sola al estar el motor en marcha.
   let hud

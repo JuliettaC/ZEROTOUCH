@@ -69,4 +69,10 @@ export const api = {
   // Indicador flotante (HUD) con el estado del motor y su última acción.
   hudWindowOpen: () => invoke('hud_window_open'),
   hudWindowClose: () => invoke('hud_window_close'),
+  // Minimiza la ventana principal al empezar (permiso core:window:allow-minimize solo en la capacidad principal).
+  minimizeMainWindow: async () => {
+    const current = globalThis.window?.__TAURI__?.window?.getCurrentWindow?.()
+    if (!current) throw Object.assign(new Error('Solo en la aplicación de escritorio.'), { code: 'DESKTOP_REQUIRED' })
+    return current.minimize()
+  },
 }
