@@ -169,6 +169,16 @@ TAB_FAN_REARM_SPEED = 250.0    # el giro debe calmarse por debajo de esto antes 
                                # redundante: dentro del giro posible de los dedos (~100°) un giro rápido no dura más
                                # que TAB_FAN_COOLDOWN_MS ni a 15 ni a 30 fps, así que hoy lo decide el enfriamiento.
 TAB_FAN_COOLDOWN_MS = 350.0
+# Golpe de muñeca para ventanas (21-11-2026, videos reales; con el interruptor windowSwipe). Las CUATRO puntas se
+# mueven a la vez respecto de sus nudillos (el scroll solo mueve índice y medio) y vuelven enseguida: bajar y volver
+# = minimizar; subir y volver = restaurar. Abrir la mano y sostenerla (mostrar escritorio) no vuelve a tiempo, y
+# abrir un puño queda cubierto por FIST_PINCH_GUARD_MS. Velocidades en tamaños de mano por segundo.
+FLICK_MIN_SPEED = 4.0          # cada una de las 4 puntas, respecto de su nudillo (barrido 4-6 con los videos)
+FLICK_RETURN_MS = 500.0        # la vuelta debe llegar antes de esto
+FLICK_MAX_HAND_SPEED = 4.0     # el centro de la mano casi quieto (no es un barrido del brazo)
+FLICK_COOLDOWN_MS = 600.0
+FLICK_OPPOSITE_MS = 1500.0     # tras minimizar no se restaura (ni al revés) antes de esto: el rebote no es otro golpe
+FLICK_MAX_GAP_MS = 200.0
 TAB_FAN_MAX_GAP_MS = 200.0     # dos muestras más separadas que esto no se comparan (mano perdida)
 
 # Clic derecho (gesto local del equipo): punta del pulgar con punta del medio, índice extendido.
@@ -483,6 +493,11 @@ class GestureInterpreter:
         self._fan_prev: tuple[float, float, float, float] | None = None  # (ms, dirección de los dedos, cx, cy)
         self._fan_armed: bool = True
         self._fan_last_ms: float = -1e9
+        self._flick_prev: tuple[float, tuple[float, ...], float, float] | None = None  # (ms, puntas, cx, cy)
+        self._flick_dir: int = 0          # +1 bajada en curso, -1 subida en curso, 0 nada
+        self._flick_ms: float = -1e9
+        self._flick_fired_ms: float = -1e9
+        self._flick_kind: str = ""
         self._rpinch_count: int = 0
         self._rpinch_start_ms: float | None = None
         self._rpinch_active: bool = False
@@ -675,6 +690,41 @@ class GestureInterpreter:
             self._win_start_ms = now_ms
             self._win_anchor_y = palm_y
         return events
+
+    def _flick_step(self, lms: list[Point3D], blocked: bool, now_ms: float) -> list[LogicalEvent]:
+        """Golpe de muñeca (ver FLICK_*): ida rápida de las 4 puntas y vuelta antes de FLICK_RETURN_MS. Se decide
+        en la vuelta: bajar y volver minimiza la ventana activa; subir y volver restaura la última minimizada."""
+        size = max(_dist2d(lms[0], lms[5]), _dist2d(lms[0], lms[17]), _dist2d(lms[5], lms[17])) or 1e-6
+        tips = tuple((lms[t].y - lms[m].y) / size for t, m in ((8, 5), (12, 9), (16, 13), (20, 17)))
+        cx = (lms[0].x + lms[5].x + lms[17].x) / 3.0
+        cy = (lms[0].y + lms[5].y + lms[17].y) / 3.0
+        prev, self._flick_prev = self._flick_prev, (now_ms, tips, cx, cy)
+        if self._flick_dir and (now_ms - self._flick_ms) > FLICK_RETURN_MS:
+            self._flick_dir = 0
+        if blocked:
+            self._flick_dir = 0
+            return []
+        if prev is None or not (0.0 < now_ms - prev[0] <= FLICK_MAX_GAP_MS):
+            return []
+        dt = (now_ms - prev[0]) / 1000.0
+        if math.hypot(cx - prev[2], cy - prev[3]) / size / dt >= FLICK_MAX_HAND_SPEED:
+            return []
+        speeds = [(a - b) / dt for a, b in zip(tips, prev[1])]   # positivo = la punta baja
+        move = 1 if min(speeds) > FLICK_MIN_SPEED else -1 if min(-v for v in speeds) > FLICK_MIN_SPEED else 0
+        if not move:
+            return []
+        if self._flick_dir == -move and (now_ms - self._flick_fired_ms) >= FLICK_COOLDOWN_MS:
+            kind = EVENT_MINIMIZE_WINDOW if self._flick_dir > 0 else EVENT_RESTORE_WINDOW
+            self._flick_dir = 0
+            if kind != self._flick_kind and (now_ms - self._flick_fired_ms) < FLICK_OPPOSITE_MS:
+                return []
+            self._flick_fired_ms = now_ms
+            self._flick_kind = kind
+            return [LogicalEvent(kind, {"gesto": "golpe_muneca"})]
+        if self._flick_dir != move:
+            self._flick_dir = move
+            self._flick_ms = now_ms
+        return []
 
     def _fan_step(self, lms: list[Point3D], handedness: str, open_hand: bool, now_ms: float) -> tuple[bool, list[LogicalEvent]]:
         """Abanico de pestaña (ver TAB_FAN_*). Devuelve (postura en curso, eventos): mientras la mano abierta y ladeada
@@ -1137,6 +1187,11 @@ class GestureInterpreter:
         pinch_is_active = self._pinching or self._pinch_candidate_count > 0
         palm_cx = (lms[0].x + lms[5].x + lms[9].x + lms[17].x) * 0.25
         palm_cy = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25
+
+        # 4·0. Golpe de muñeca para ventanas (con windowSwipe): observa el movimiento sin cortar los demás gestos.
+        if self.config.window_swipe_enabled:
+            fist_recent = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
+            events.extend(self._flick_step(lms, self._dragging or pinch_is_active or fist_recent or self.airswipe_active, now_ms))
 
         # 4·0a. Pestaña siguiente (gesto local): abanico con la mano abierta y ladeada (ver TAB_FAN_*). Sustituye
         #       al gesto de pulgar y meñique (21-11-2026). Mientras la mano ladeada está quieta, el cursor no se mueve.

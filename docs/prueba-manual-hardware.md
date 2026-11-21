@@ -102,7 +102,7 @@ Comprueba antes de seguir:
 | Índice + meñique | Mantén ~0,4 s | Alterna modo precisión (cursor más lento) | Activo |
 | Barrido izquierda / derecha | Palma abierta, movimiento rápido | Atrás (Alt+←) / Adelante (Alt+→) | **Apagado** |
 | Pulgar arriba / abajo | Puño con el pulgar extendido ~0,5 s | Intro / Escape | **Apagado** |
-| Mano abajo / arriba | Mano abierta: bájala **muy rápido y de una vez** (o súbela) | Minimizar la ventana activa / traerla de vuelta | **Apagado** (desde el QA del 19-11) |
+| Mano abajo / arriba | **Golpe de muñeca**: sin mover el brazo, los cuatro dedos bajan rápido y vuelven (o suben y vuelven). También: mano abierta bajada o subida muy rápido | Minimizar la ventana activa / traerla de vuelta | **Apagado** (desde el QA del 19-11): actívalo en Calibrar |
 | Tres dedos | Índice, medio y anular extendidos; baja o sube la mano | Minimizar / restaurar ventana | **Apagado** |
 | Abanico (👋) | Mano abierta y **ladeada**, casi quieta: dobla la muñeca rápido hacia el lado del pulgar (el regreso no cuenta) | Pestaña siguiente (Ctrl+Tab) | Activo |
 | Pinza con el medio | Índice extendido; junta un instante pulgar y **medio** | Clic derecho | Activo |
