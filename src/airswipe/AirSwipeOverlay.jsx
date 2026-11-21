@@ -5,7 +5,7 @@ import { buildIndex, withExtras } from './decoder'
 import { LETTERS, keyboardGeometry } from './layout'
 import { afterSend, createKeyboardState, discard, ingest, pick, resetSession, runEffects } from './keyboard'
 import { REJECTION_MESSAGES, airswipeTransition, closeAirswipe, typingBlocker } from './session'
-import { HEARTBEAT_EVERY_MS, clearHeartbeat, writeHeartbeat } from './link'
+import { HEARTBEAT_EVERY_MS, clearHeartbeat, otherKeyboardSize, readKeyboardSize, writeHeartbeat, writeKeyboardSize } from './link'
 import './overlay.css'
 
 // Ventana del teclado Air-Swipe (no activable, siempre encima; la crea el puente en `#airswipe`).
@@ -29,6 +29,7 @@ function useOverlay() {
   const indexRef = useRef(null)
   const refreshRectRef = useRef(null)
   const [edge, setEdge] = useState('bottom')
+  const [size, setSize] = useState(() => readKeyboardSize(globalThis.localStorage))
 
   const commit = useCallback(next => { kbRef.current = next; setKb(next) }, [])
   const execute = useCallback(async (effects, live) => {
@@ -118,16 +119,26 @@ function useOverlay() {
     move: async () => {
       const next = edge === 'bottom' ? 'top' : 'bottom'
       try {
-        await api.airswipeWindowOpen(next)
+        await api.airswipeWindowOpen(next, size)
         setEdge(next)
         await refreshRectRef.current?.()
       } catch (error) { commit({ ...kbRef.current, notice: error?.message || 'No se pudo mover el teclado.' }) }
+    },
+    // Compacto (por defecto, deja ver la aplicación) o grande (teclas más grandes para trazar). Se recuerda por equipo.
+    resize: async () => {
+      const next = otherKeyboardSize(size)
+      try {
+        await api.airswipeWindowOpen(edge, next)
+        setSize(next)
+        writeKeyboardSize(globalThis.localStorage, next)
+        await refreshRectRef.current?.()
+      } catch (error) { commit({ ...kbRef.current, notice: error?.message || 'No se pudo cambiar el tamaño del teclado.' }) }
     },
     reactivate: async () => {
       try { await api.engineAirswipe(true) } catch (error) { commit({ ...kbRef.current, notice: error?.message || 'No se pudo reactivar el teclado.' }) }
     },
   }
-  return { ctx, loadError, status, bridgeDown, kb, trail, edge, actions }
+  return { ctx, loadError, status, bridgeDown, kb, trail, edge, size, actions }
 }
 
 function messageFor({ status, bridgeDown, loadError, kb, ctx }) {
@@ -142,7 +153,7 @@ function messageFor({ status, bridgeDown, loadError, kb, ctx }) {
 }
 
 export default function AirSwipeOverlay() {
-  const { ctx, loadError, status, bridgeDown, kb, trail, edge, actions } = useOverlay()
+  const { ctx, loadError, status, bridgeDown, kb, trail, edge, size, actions } = useOverlay()
   const message = messageFor({ status, bridgeDown, loadError, kb, ctx })
   const geometry = ctx?.geometry
   const canReactivate = !bridgeDown && status.running && !status.airswipe
@@ -161,6 +172,7 @@ export default function AirSwipeOverlay() {
         <button type="button" className="as-action" onClick={() => actions.key('space')}>Espacio</button>
         <button type="button" className="as-action" onClick={() => actions.key('enter')}>Intro</button>
         <button type="button" className="as-action" aria-label={edge === 'bottom' ? 'Mover el teclado arriba' : 'Mover el teclado abajo'} onClick={actions.move}>{edge === 'bottom' ? '▲' : '▼'}</button>
+        <button type="button" className="as-action" aria-label={size === 'large' ? 'Achicar el teclado' : 'Agrandar el teclado'} title={size === 'large' ? 'Achicar' : 'Agrandar'} onClick={actions.resize}>{size === 'large' ? '⤡' : '⤢'}</button>
         <button type="button" className="as-action close" aria-label="Cerrar teclado" onClick={actions.close}>✕</button>
       </div>
     </div>

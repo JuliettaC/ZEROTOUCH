@@ -62,7 +62,8 @@ export const api = {
   engineTypeText: text => invoke('engine_type_text', { text }),
   enginePressKey: key => invoke('engine_press_key', { key }),
   engineGazeCalibrate: () => invoke('engine_gaze_calibrate'),
-  airswipeWindowOpen: edge => invoke('airswipe_window_open', edge ? { edge } : {}),
+  // edge: "top" | "bottom" (mueve); size: "compact" | "large". Sin argumentos abre o muestra el teclado.
+  airswipeWindowOpen: (edge, size) => invoke('airswipe_window_open', { ...(edge ? { edge } : {}), ...(size ? { size } : {}) }),
   airswipeWindowClose: () => invoke('airswipe_window_close'),
   airswipeWindowRect: () => invoke('airswipe_window_rect'),
   // Indicador flotante (HUD) con el estado del motor y su última acción.

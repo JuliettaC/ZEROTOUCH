@@ -452,3 +452,11 @@ Sin cámara ni entradas en ninguna ejecución. Falta ver el HUD con manos reales
 - **Medido**: con el script ya corregido, tres ejecuciones seguidas **45/45**. La overlay escribió su primer latido a los **543, 542 y 566 ms**. Eso queda muy por debajo de 3,5 s, así que la hipótesis **no está confirmada**: la ejecución fallida habría necesitado una carga más de seis veces más lenta que lo normal, y no quedó evidencia de por qué.
 - **Cambios (solo en el script)**: se emula el margen real de 8 s renovando la semilla hasta el primer latido de la overlay (pasos 8 y 14), y se mide `msHastaPrimerLatido`. Si vuelve a fallar, el detalle incluye el aviso de la ventana principal: sin latido y con «Se apagó el modo teclado…», el guardia la cerró; si no hay aviso, la causa es otra (p. ej., que el destino CDP no se registre).
 - **Para la demo**: la app real tiene 8 s de margen y la overlay suele cargar en ~0,55 s en este PC. No se cambió código de la app.
+
+### Teclado Air-Swipe más pequeño (20-11-2026, noche)
+
+Pedido: «el teclado me tapa toda la pantalla cuando se pone». Antes ocupaba ~55 % del ancho y hasta 36 % del alto (en la captura de la app real: 1056×359 px).
+- **Compacto por defecto**: ~40 % del ancho y como mucho 26 % del alto (`airswipe_size` en `desktop/src/main.rs`); en 1920×1080 al 100 %, 760×250 px.
+- **Botón ⤢/⤡ en el teclado** para pasar al tamaño grande (el anterior) cuando cueste trazar; se recuerda por equipo (`zerotouch:airswipe:size`, `src/airswipe/link.js`). El ▲/▼ conserva el tamaño y el ⤢/⤡ conserva el borde.
+- Pruebas: `cargo test` 10/10 (+2 de `airswipe_size`); frontend 151/151 (+4 `airswipe-size.test.js`, incluida la geometría de las 27 teclas en 768×256 sin solapes y ≥ 30 px); `npm run verify:tauri` **48/48** (+3: abre compacto, ⤢ agranda a 920×313 con el área cliente nativa igual al puente, ⤡ vuelve a 760×250 sin foco y guarda la preferencia). Primer latido de la overlay: 556 ms.
+- **Sin probar con manos**: con teclas más pequeñas el trazo puede costar más; para eso está ⤢.

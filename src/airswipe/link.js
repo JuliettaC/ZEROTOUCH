@@ -27,3 +27,20 @@ export function heartbeatFresh(storage, now = Date.now(), staleAfter = STALE_AFT
     return false
   }
 }
+
+// Tamaño del teclado (preferencia del equipo; la comparten las dos ventanas por localStorage).
+// «compact» por defecto para no tapar la aplicación; «large» da teclas más grandes para trazar.
+export const KEYBOARD_SIZE_KEY = 'zerotouch:airswipe:size'
+export const KEYBOARD_SIZES = ['compact', 'large']
+
+export function readKeyboardSize(storage) {
+  try { return storage.getItem(KEYBOARD_SIZE_KEY) === 'large' ? 'large' : 'compact' } catch { return 'compact' }
+}
+
+export function writeKeyboardSize(storage, size) {
+  try { storage.setItem(KEYBOARD_SIZE_KEY, size === 'large' ? 'large' : 'compact'); return true } catch { return false }
+}
+
+export function otherKeyboardSize(size) {
+  return size === 'large' ? 'compact' : 'large'
+}

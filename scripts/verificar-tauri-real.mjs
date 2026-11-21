@@ -337,6 +337,17 @@ try {
   check('la ventana principal sigue abierta junto a la overlay', Boolean(mainWin), { ventanas: win.windows.filter(w => w.title).map(w => w.title) })
   check('la geometría cabe en el escritorio visible', overlayWin && rect.x >= win.virtualScreen.left && rect.y >= win.virtualScreen.top && rect.x + rect.width <= win.virtualScreen.left + win.virtualScreen.width && rect.y + rect.height <= win.virtualScreen.top + win.virtualScreen.height, { rect: [rect.x, rect.y, rect.width, rect.height] })
   await screenshot(overlay, 'overlay-real')
+  check('el teclado abre COMPACTO: ≤ 40 % del ancho y ≤ 26 % del alto del área de trabajo', rect.size === 'compact' && rect.width <= rect.work.width * 0.40 + 1 && rect.height <= rect.work.height * 0.26 + 1, { rect: [rect.width, rect.height], area: [rect.work.width, rect.work.height] })
+
+  // 10b. Agrandar y achicar desde la propia overlay (botón ⤢/⤡): ventana nativa, rectángulo del puente y teclas en sincronía.
+  const sized = async () => { await delay(900); const r = await run(await main(), async () => invoke('airswipe_window_rect')); const w = winState(app.pid).windows.find(x => x.title.includes('Air-Swipe')); const keys = await run(overlay, async () => document.querySelectorAll('.as-key').length); return { r, w, keys } }
+  await run(overlay, async () => document.querySelector('.as-action[aria-label="Agrandar el teclado"]').click())
+  const big = await sized()
+  check('⤢ agranda el teclado real y el área cliente nativa coincide con el puente', big.w && big.r.width > rect.width && big.r.height > rect.height && big.w.clientWidth === big.r.width && big.w.clientHeight === big.r.height && big.keys === 27, { antes: [rect.width, rect.height], despues: [big.r.width, big.r.height], nativo: big.w && [big.w.clientWidth, big.w.clientHeight] })
+  await run(overlay, async () => document.querySelector('.as-action[aria-label="Achicar el teclado"]').click())
+  const small = await sized()
+  const remembered = await run(await main(), async () => localStorage.getItem('zerotouch:airswipe:size'))
+  check('⤡ lo devuelve al compacto, sigue sin foco y la preferencia queda guardada', small.w && small.r.width === rect.width && small.r.height === rect.height && !small.w.foreground && remembered === 'compact', { tamaño: [small.r.width, small.r.height], foco: small.w?.foreground, guardado: remembered })
 
   // 11. Overlay → puente → motor real: tocar una tecla sin CONTROL debe rechazarse con la compuerta del motor.
   const keyCenter = await run(overlay, async () => { const r = document.querySelector('.as-key[aria-label="Tecla h"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })

@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { closeAirswipe } from '../airswipe/session'
-import { HEARTBEAT_EVERY_MS, OPEN_GRACE_MS, clearHeartbeat, heartbeatFresh } from '../airswipe/link'
+import { HEARTBEAT_EVERY_MS, OPEN_GRACE_MS, clearHeartbeat, heartbeatFresh, readKeyboardSize } from '../airswipe/link'
 
 const storage = () => globalThis.localStorage
 
@@ -26,7 +26,7 @@ export function useAirswipeLink({ onNotice }) {
     setBusy(true)
     graceUntilRef.current = Date.now() + OPEN_GRACE_MS
     try {
-      await api.airswipeWindowOpen()
+      await api.airswipeWindowOpen(undefined, readKeyboardSize(storage()))
       await api.engineAirswipe(true)
       onNotice('Teclado Air-Swipe abierto. Haz clic con la pinza donde quieras escribir y traza la palabra con el índice.')
     } catch (error) {

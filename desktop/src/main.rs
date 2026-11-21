@@ -155,11 +155,50 @@ async fn engine_gaze_calibrate(window: tauri::WebviewWindow, engine: tauri::Stat
     with_engine(engine.inner().clone(), |mgr| mgr.gaze_calibrate()).await
 }
 
+/// Tamaño del teclado: «compact» (por defecto, deja ver la aplicación) o «large» (teclas más grandes para trazar).
+fn airswipe_size(work_w: f64, work_h: f64, scale: f64, large: bool) -> (f64, f64) {
+    if large {
+        // ~55 % del ancho y como mucho ~36 % del alto (tamaño anterior al 20-11-2026).
+        let width = (work_w * 0.55).clamp(560.0 * scale, 920.0 * scale).min(work_w);
+        let height = (width * 0.34).clamp(200.0 * scale, 320.0 * scale).min(work_h * 0.36);
+        (width, height)
+    } else {
+        // ~40 % del ancho y como mucho ~26 % del alto: en 1920×1080, unos 768×256 px.
+        let width = (work_w * 0.40).clamp(460.0 * scale, 760.0 * scale).min(work_w);
+        let height = (width / 3.0).clamp(170.0 * scale, 250.0 * scale).min(work_h * 0.26);
+        (width, height)
+    }
+}
+
+#[cfg(test)]
+mod airswipe_size_tests {
+    use super::airswipe_size;
+
+    #[test]
+    fn compacto_por_defecto_deja_ver_la_pantalla() {
+        // 1920×1080 al 100 %: el compacto ocupa como mucho el 40 % del ancho y el 26 % del alto.
+        let (w, h) = airswipe_size(1920.0, 1040.0, 1.0, false);
+        assert!(w <= 1920.0 * 0.40 + 0.5 && h <= 1040.0 * 0.26 + 0.5, "{w}×{h}");
+        let (lw, lh) = airswipe_size(1920.0, 1040.0, 1.0, true);
+        assert!(w < lw && h < lh, "el grande es mayor: {w}×{h} frente a {lw}×{lh}");
+        assert_eq!((lw.round(), lh.round()), (920.0, 313.0), "el grande conserva el tamaño anterior");
+    }
+
+    #[test]
+    fn respeta_la_escala_y_las_pantallas_pequenas() {
+        // 1920×1080 físicos al 150 % (notebook): mínimo 460 lógicos de ancho.
+        let (w, h) = airswipe_size(1920.0, 1032.0, 1.5, false);
+        assert!(w >= 460.0 * 1.5 - 0.5 && h <= 1032.0 * 0.26 + 0.5, "{w}×{h}");
+        // Pantalla muy pequeña: nunca más ancho que el área de trabajo ni más alto que su 26 %.
+        let (w, h) = airswipe_size(800.0, 560.0, 1.0, false);
+        assert!(w <= 800.0 && h <= 560.0 * 0.26 + 0.5, "{w}×{h}");
+    }
+}
+
 /// Geometría del teclado Air-Swipe: centrado en la parte inferior (o superior, con `at_top`) del área
-/// de trabajo del monitor principal. Ocupa ~55 % del ancho y como mucho ~1/3 del alto, para no tapar la
-/// aplicación en la que se escribe. Se devuelve en píxeles físicos junto con el rectángulo del escritorio virtual, que es
-/// el espacio en el que el motor expresa el cursor normalizado.
-fn airswipe_geometry(app: &tauri::AppHandle, at_top: bool) -> Result<Value, BridgeError> {
+/// de trabajo del monitor principal, con el tamaño de `airswipe_size`. Se devuelve en píxeles físicos junto con el
+/// rectángulo del escritorio virtual, que es el espacio en el que el motor expresa el cursor normalizado.
+fn airswipe_geometry(app: &tauri::AppHandle, at_top: bool, large: bool) -> Result<Value, BridgeError> {
     let monitor = app
         .primary_monitor()
         .map_err(|_| err("MONITOR", "No se pudo consultar el monitor principal."))?
@@ -168,8 +207,7 @@ fn airswipe_geometry(app: &tauri::AppHandle, at_top: bool) -> Result<Value, Brid
     let work = monitor.work_area();
     let work_w = work.size.width as f64;
     let work_h = work.size.height as f64;
-    let width = (work_w * 0.55).clamp(560.0 * scale, 920.0 * scale).min(work_w);
-    let height = (width * 0.34).clamp(200.0 * scale, 320.0 * scale).min(work_h * 0.36);
+    let (width, height) = airswipe_size(work_w, work_h, scale, large);
     let x = work.position.x as f64 + (work_w - width) / 2.0;
     let y = if at_top {
         work.position.y as f64 + 12.0 * scale
@@ -194,18 +232,24 @@ fn airswipe_geometry(app: &tauri::AppHandle, at_top: bool) -> Result<Value, Brid
     }
     Ok(json!({
         "x": x.round(), "y": y.round(), "width": width.round(), "height": height.round(), "scale": scale,
+        "size": if large { "large" } else { "compact" },
+        "work": { "width": work_w, "height": work_h },
         "screen": { "left": left, "top": top, "width": right - left, "height": bottom - top }
     }))
 }
 
 #[tauri::command]
-async fn airswipe_window_open(window: tauri::WebviewWindow, app: tauri::AppHandle, edge: Option<String>) -> Result<Value, BridgeError> {
+async fn airswipe_window_open(window: tauri::WebviewWindow, app: tauri::AppHandle, edge: Option<String>, size: Option<String>) -> Result<Value, BridgeError> {
     verify_origin(&window)?;
     // `edge`: "top" o "bottom" mueve el teclado ya abierto (botón Subir/Bajar de la overlay).
+    // `size`: "large" o, cualquier otro valor o ausente, "compact" (botón Agrandar/Achicar de la overlay).
     let at_top = edge.as_deref() == Some("top");
-    let geometry = airswipe_geometry(&app, at_top)?;
+    let large = size.as_deref() == Some("large");
+    let geometry = airswipe_geometry(&app, at_top, large)?;
     let scale = geometry["scale"].as_f64().unwrap_or(1.0);
     if let Some(existing) = app.get_webview_window(AIRSWIPE_WINDOW) {
+        // Primero el tamaño y luego la posición: anclada abajo, la esquina depende del alto nuevo.
+        let _ = existing.set_size(tauri::PhysicalSize::new(geometry["width"].as_f64().unwrap_or(760.0) as u32, geometry["height"].as_f64().unwrap_or(250.0) as u32));
         let _ = existing.set_position(tauri::PhysicalPosition::new(geometry["x"].as_f64().unwrap_or(0.0) as i32, geometry["y"].as_f64().unwrap_or(0.0) as i32));
         if edge.is_none() {
             let _ = existing.show();
@@ -245,7 +289,7 @@ async fn airswipe_window_close(window: tauri::WebviewWindow, app: tauri::AppHand
 #[tauri::command]
 async fn airswipe_window_rect(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<Value, BridgeError> {
     verify_origin(&window)?;
-    let mut geometry = airswipe_geometry(&app, false)?;
+    let mut geometry = airswipe_geometry(&app, false, false)?;
     if let Some(existing) = app.get_webview_window(AIRSWIPE_WINDOW) {
         if let (Ok(pos), Ok(size)) = (existing.inner_position(), existing.inner_size()) {
             geometry["x"] = json!(pos.x);
