@@ -52,3 +52,6 @@ dist-app
 *.njsproj
 *.sln
 *.sw?
+
+# Videos de gestos grabados por la persona usuaria (muestran su cara): nunca al repositorio.
+VIDEOS GESTOS/

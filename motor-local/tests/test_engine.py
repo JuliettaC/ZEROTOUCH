@@ -51,6 +51,11 @@ def make_open_palm(
     for idx in (8, 12, 16, 20):
         lms[idx] = Point3D(cx, cy - 0.14 * scale)
     lms[4] = Point3D(cx + pinch_dist * scale, cy - 0.14 * scale)
+    if pinch_dist < 0.08:
+        # Pinza realista (21-11-2026): el índice se dobla hacia el pulgar y se aparta del medio. Antes las cuatro
+        # puntas coincidían, una mano imposible que ya no pasa por la forma de micro-pinza del intérprete.
+        lms[8] = Point3D(cx - 0.07 * scale, cy - 0.10 * scale)
+        lms[4] = Point3D(cx - 0.07 * scale + pinch_dist * scale, cy - 0.10 * scale)
     lms[2] = Point3D(cx - 0.06 * scale, cy + 0.05 * scale)
     lms[3] = Point3D(cx - 0.07 * scale, cy - 0.02 * scale)
     return HandLandmarks(landmarks=lms, handedness=handedness, confidence=confidence)

@@ -1,27 +1,27 @@
 """Layer 3: Gesture Interpretation Module.
 
-Máquina de estados que convierte 21 landmarks + EngineConfig en eventos lógicos:
+MÃƒÂ¡quina de estados que convierte 21 landmarks + EngineConfig en eventos lÃƒÂ³gicos:
 MOVE_CURSOR, LEFT_CLICK, SCROLL, START_DRAG, END_DRAG, PAUSE, RESUME, TRACKING_LOST, acciones
 discretas (BACK, FORWARD, CONFIRM, CANCEL, MEDIA_*, TIMER, PRECISION, NAVIGATION), ventanas y
 AIRSWIPE_TRACE.
 
 Estados mutuamente excluyentes por fotograma (prioridad):
-  puño (pausa) / pulgares -> arrastre activo -> precisión (postura) -> tres dedos -> dos dedos
+  puÃƒÂ±o (pausa) / pulgares -> arrastre activo -> precisiÃƒÂ³n (postura) -> tres dedos -> dos dedos
   (scroll) -> trazo Air-Swipe (apuntar) -> palma (barrido / sostenida) -> pinza -> puntero.
 
-Activación del puntero: con `pointer_enabled`, el cursor y los demás gestos (salvo puño y pulgares)
-solo actúan después de sostener la mano abierta POINTER_ARM_MS («mano abierta sostenida ->
-activar puntero»). El puntero se desarma al perder la mano POINTER_DISARM_MS o al pausar.
+ActivaciÃƒÂ³n del puntero: con `pointer_enabled`, el cursor y los demÃƒÂ¡s gestos (salvo puÃƒÂ±o y pulgares)
+solo actÃƒÂºan despuÃƒÂ©s de sostener la mano abierta POINTER_ARM_MS (Ã‚Â«mano abierta sostenida ->
+activar punteroÃ‚Â»). El puntero se desarma al perder la mano POINTER_DISARM_MS o al pausar.
 
 Todas las temporizaciones se miden en milisegundos reales, no solo en fotogramas:
-- La pinza exige N muestras consecutivas Y un tiempo mínimo de confirmación.
+- La pinza exige N muestras consecutivas Y un tiempo mÃƒÂ­nimo de confirmaciÃƒÂ³n.
 - El scroll exige postura confirmada y movimiento por encima de una zona muerta; la velocidad
   se limita por tiempo transcurrido, de modo que cadencias distintas dan desplazamientos
   parecidos.
-- Los gestos discretos (pulgares, precisión, palma sostenida, barridos) disparan UNA vez por
+- Los gestos discretos (pulgares, precisiÃƒÂ³n, palma sostenida, barridos) disparan UNA vez por
   postura, exigen soltarla (rearme) y respetan un cooldown.
 
-Los valores son hipótesis iniciales, no calibración medida.
+Los valores son hipÃƒÂ³tesis iniciales, no calibraciÃƒÂ³n medida.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ EVENT_START_DRAG = "START_DRAG"
 EVENT_END_DRAG = "END_DRAG"
 EVENT_PAUSE = "PAUSE"
 EVENT_RESUME = "RESUME"
-EVENT_THUMBS_UP = "THUMBS_UP"          # telemetría/compatibilidad: la acción viaja como evento discreto
+EVENT_THUMBS_UP = "THUMBS_UP"          # telemetrÃƒÂ­a/compatibilidad: la acciÃƒÂ³n viaja como evento discreto
 EVENT_THUMBS_DOWN = "THUMBS_DOWN"
 EVENT_TRACKING_LOST = "TRACKING_LOST"
 EVENT_BACK = "BACK"                    # atras (Alt+Izquierda)
@@ -52,16 +52,16 @@ EVENT_CANCEL = "CANCEL"                # cancelar (Escape)
 EVENT_MEDIA_PLAY_PAUSE = "MEDIA_PLAY_PAUSE"
 EVENT_MEDIA_NEXT = "MEDIA_NEXT"
 EVENT_TIMER = "TIMER"                  # temporizador_iniciar: evento para la interfaz
-EVENT_PRECISION = "PRECISION"          # precision: alterna el modo precisión (evento para la interfaz)
+EVENT_PRECISION = "PRECISION"          # precision: alterna el modo precisiÃƒÂ³n (evento para la interfaz)
 EVENT_NAVIGATION = "NAVIGATION"        # navegacion: vuelve al puntero normal (evento para la interfaz)
 EVENT_MINIMIZE_WINDOW = "MINIMIZE_WINDOW"  # tres dedos hacia abajo: ventana activa
-EVENT_RESTORE_WINDOW = "RESTORE_WINDOW"    # tres dedos hacia arriba: última ventana minimizada por el motor
+EVENT_RESTORE_WINDOW = "RESTORE_WINDOW"    # tres dedos hacia arriba: ÃƒÂºltima ventana minimizada por el motor
 EVENT_AIRSWIPE_TRACE = "AIRSWIPE_TRACE"    # trazo terminado sobre el teclado Air-Swipe (puntos normalizados)
-EVENT_NEXT_TAB = "NEXT_TAB"            # pulgar y meñique hacia abajo: pestaña siguiente (Ctrl+Tab)
-EVENT_PREV_TAB = "PREV_TAB"            # pulgar y meñique hacia arriba: pestaña anterior (Ctrl+Shift+Tab)
-EVENT_RIGHT_CLICK = "RIGHT_CLICK"      # pinza pulgar-medio: clic derecho en la posición del puntero
+EVENT_NEXT_TAB = "NEXT_TAB"            # pulgar y meÃƒÂ±ique hacia abajo: pestaÃƒÂ±a siguiente (Ctrl+Tab)
+EVENT_PREV_TAB = "PREV_TAB"            # pulgar y meÃƒÂ±ique hacia arriba: pestaÃƒÂ±a anterior (Ctrl+Shift+Tab)
+EVENT_RIGHT_CLICK = "RIGHT_CLICK"      # pinza pulgar-medio: clic derecho en la posiciÃƒÂ³n del puntero
 
-# Acción del catálogo -> tipo de evento lógico.
+# AcciÃƒÂ³n del catÃƒÂ¡logo -> tipo de evento lÃƒÂ³gico.
 ACTION_EVENTS: dict[str, str] = {
     "atras": EVENT_BACK,
     "adelante": EVENT_FORWARD,
@@ -74,10 +74,10 @@ ACTION_EVENTS: dict[str, str] = {
     "navegacion": EVENT_NAVIGATION,
 }
 
-# --- Hipótesis iniciales (no medidas) ---
-# Con cámaras de ~15 FPS, 3 muestras eran ~200 ms: una pinza rápida (un «toque») nunca se confirmaba.
+# --- HipÃƒÂ³tesis iniciales (no medidas) ---
+# Con cÃƒÂ¡maras de ~15 FPS, 3 muestras eran ~200 ms: una pinza rÃƒÂ¡pida (un Ã‚Â«toqueÃ‚Â») nunca se confirmaba.
 PINCH_CONFIRM_FRAMES = 2       # muestras consecutivas dentro del umbral para confirmar una pinza
-PINCH_CONFIRM_MS = 45.0        # y tiempo mínimo desde la primera muestra
+PINCH_CONFIRM_MS = 45.0        # y tiempo mÃƒÂ­nimo desde la primera muestra
 PINCH_DEPTH_WEIGHT = 0.6       # peso de la profundidad (z de MediaPipe) en la distancia de la pinza
 PINCH_RELEASE_FRAMES = 2       # muestras consecutivas fuera del umbral para soltar la pinza
 PINCH_CANDIDATE_MAX_MS = 600.0  # una pinza candidata que no se confirma en este tiempo caduca
@@ -87,49 +87,52 @@ SCROLL_CONFIRM_MS = 60.0
 SCROLL_DEADZONE_PALM = 0.06    # zona muerta vertical, en longitudes de palma
 SCROLL_AXIS_DOMINANCE = 1.5    # movimiento vertical debe dominar al horizontal en este factor
 SCROLL_UNITS_PER_PALM = 8.0    # unidades de rueda por longitud de palma (antes de sensibilidad)
-SCROLL_MAX_NOTCHES_PER_SEC = 20.0  # límite de velocidad en muescas de rueda por segundo
-# Tres dedos (ventanas): postura confirmada, desplazamiento vertical, una acción por gesto.
+SCROLL_MAX_NOTCHES_PER_SEC = 20.0  # lÃƒÂ­mite de velocidad en muescas de rueda por segundo
+# Tres dedos (ventanas): postura confirmada, desplazamiento vertical, una acciÃƒÂ³n por gesto.
 WINDOW_CONFIRM_FRAMES = 3
 WINDOW_CONFIRM_MS = 60.0
-WINDOW_MIN_PALM = 0.6          # desplazamiento vertical mínimo, en longitudes de palma
+WINDOW_MIN_PALM = 0.6          # desplazamiento vertical mÃƒÂ­nimo, en longitudes de palma
 WINDOW_GESTURE_WINDOW_MS = 1000.0  # ventana temporal del desplazamiento; si vence, se vuelve a anclar
 WINDOW_COOLDOWN_MS = 800.0
 WINDOW_REARM_MS = 200.0        # postura ausente este tiempo para rearmar
-# Barrido horizontal con palma abierta: predominio horizontal, recorrido y velocidad mínimos.
+# Barrido horizontal con palma abierta: predominio horizontal, recorrido y velocidad mÃƒÂ­nimos.
 SWIPE_WINDOW_MS = 450.0
-SWIPE_MIN_PALM = 1.2           # recorrido horizontal mínimo, en longitudes de palma
+SWIPE_MIN_PALM = 1.2           # recorrido horizontal mÃƒÂ­nimo, en longitudes de palma
 SWIPE_DOMINANCE = 2.0          # |dx| debe superar |dy| en este factor
 SWIPE_MIN_SPEED = 2.0          # longitudes de palma por segundo
-SWIPE_REVERSAL_PALM = 0.25     # si la mano vuelve este recorrido hacia atrás, el barrido se reinicia
+SWIPE_REVERSAL_PALM = 0.25     # si la mano vuelve este recorrido hacia atrÃƒÂ¡s, el barrido se reinicia
 SWIPE_COOLDOWN_MS = 600.0
 SWIPE_STILL_PALM = 0.03        # movimiento por muestra por debajo del cual la mano cuenta como quieta
 SWIPE_REARM_MS = 200.0
-# Barrido vertical con la mano abierta («bajar» y «subir» la ventana). Más exigente que el horizontal:
-# mover el cursor de arriba abajo también es un movimiento vertical de la mano abierta, así que solo
-# cuenta un movimiento claramente rápido y largo.
+# Barrido vertical con la mano abierta (Ã‚Â«bajarÃ‚Â» y Ã‚Â«subirÃ‚Â» la ventana). MÃƒÂ¡s exigente que el horizontal:
+# mover el cursor de arriba abajo tambiÃƒÂ©n es un movimiento vertical de la mano abierta, asÃƒÂ­ que solo
+# cuenta un movimiento claramente rÃƒÂ¡pido y largo.
 VSWIPE_WINDOW_MS = 500.0
-VSWIPE_MIN_PALM = 2.0          # recorrido vertical mínimo, en longitudes de palma (QA: 1,3 se disparaba al mover el cursor)
+VSWIPE_MIN_PALM = 2.0          # recorrido vertical mÃƒÂ­nimo, en longitudes de palma (QA: 1,3 se disparaba al mover el cursor)
 VSWIPE_DOMINANCE = 1.8         # |dy| debe superar |dx| en este factor
 VSWIPE_MIN_SPEED = 5.0         # longitudes de palma por segundo
-# Puño (pausa): puntas a menos de esta fracción de la palma de su articulación MCP, confirmado en el
-# tiempo y con la mano quieta. Hipótesis sin calibrar con cámara real.
+# PuÃƒÂ±o (pausa): puntas a menos de esta fracciÃƒÂ³n de la palma de su articulaciÃƒÂ³n MCP, confirmado en el
+# tiempo y con la mano quieta. HipÃƒÂ³tesis sin calibrar con cÃƒÂ¡mara real.
 FIST_TIP_RATIO = 0.52
 FIST_CONFIRM_FRAMES = 6
 FIST_CONFIRM_MS = 250.0
-FIST_MISS_TOLERANCE = 2        # muestras sueltas sin puño que no reinician la confirmación
-FIST_STILL_PALM = 0.15         # QA 19-11: con 0,05 el ruido de la cámara (mano a 70-90 cm) reiniciaba el puño
-# Activación del puntero: mano abierta sostenida.
+FIST_MISS_TOLERANCE = 2        # muestras sueltas sin puÃƒÂ±o que no reinician la confirmaciÃƒÂ³n
+FIST_STILL_PALM = 0.15         # QA 19-11: con 0,05 el ruido de la cÃƒÂ¡mara (mano a 70-90 cm) reiniciaba el puÃƒÂ±o
+PINCH_INDEX_SEPARATION = 0.45  # puntas de ÃƒÂ­ndice y medio separadas (palmas). Videos: clic 0,52-0,87; scroll 0,13-0,61
+PINCH_INDEX_MAX_ANGLE = 145.0  # ÃƒÂ­ndice doblado en su articulaciÃƒÂ³n media (grados). Videos: clic 51-132; scroll 152-173
+FIST_PINCH_GUARD_MS = 400.0    # tras ver un puÃƒÂ±o, la pinza no entra durante este tiempo (abrir el puÃƒÂ±o no es un clic)
+# ActivaciÃƒÂ³n del puntero: mano abierta sostenida.
 POINTER_ARM_MS = 350.0
 POINTER_DISARM_MS = 8000.0     # mano perdida este tiempo -> hay que volver a abrir la mano
 # QA 19-11: con 3 s, bajar la mano a descansar un momento obligaba a re-armar el puntero cada vez.
 DROPOUT_GRACE_FRAMES = 2       # cuadros sin mano que se toleran sin reiniciar gestos en curso
-DROPOUT_GRACE_MS = 150.0       # MediaPipe pierde la mano en cuadros sueltos (sobre todo al cerrar el puño)
-ACTIVE_EDGE = 0.03             # el área activa recentrada no se acerca más que esto al borde de la imagen
-# Aceleración del puntero, como la de un mouse (QA 19-11, 2ª iteración). La velocidad se mide en pantallas por segundo
-# del mapeo absoluto. Lento: ×ACCEL_GAIN_SLOW (precisión, menos temblor); normal: ×ACCEL_GAIN_MID; rápido:
-# ×ACCEL_GAIN_FAST. Con el banco QA, cruzar la pantalla pasa de ~0,39 a ~0,19 del ancho de la imagen (~13 cm de mano
-# a 50 cm). La 1ª versión (×0,3 y nunca >1) dejaba el cursor pegajoso y sin llegar a las esquinas. El cursor se
-# detiene en los bordes, como un mouse: al volver queda corrido respecto de la mano y se recoloca moviéndola.
+DROPOUT_GRACE_MS = 150.0       # MediaPipe pierde la mano en cuadros sueltos (sobre todo al cerrar el puÃƒÂ±o)
+ACTIVE_EDGE = 0.03             # el ÃƒÂ¡rea activa recentrada no se acerca mÃƒÂ¡s que esto al borde de la imagen
+# AceleraciÃƒÂ³n del puntero, como la de un mouse (QA 19-11, 2Ã‚Âª iteraciÃƒÂ³n). La velocidad se mide en pantallas por segundo
+# del mapeo absoluto. Lento: Ãƒâ€”ACCEL_GAIN_SLOW (precisiÃƒÂ³n, menos temblor); normal: Ãƒâ€”ACCEL_GAIN_MID; rÃƒÂ¡pido:
+# Ãƒâ€”ACCEL_GAIN_FAST. Con el banco QA, cruzar la pantalla pasa de ~0,39 a ~0,19 del ancho de la imagen (~13 cm de mano
+# a 50 cm). La 1Ã‚Âª versiÃƒÂ³n (Ãƒâ€”0,3 y nunca >1) dejaba el cursor pegajoso y sin llegar a las esquinas. El cursor se
+# detiene en los bordes, como un mouse: al volver queda corrido respecto de la mano y se recoloca moviÃƒÂ©ndola.
 ACCEL_SPEED_SLOW = 0.05
 ACCEL_SPEED_MID = 0.30
 ACCEL_SPEED_FAST = 1.00
@@ -138,36 +141,36 @@ ACCEL_GAIN_MID = 1.2
 ACCEL_GAIN_FAST = 2.5
 SETTLE_MS = 200.0              # mano dentro del radio de asentamiento este tiempo -> cursor quieto
 CLICK_REWIND_MS = 90.0         # el clic cae donde estaba el cursor justo antes de que los dedos empezaran a juntarse
-# Gestos discretos sostenidos: tiempo de confirmación, cooldown y rearme.
+# Gestos discretos sostenidos: tiempo de confirmaciÃƒÂ³n, cooldown y rearme.
 THUMB_HOLD_MS = 500.0
 THUMB_COOLDOWN_MS = 800.0
 PRECISION_HOLD_MS = 400.0
 PRECISION_COOLDOWN_MS = 800.0
-PALM_HOLD_MS = 900.0           # palma abierta quieta este tiempo -> acción discreta (navegacion)
+PALM_HOLD_MS = 900.0           # palma abierta quieta este tiempo -> acciÃƒÂ³n discreta (navegacion)
 PALM_COOLDOWN_MS = 1200.0
-PALM_STILL_PALM = 0.08         # recorrido máximo (en palmas) para contar como "sostenida"
+PALM_STILL_PALM = 0.08         # recorrido mÃƒÂ¡ximo (en palmas) para contar como "sostenida"
 DISCRETE_REARM_MS = 250.0
-HOLD_GAP_RESET_MS = 150.0      # sin evaluar la postura este tiempo, la confirmación empieza de cero
-# Trazo Air-Swipe: índice extendido (apuntar) sobre el teclado virtual.
+HOLD_GAP_RESET_MS = 150.0      # sin evaluar la postura este tiempo, la confirmaciÃƒÂ³n empieza de cero
+# Trazo Air-Swipe: ÃƒÂ­ndice extendido (apuntar) sobre el teclado virtual.
 TRACE_CONFIRM_FRAMES = 3
 TRACE_END_FRAMES = 4           # fotogramas sin apuntar para cerrar el trazo
 TRACE_MIN_POINTS = 4
-TRACE_MIN_LENGTH = 0.02        # recorrido mínimo en pantalla normalizada
+TRACE_MIN_LENGTH = 0.02        # recorrido mÃƒÂ­nimo en pantalla normalizada
 TRACE_MAX_POINTS = 600
 
-# Pestañas (gesto local del equipo): pulgar y meñique extendidos, índice, medio y anular plegados.
-# Cada TAB_STEP_PALM de recorrido vertical cambia UNA pestaña; seguir moviendo la mano cambia más.
+# PestaÃƒÂ±as (gesto local del equipo): pulgar y meÃƒÂ±ique extendidos, ÃƒÂ­ndice, medio y anular plegados.
+# Cada TAB_STEP_PALM de recorrido vertical cambia UNA pestaÃƒÂ±a; seguir moviendo la mano cambia mÃƒÂ¡s.
 TAB_CONFIRM_FRAMES = 3
 TAB_CONFIRM_MS = 60.0
-TAB_STEP_PALM = 0.5            # recorrido vertical por pestaña, en longitudes de palma
-TAB_REPEAT_MS = 220.0          # intervalo mínimo entre dos cambios de pestaña
-TAB_THUMB_OUT = 0.4            # punta del pulgar separada de la base del índice (en palmas; en 4:3 lo horizontal mide menos)
+TAB_STEP_PALM = 0.5            # recorrido vertical por pestaÃƒÂ±a, en longitudes de palma
+TAB_REPEAT_MS = 220.0          # intervalo mÃƒÂ­nimo entre dos cambios de pestaÃƒÂ±a
+TAB_THUMB_OUT = 0.4            # punta del pulgar separada de la base del ÃƒÂ­ndice (en palmas; en 4:3 lo horizontal mide menos)
 
-# Clic derecho (gesto local del equipo): punta del pulgar con punta del medio, índice extendido.
+# Clic derecho (gesto local del equipo): punta del pulgar con punta del medio, ÃƒÂ­ndice extendido.
 RIGHT_PINCH_CONFIRM_FRAMES = 2
 RIGHT_PINCH_CONFIRM_MS = 45.0
 RIGHT_PINCH_RELEASE_FRAMES = 2
-RIGHT_PINCH_MAX_MS = 700.0     # una pinza más larga se descarta sin clic (no es un «toque»)
+RIGHT_PINCH_MAX_MS = 700.0     # una pinza mÃƒÂ¡s larga se descarta sin clic (no es un Ã‚Â«toqueÃ‚Â»)
 RIGHT_PINCH_MIDDLE_REACH = 1.1  # la punta del medio sigue lejos de la palma (no es un dedo plegado)
 
 
@@ -256,7 +259,7 @@ class OneEuroFilter1D:
 
 
 def pointer_gain(speed: float) -> float:
-    """Ganancia de la aceleración según la velocidad (pantallas/s): curva suave y monótona."""
+    """Ganancia de la aceleraciÃƒÂ³n segÃƒÂºn la velocidad (pantallas/s): curva suave y monÃƒÂ³tona."""
     def smooth(a: float, b: float, v: float) -> float:
         t = max(0.0, min(1.0, (v - a) / (b - a)))
         return t * t * (3.0 - 2.0 * t)
@@ -270,8 +273,8 @@ def _dist2d(a: Point3D, b: Point3D) -> float:
 
 
 def _pinch_distance(a: Point3D, b: Point3D) -> float:
-    """Distancia pulgar-índice con algo de profundidad: con la palma de frente a la cámara las dos
-    puntas pueden solaparse en 2D aunque estén separadas en profundidad (falsos clics)."""
+    """Distancia pulgar-ÃƒÂ­ndice con algo de profundidad: con la palma de frente a la cÃƒÂ¡mara las dos
+    puntas pueden solaparse en 2D aunque estÃƒÂ©n separadas en profundidad (falsos clics)."""
     return math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (PINCH_DEPTH_WEIGHT * (a.z - b.z)) ** 2)
 
 
@@ -304,8 +307,29 @@ def _confirmed(count: int, start_ms: float | None, now_ms: float, min_frames: in
     return start_ms is not None and count >= min_frames and (now_ms - start_ms) >= min_ms
 
 
+def _pip_angle(a: Point3D, b: Point3D, c: Point3D) -> float:
+    """ÃƒÂngulo en grados en b (3D, con la profundidad relativa de MediaPipe): 180 = dedo recto."""
+    v1 = (a.x - b.x, a.y - b.y, a.z - b.z)
+    v2 = (c.x - b.x, c.y - b.y, c.z - b.z)
+    n1 = math.sqrt(sum(p * p for p in v1))
+    n2 = math.sqrt(sum(p * p for p in v2))
+    if n1 < 1e-9 or n2 < 1e-9:
+        return 180.0
+    cos = sum(p * q for p, q in zip(v1, v2)) / (n1 * n2)
+    return math.degrees(math.acos(max(-1.0, min(1.0, cos))))
+
+
+def _index_pinch_shape(lms: list[Point3D], scale: float) -> bool:
+    """Forma de la micro-pinza (videos reales del 21-11-2026): el ÃƒÂ­ndice se dobla SOLO hacia el pulgar y el medio
+    queda aparte. Separa el clic del scroll (ÃƒÂ­ndice y medio juntos y rectos, con el pulgar cerca) y de los golpes
+    de mano de pestaÃƒÂ±as y ventanas, que en la imagen tambiÃƒÂ©n acercan el pulgar a la punta del ÃƒÂ­ndice."""
+    separated = _dist2d(lms[8], lms[12]) / scale >= PINCH_INDEX_SEPARATION
+    bent = _pip_angle(lms[5], lms[6], lms[8]) <= PINCH_INDEX_MAX_ANGLE
+    return separated and bent
+
+
 def _is_fist_pose(lms: list[Point3D], scale: float) -> bool:
-    """Puño: los cuatro dedos plegados y cada punta cerca de la palma (no solo más cerca de la muñeca)."""
+    """PuÃƒÂ±o: los cuatro dedos plegados y cada punta cerca de la palma (no solo mÃƒÂ¡s cerca de la muÃƒÂ±eca)."""
     for tip, mcp in ((8, 5), (12, 9), (16, 13), (20, 17)):
         if _dist2d(lms[tip], lms[mcp]) > FIST_TIP_RATIO * scale:
             return False
@@ -340,8 +364,8 @@ class _HoldGesture:
         self._anchor = None
 
     def step(self, pose: bool, now_ms: float, cx: float = 0.0, cy: float = 0.0, scale: float = 1.0) -> bool:
-        # Si la postura no se evaluó durante un tiempo (otra rama del intérprete la excluyó), la
-        # confirmación empieza de cero: un inicio antiguo nunca cuenta como "sostenido".
+        # Si la postura no se evaluÃƒÂ³ durante un tiempo (otra rama del intÃƒÂ©rprete la excluyÃƒÂ³), la
+        # confirmaciÃƒÂ³n empieza de cero: un inicio antiguo nunca cuenta como "sostenido".
         if self._last_step_ms is not None and (now_ms - self._last_step_ms > HOLD_GAP_RESET_MS or now_ms < self._last_step_ms):
             self._start_ms = None
             self._anchor = None
@@ -380,7 +404,7 @@ class GestureInterpreter:
     def __init__(self, config: EngineConfig | None = None) -> None:
         self.config = config or EngineConfig()
         self.paused: bool = False
-        self.external_hold: bool = False   # retención por mirada: sin eventos mientras dure
+        self.external_hold: bool = False   # retenciÃƒÂ³n por mirada: sin eventos mientras dure
         self.precision_active: bool = False
         self.airswipe_active: bool = False
         self.pointer_armed: bool = False
@@ -404,12 +428,13 @@ class GestureInterpreter:
         self._scroll_anchor: tuple[float, float] | None = None
         self._scroll_last_ms: float = 0.0
         self._scroll_pending: float = 0.0     # unidades pendientes de emitir (limitadas por velocidad)
-        self._scroll_accum: float = 0.0       # fracción de muesca aún no emitida
+        self._scroll_accum: float = 0.0       # fracciÃƒÂ³n de muesca aÃƒÂºn no emitida
         self._missing_frames: int = 0
         self._lost_since_ms: float | None = None
         self._tracking_lost_emitted: bool = False
         self._fist_count: int = 0
         self._fist_first_ms: float | None = None
+        self._fist_seen_ms: float | None = None  # ÃƒÂºltimo fotograma con postura de puÃƒÂ±o (aunque no confirmado)
         self._fist_anchor: tuple[float, float] | None = None
         self._fist_misses: int = 0
         self._fist_was_confirmed: bool = False
@@ -443,10 +468,10 @@ class GestureInterpreter:
         self._trace_points: list[list[float]] = []
         self._last_seen_ms: float | None = None
         self._cursor_history: list[tuple[float, float, float]] = []   # (t, x, y) del cursor suavizado
-        self._arm_center: tuple[float, float] | None = None           # centro del área activa fijado al armar
+        self._arm_center: tuple[float, float] | None = None           # centro del ÃƒÂ¡rea activa fijado al armar
         self._settle_ref: tuple[float, float, float] | None = None     # (x, y, t) para detectar mano quieta
-        self._accel_prev: tuple[float, float, float] | None = None     # posición absoluta filtrada anterior (x, y, t)
-        self._accel_out: tuple[float, float] | None = None              # posición acelerada (la que sigue el cursor)
+        self._accel_prev: tuple[float, float, float] | None = None     # posiciÃƒÂ³n absoluta filtrada anterior (x, y, t)
+        self._accel_out: tuple[float, float] | None = None              # posiciÃƒÂ³n acelerada (la que sigue el cursor)
         self._cursor_settled: bool = False
         self._tab_frames: int = 0
         self._tab_start_ms: float | None = None
@@ -462,7 +487,7 @@ class GestureInterpreter:
     # ------------------------------------------------------------------ control
 
     def update_config(self, config: EngineConfig) -> list[LogicalEvent]:
-        """Aplica una configuración nueva. Antes libera cualquier botón retenido y limpia el estado
+        """Aplica una configuraciÃƒÂ³n nueva. Antes libera cualquier botÃƒÂ³n retenido y limpia el estado
         de pinza y scroll, porque cualquier cambio puede hacer incompatible el gesto en curso."""
         events = self._release_pointer_state("config_change")
         self._reset_scroll()
@@ -489,7 +514,7 @@ class GestureInterpreter:
         return events
 
     def set_external_hold(self, hold: bool) -> list[LogicalEvent]:
-        """Retención externa (asistencia por mirada): libera lo retenido y deja de emitir eventos."""
+        """RetenciÃƒÂ³n externa (asistencia por mirada): libera lo retenido y deja de emitir eventos."""
         events: list[LogicalEvent] = []
         if hold and not self.external_hold:
             events = self._release_pointer_state("gaze_hold")
@@ -510,7 +535,7 @@ class GestureInterpreter:
         self.precision_active = bool(active)
 
     def _release_pointer_state(self, reason: str) -> list[LogicalEvent]:
-        """Termina arrastre y pinza sin emitir clic. Único punto de liberación del interpretador."""
+        """Termina arrastre y pinza sin emitir clic. ÃƒÅ¡nico punto de liberaciÃƒÂ³n del interpretador."""
         events: list[LogicalEvent] = []
         if self._dragging:
             self._dragging = False
@@ -541,9 +566,9 @@ class GestureInterpreter:
         self.telemetry.tracing = False
 
     def _fist_confirmed(self, candidate: bool, palm_x: float, palm_y: float, scale: float, now_ms: float, opened: bool = False) -> bool:
-        """Confirma un puño: postura sostenida durante varias muestras y tiempo, con la palma quieta.
-        Tolera FIST_MISS_TOLERANCE muestras sueltas que no parecen puño (ruido de la cámara), salvo que la
-        mano se haya abierto de verdad (`opened`): eso es soltar el puño a propósito."""
+        """Confirma un puÃƒÂ±o: postura sostenida durante varias muestras y tiempo, con la palma quieta.
+        Tolera FIST_MISS_TOLERANCE muestras sueltas que no parecen puÃƒÂ±o (ruido de la cÃƒÂ¡mara), salvo que la
+        mano se haya abierto de verdad (`opened`): eso es soltar el puÃƒÂ±o a propÃƒÂ³sito."""
         if not candidate:
             if not opened and self._fist_first_ms is not None and self._fist_misses < FIST_MISS_TOLERANCE:
                 self._fist_misses += 1
@@ -560,7 +585,7 @@ class GestureInterpreter:
             self._fist_count = 0
         ax, ay = self._fist_anchor
         if math.hypot(palm_x - ax, palm_y - ay) / scale > FIST_STILL_PALM:
-            # La mano se mueve: no es un puño sostenido para pausar. Se reinicia la confirmación.
+            # La mano se mueve: no es un puÃƒÂ±o sostenido para pausar. Se reinicia la confirmaciÃƒÂ³n.
             self._fist_was_confirmed = False
             self._fist_first_ms = now_ms
             self._fist_anchor = (palm_x, palm_y)
@@ -595,8 +620,8 @@ class GestureInterpreter:
     # ------------------------------------------------------------ acciones discretas
 
     def _discrete_action(self, gesto: str, now_ms: float, extra: dict[str, Any] | None = None) -> list[LogicalEvent]:
-        """Resuelve la acción configurada de un gesto discreto y la emite como evento lógico.
-        `precision` y `navegacion` cambian además el estado del propio interpretador."""
+        """Resuelve la acciÃƒÂ³n configurada de un gesto discreto y la emite como evento lÃƒÂ³gico.
+        `precision` y `navegacion` cambian ademÃƒÂ¡s el estado del propio interpretador."""
         accion = self.config.discrete_actions.get(gesto, NO_ACTION)
         if accion == NO_ACTION or accion not in ACTION_EVENTS:
             return []
@@ -612,7 +637,7 @@ class GestureInterpreter:
         return [LogicalEvent(ACTION_EVENTS[accion], payload)]
 
     def _window_step(self, pose: bool, palm_y: float, scale: float, now_ms: float) -> list[LogicalEvent]:
-        """Tres dedos: una acción por gesto. Abajo minimiza la ventana activa; arriba restaura la última."""
+        """Tres dedos: una acciÃƒÂ³n por gesto. Abajo minimiza la ventana activa; arriba restaura la ÃƒÂºltima."""
         events: list[LogicalEvent] = []
         if not pose:
             self._win_frames = 0
@@ -621,7 +646,7 @@ class GestureInterpreter:
             if self._win_lost_ms is None:
                 self._win_lost_ms = now_ms
             if self._win_locked and (now_ms - self._win_lost_ms) >= WINDOW_REARM_MS:
-                self._win_locked = False  # rearme: la postura se soltó y quedó neutral
+                self._win_locked = False  # rearme: la postura se soltÃƒÂ³ y quedÃƒÂ³ neutral
             return events
         self._win_lost_ms = None
         if self._win_locked or (now_ms - self._win_fired_ms) < WINDOW_COOLDOWN_MS:
@@ -648,7 +673,7 @@ class GestureInterpreter:
         return events
 
     def _tab_step(self, pose: bool, palm_y: float, scale: float, now_ms: float) -> list[LogicalEvent]:
-        """Pulgar y meñique: bajar la mano = pestaña siguiente; subirla = anterior. Un cambio por cada
+        """Pulgar y meÃƒÂ±ique: bajar la mano = pestaÃƒÂ±a siguiente; subirla = anterior. Un cambio por cada
         TAB_STEP_PALM recorrido; la postura quieta no hace nada."""
         if not pose:
             self._tab_frames = 0
@@ -661,7 +686,7 @@ class GestureInterpreter:
             self._tab_anchor_y = palm_y
             return []
         if not _confirmed(self._tab_frames, self._tab_start_ms, now_ms, TAB_CONFIRM_FRAMES, TAB_CONFIRM_MS):
-            self._tab_anchor_y = palm_y  # el ancla se fija cuando la postura ya está confirmada
+            self._tab_anchor_y = palm_y  # el ancla se fija cuando la postura ya estÃƒÂ¡ confirmada
             return []
         dy = (palm_y - self._tab_anchor_y) / scale  # positivo = hacia abajo
         if abs(dy) < TAB_STEP_PALM or (now_ms - self._tab_last_step_ms) < TAB_REPEAT_MS:
@@ -672,7 +697,7 @@ class GestureInterpreter:
         return [LogicalEvent(kind, {"dy_palm": round(dy, 3)})]
 
     def _accelerate(self, x: float, y: float, now_ms: float) -> tuple[float, float]:
-        """Aplica la aceleración del puntero a la posición absoluta filtrada (ver ACCEL_*)."""
+        """Aplica la aceleraciÃƒÂ³n del puntero a la posiciÃƒÂ³n absoluta filtrada (ver ACCEL_*)."""
         if not self.config.pointer_acceleration:
             return x, y
         prev, out = self._accel_prev, self._accel_out
@@ -688,7 +713,7 @@ class GestureInterpreter:
         return self._accel_out
 
     def _cursor_before(self, t_ms: float) -> tuple[float, float] | None:
-        """Posición del cursor suavizado en el último fotograma anterior a `t_ms` (o None)."""
+        """PosiciÃƒÂ³n del cursor suavizado en el ÃƒÂºltimo fotograma anterior a `t_ms` (o None)."""
         for t, x, y in reversed(self._cursor_history):
             if t <= t_ms:
                 return (x, y)
@@ -701,8 +726,8 @@ class GestureInterpreter:
         self._rpinch_release = 0
 
     def _right_pinch_step(self, close: bool, open_: bool, now_ms: float) -> tuple[bool, list[LogicalEvent]]:
-        """Pinza pulgar-medio con confirmación e histéresis, como la del índice. Devuelve (en curso, eventos):
-        mientras está en curso el cursor no se mueve, para que el clic caiga donde apuntaba."""
+        """Pinza pulgar-medio con confirmaciÃƒÂ³n e histÃƒÂ©resis, como la del ÃƒÂ­ndice. Devuelve (en curso, eventos):
+        mientras estÃƒÂ¡ en curso el cursor no se mueve, para que el clic caiga donde apuntaba."""
         if not self._rpinch_active:
             if not close:
                 self._clear_right_pinch()
@@ -735,9 +760,9 @@ class GestureInterpreter:
         self._swipe_max_y = cy
 
     def _swipe_step(self, pose: bool, cx: float, cy: float, scale: float, now_ms: float) -> list[LogicalEvent]:
-        """Barrido con palma abierta: una acción por barrido, con rearme por quietud y cooldown.
-        Horizontal: acción configurada (atrás/adelante). Vertical (con window_swipe_enabled): abajo
-        minimiza la ventana activa y arriba restaura la última minimizada por el motor."""
+        """Barrido con palma abierta: una acciÃƒÂ³n por barrido, con rearme por quietud y cooldown.
+        Horizontal: acciÃƒÂ³n configurada (atrÃƒÂ¡s/adelante). Vertical (con window_swipe_enabled): abajo
+        minimiza la ventana activa y arriba restaura la ÃƒÂºltima minimizada por el motor."""
         events: list[LogicalEvent] = []
         if not pose:
             self._swipe_start_ms = None
@@ -799,7 +824,7 @@ class GestureInterpreter:
             return events
         if (now_ms - self._swipe_start_ms) > SWIPE_WINDOW_MS:
             return events
-        # Si la mano vuelve hacia atrás desde su extremo, no es un barrido: se reinicia la ventana.
+        # Si la mano vuelve hacia atrÃƒÂ¡s desde su extremo, no es un barrido: se reinicia la ventana.
         if (dx > 0 and (self._swipe_max_x - cx) / scale > SWIPE_REVERSAL_PALM) or (
             dx < 0 and (cx - self._swipe_min_x) / scale > SWIPE_REVERSAL_PALM
         ):
@@ -890,12 +915,12 @@ class GestureInterpreter:
         dt = max(1.0 / 120.0, min(0.25, (now_ms - self._scroll_last_ms) / 1000.0))
         self._scroll_last_ms = now_ms
 
-        # Quietud o temblor (dentro de la zona muerta): el ancla no se mueve, así el movimiento lento
+        # Quietud o temblor (dentro de la zona muerta): el ancla no se mueve, asÃƒÂ­ el movimiento lento
         # se acumula hasta superarla. Movimiento horizontal dominante: no desplaza y consume el movimiento.
         if abs(dy) >= SCROLL_DEADZONE_PALM:
             if abs(dx) * SCROLL_AXIS_DOMINANCE <= abs(dy):
                 # Solo se consume el recorrido por encima de la zona muerta: el ancla avanza esa cantidad
-                # y deja la banda muerta pendiente. Así el resultado no depende de cuántas muestras
+                # y deja la banda muerta pendiente. AsÃƒÂ­ el resultado no depende de cuÃƒÂ¡ntas muestras
                 # haga falta para recorrer el mismo desplazamiento (cadencia).
                 consumed = dy - math.copysign(SCROLL_DEADZONE_PALM, dy)
                 sensitivity_gain = 0.55 + self.config.sensitivity / 100.0
@@ -904,8 +929,8 @@ class GestureInterpreter:
             else:
                 self._scroll_anchor = (avg_x, avg_y)
 
-        # La cola pendiente se vacía en cada muestra, aunque la mano esté quieta, con límite de velocidad
-        # por tiempo transcurrido (no por número de fotogramas).
+        # La cola pendiente se vacÃƒÂ­a en cada muestra, aunque la mano estÃƒÂ© quieta, con lÃƒÂ­mite de velocidad
+        # por tiempo transcurrido (no por nÃƒÂºmero de fotogramas).
         max_units = SCROLL_MAX_NOTCHES_PER_SEC * dt
         emitted = max(-max_units, min(max_units, self._scroll_pending))
         self._scroll_pending -= emitted
@@ -917,7 +942,7 @@ class GestureInterpreter:
     # --------------------------------------------------------------- trazo
 
     def _trace_step(self, pointing: bool, now_ms: float) -> list[LogicalEvent]:
-        """Trazo Air-Swipe: apuntar con el índice inicia el recorrido; soltar la postura lo cierra."""
+        """Trazo Air-Swipe: apuntar con el ÃƒÂ­ndice inicia el recorrido; soltar la postura lo cierra."""
         events: list[LogicalEvent] = []
         if pointing:
             self._trace_gap = 0
@@ -957,7 +982,7 @@ class GestureInterpreter:
                 and self._last_seen_ms is not None
                 and (now_ms - self._last_seen_ms) <= DROPOUT_GRACE_MS
             ):
-                # Cuadro suelto sin mano: se conservan el puño, la pinza y los gestos en curso.
+                # Cuadro suelto sin mano: se conservan el puÃƒÂ±o, la pinza y los gestos en curso.
                 return events
             self._fist_start_ms = None
             self._reset_scroll()
@@ -1007,21 +1032,24 @@ class GestureInterpreter:
         raw_ax, raw_ay = self._compute_skeletal_anchor(lms)
         pinch_open = pinch_ratio > self.config.pinch_exit_ratio
 
-        # Retención externa (mirada): se sigue observando la mano, pero no se emite ninguna acción.
+        # RetenciÃƒÂ³n externa (mirada): se sigue observando la mano, pero no se emite ninguna acciÃƒÂ³n.
         if self.external_hold:
             self.telemetry = self._telemetry(hand, "GAZE_HOLD", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
             return events
 
-        # 3. Puño: transición de parada. Si había arrastre o pinza, se liberan sin clic.
+        # 3. PuÃƒÂ±o: transiciÃƒÂ³n de parada. Si habÃƒÂ­a arrastre o pinza, se liberan sin clic.
         fist_palm_x = (lms[0].x + lms[5].x + lms[9].x + lms[17].x) * 0.25
         fist_palm_y = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25
         opened = sum((index_ext, middle_ext, ring_ext, pinky_ext)) >= 2
-        is_fist = self._fist_confirmed(_is_fist_pose(lms, scale), fist_palm_x, fist_palm_y, scale, now_ms, opened)
+        fist_now = _is_fist_pose(lms, scale)
+        if fist_now:
+            self._fist_seen_ms = now_ms
+        is_fist = self._fist_confirmed(fist_now, fist_palm_x, fist_palm_y, scale, now_ms, opened)
         thumb_mcp = lms[2]
         thumb_tip = lms[4]
         index_mcp = lms[5]
         thumb_out_dist = _dist2d(thumb_tip, index_mcp) / scale
-        dy_thumb = (thumb_mcp.y - thumb_tip.y) / scale   # positivo = punta por encima de la articulación (arriba)
+        dy_thumb = (thumb_mcp.y - thumb_tip.y) / scale   # positivo = punta por encima de la articulaciÃƒÂ³n (arriba)
         thumb_extended = _is_fist_pose(lms, scale) and thumb_out_dist > 0.72 and abs(dy_thumb) > 0.42
         thumbs_up_pose = thumb_extended and dy_thumb > 0
         thumbs_down_pose = thumb_extended and dy_thumb < 0
@@ -1030,8 +1058,8 @@ class GestureInterpreter:
             self._reset_scroll()
             self._cancel_trace()
             if thumb_extended:
-                # Pulgar extendido: gesto discreto sostenido, una acción por postura. No pausa, y no acumula
-                # tiempo de puño (si no, un cuadro dudoso durante el pulgar pausaría al instante).
+                # Pulgar extendido: gesto discreto sostenido, una acciÃƒÂ³n por postura. No pausa, y no acumula
+                # tiempo de puÃƒÂ±o (si no, un cuadro dudoso durante el pulgar pausarÃƒÂ­a al instante).
                 self._fist_start_ms = None
                 self._fist_first_ms = None
                 self._fist_was_confirmed = False
@@ -1045,8 +1073,8 @@ class GestureInterpreter:
             self._thumb_up.step(False, now_ms)
             self._thumb_down.step(False, now_ms)
             if self._fist_start_ms is None:
-                # El tiempo para pausar cuenta desde que la mano formó el puño, no desde que se confirmó:
-                # antes la pausa tardaba ~750 ms (confirmación + espera); ahora ~pause_hold_ms.
+                # El tiempo para pausar cuenta desde que la mano formÃƒÂ³ el puÃƒÂ±o, no desde que se confirmÃƒÂ³:
+                # antes la pausa tardaba ~750 ms (confirmaciÃƒÂ³n + espera); ahora ~pause_hold_ms.
                 self._fist_start_ms = self._fist_first_ms if self._fist_first_ms is not None else now_ms
                 self._fist_toggled_in_hold = False
             elif (not self._fist_toggled_in_hold) and (now_ms - self._fist_start_ms >= self.config.pause_hold_ms):
@@ -1074,7 +1102,7 @@ class GestureInterpreter:
 
         open_pose = index_ext and middle_ext and ring_ext and pinky_ext and pinch_open
 
-        # 3b. Activación del puntero: mano abierta sostenida. Hasta entonces no hay cursor ni gestos.
+        # 3b. ActivaciÃƒÂ³n del puntero: mano abierta sostenida. Hasta entonces no hay cursor ni gestos.
         if self.config.pointer_enabled and not self.pointer_armed:
             if open_pose:
                 if self._arm_start_ms is None:
@@ -1082,7 +1110,7 @@ class GestureInterpreter:
                 elif (now_ms - self._arm_start_ms) >= POINTER_ARM_MS:
                     self.pointer_armed = True
                     # Donde la persona abre la mano pasa a ser el centro de la pantalla: no hay que levantar
-                    # el brazo hasta una zona fija de la imagen (salvo calibración de recorrido medida).
+                    # el brazo hasta una zona fija de la imagen (salvo calibraciÃƒÂ³n de recorrido medida).
                     self._arm_center = (raw_ax, raw_ay) if self.config.active_box is None else None
                     self._accel_prev = None
                     self._accel_out = None
@@ -1096,13 +1124,13 @@ class GestureInterpreter:
                 self.telemetry = self._telemetry(hand, "ARMING" if open_pose else "NONE", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
                 return events
 
-        # 4. Pinza: estado confirmado o candidato. Se evalúa antes del scroll para que pinza y dos dedos
-        #    sean excluyentes por la relación pinza/palma.
+        # 4. Pinza: estado confirmado o candidato. Se evalÃƒÂºa antes del scroll para que pinza y dos dedos
+        #    sean excluyentes por la relaciÃƒÂ³n pinza/palma.
         pinch_is_active = self._pinching or self._pinch_candidate_count > 0
         palm_cx = (lms[0].x + lms[5].x + lms[9].x + lms[17].x) * 0.25
         palm_cy = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25
 
-        # 4·0a. Pestañas (gesto local): pulgar y meñique extendidos; índice, medio y anular plegados.
+        # 4Ã‚Â·0a. PestaÃƒÂ±as (gesto local): pulgar y meÃƒÂ±ique extendidos; ÃƒÂ­ndice, medio y anular plegados.
         #       Mientras dura la postura, el cursor no se mueve.
         if self.config.tab_gestures_enabled:
             index_folded = _is_finger_folded(lms, 8, 6, 5)
@@ -1118,7 +1146,7 @@ class GestureInterpreter:
                 self.telemetry = self._telemetry(hand, "PESTANAS", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
                 return events
 
-        # 4·0b. Clic derecho (gesto local): pinza pulgar-medio con el índice extendido y separado del pulgar.
+        # 4Ã‚Â·0b. Clic derecho (gesto local): pinza pulgar-medio con el ÃƒÂ­ndice extendido y separado del pulgar.
         if self.config.right_click_enabled and not self.airswipe_active and not self._dragging and not pinch_is_active:
             middle_ratio = _pinch_distance(lms[4], lms[12]) / scale
             middle_reach = _dist2d(lms[12], lms[0]) > _dist2d(lms[9], lms[0]) * RIGHT_PINCH_MIDDLE_REACH
@@ -1133,8 +1161,8 @@ class GestureInterpreter:
         elif self._rpinch_count or self._rpinch_active:
             self._clear_right_pinch()
 
-        # 4a. Modo precisión (índice y meñique extendidos): postura sostenida, una acción por postura.
-        #     Mientras dura, el cursor queda quieto para no desviar la selección.
+        # 4a. Modo precisiÃƒÂ³n (ÃƒÂ­ndice y meÃƒÂ±ique extendidos): postura sostenida, una acciÃƒÂ³n por postura.
+        #     Mientras dura, el cursor queda quieto para no desviar la selecciÃƒÂ³n.
         precision_pose = (
             index_ext and pinky_ext and (not middle_ext) and (not ring_ext) and middle_folded and ring_folded
             and pinch_open and (not self._dragging) and (not pinch_is_active)
@@ -1199,7 +1227,7 @@ class GestureInterpreter:
             return events
         self._reset_scroll()
 
-        # 5a. Trazo Air-Swipe: apuntar con el índice (los demás dedos plegados) sobre el teclado virtual.
+        # 5a. Trazo Air-Swipe: apuntar con el ÃƒÂ­ndice (los demÃƒÂ¡s dedos plegados) sobre el teclado virtual.
         pointing = (
             self.airswipe_active and self.config.airswipe_enabled
             and index_ext and (not middle_ext) and (not ring_ext) and (not pinky_ext)
@@ -1208,19 +1236,19 @@ class GestureInterpreter:
         )
         events.extend(self._trace_step(pointing, now_ms))
 
-        # 5b. Barrido horizontal con palma abierta: una acción por barrido. El puntero sigue activo.
+        # 5b. Barrido horizontal con palma abierta: una acciÃƒÂ³n por barrido. El puntero sigue activo.
         swipe_flags = self.config.swipe_left_enabled or self.config.swipe_right_enabled or self.config.window_swipe_enabled
         swipe_pose = swipe_flags and open_pose and (not self._dragging) and (not pinch_is_active)
         events.extend(self._swipe_step(swipe_pose, palm_cx, palm_cy, scale, now_ms))
 
-        # 5c. Palma abierta sostenida y quieta: acción discreta (por defecto, volver a navegación).
+        # 5c. Palma abierta sostenida y quieta: acciÃƒÂ³n discreta (por defecto, volver a navegaciÃƒÂ³n).
         palm_pose = self.config.palm_enabled and open_pose and (not self._dragging) and (not pinch_is_active)
         if self._palm_hold.step(palm_pose, now_ms, palm_cx, palm_cy, scale):
             events.extend(self._discrete_action("palma_abierta", now_ms))
 
         # 6. Puntero con filtro One-Euro adaptativo
-        # Sin recortar a [0, 1] antes del filtro y la aceleración: con la mano fuera del área activa el
-        # recorte congelaba el cursor (QA 19-11, 2ª iteración). Se recorta solo la posición final.
+        # Sin recortar a [0, 1] antes del filtro y la aceleraciÃƒÂ³n: con la mano fuera del ÃƒÂ¡rea activa el
+        # recorte congelaba el cursor (QA 19-11, 2Ã‚Âª iteraciÃƒÂ³n). Se recorta solo la posiciÃƒÂ³n final.
         target_x, target_y = self._map_to_screen_norm(raw_ax, raw_ay, clamp=False)
         filtered_x = self._filter_x.filter(target_x, now_sec, min_cutoff=self.config.min_cutoff_hz, beta=self.config.beta_speed)
         filtered_y = self._filter_y.filter(target_y, now_sec, min_cutoff=self.config.min_cutoff_hz, beta=self.config.beta_speed)
@@ -1230,13 +1258,17 @@ class GestureInterpreter:
         active_gesture = "TRACE" if self._tracing else "POINTER"
         enter_ratio = self.config.pinch_enter_ratio
         exit_ratio = self.config.pinch_exit_ratio
-        # Solo la relación con el tamaño de la palma: el umbral absoluto (pensado para una palma de 0,15)
-        # hacía que con la mano lejos la pinza entrara sola y no se pudiera soltar (clic -> arrastre).
-        # La mano se está cerrando en puño (índice, medio y anular enrollados hacia la palma): no es una pinza.
-        # Solo el índice no basta: en una pinza real con la palma hacia la cámara el índice doblado también
-        # se proyecta cerca del nudillo (QA 19-11, 2ª iteración: bloqueaba clics legítimos).
-        index_curled = all(_dist2d(lms[tip], lms[0]) < _dist2d(lms[mcp], lms[0]) for tip, mcp in ((8, 5), (12, 9), (16, 13)))
-        is_entering_pinch = pinch_ratio <= enter_ratio and not index_curled
+        # Solo la relaciÃƒÂ³n con el tamaÃƒÂ±o de la palma: el umbral absoluto (pensado para una palma de 0,15)
+        # hacÃƒÂ­a que con la mano lejos la pinza entrara sola y no se pudiera soltar (clic -> arrastre).
+        # La mano se estÃƒÂ¡ cerrando en puÃƒÂ±o (ÃƒÂ­ndice, medio y anular enrollados hacia la palma): no es una pinza.
+        # Solo el ÃƒÂ­ndice no basta: en una pinza real con la palma hacia la cÃƒÂ¡mara el ÃƒÂ­ndice doblado tambiÃƒÂ©n
+        # se proyecta cerca del nudillo (QA 19-11, 2Ã‚Âª iteraciÃƒÂ³n: bloqueaba clics legÃƒÂ­timos).
+        # 21-11-2026 (videos reales): la regla anterior (Ã‚Â«puntas mÃƒÂ¡s cerca de la muÃƒÂ±eca que los nudillosÃ‚Â») descartaba
+        # TODAS las pinzas de una mano con los dedos colgando hacia la cÃƒÂ¡mara. Ahora la pinza solo se bloquea si
+        # la mano estÃƒÂ¡ en puÃƒÂ±o o lo estuvo hace menos de FIST_PINCH_GUARD_MS: abrir el puÃƒÂ±o pasa por posturas
+        # parecidas a una pinza, y cerrarlo ya descarta la pinza sin clic (_release_pointer_state).
+        index_curled = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
+        is_entering_pinch = pinch_ratio <= enter_ratio and not index_curled and _index_pinch_shape(lms, scale)
         is_exiting_pinch = pinch_ratio >= exit_ratio
 
         if self.config.pinch_enabled and not self._tracing:
@@ -1258,17 +1290,17 @@ class GestureInterpreter:
                         self._pinch_release_count = 0
                         active_gesture = "PINCH"
                     else:
-                        active_gesture = "PINCH"  # candidato: aún sin confirmar, sin acción
+                        active_gesture = "PINCH"  # candidato: aÃƒÂºn sin confirmar, sin acciÃƒÂ³n
                 elif pinch_ratio >= exit_ratio or index_curled or (
                     self._pinch_candidate_start_ms is not None
                     and (now_ms - self._pinch_candidate_start_ms) > PINCH_CANDIDATE_MAX_MS
                 ):
-                    # La mano se abrió o la pinza no se confirmó a tiempo: se descarta sin clic.
+                    # La mano se abriÃƒÂ³ o la pinza no se confirmÃƒÂ³ a tiempo: se descarta sin clic.
                     self._clear_pinch()
-                # Entre el umbral de entrada y el de salida la candidata se conserva (histéresis):
-                # la medida oscila ahí durante una pinza real y no debe reiniciar la confirmación.
+                # Entre el umbral de entrada y el de salida la candidata se conserva (histÃƒÂ©resis):
+                # la medida oscila ahÃƒÂ­ durante una pinza real y no debe reiniciar la confirmaciÃƒÂ³n.
             elif index_curled and not self._dragging:
-                # La pinza se convirtió en puño: se descarta sin clic (lo decide el puño).
+                # La pinza se convirtiÃƒÂ³ en puÃƒÂ±o: se descarta sin clic (lo decide el puÃƒÂ±o).
                 self._clear_pinch()
             else:
                 active_gesture = "DRAG" if self._dragging else "PINCH"
@@ -1308,10 +1340,10 @@ class GestureInterpreter:
                 self._smoothed_x, self._smoothed_y = filtered_x, filtered_y
                 events.append(LogicalEvent(EVENT_MOVE_CURSOR, {"x": round(self._smoothed_x, 4), "y": round(self._smoothed_y, 4)}))
             else:
-                # Cursor asentado: si la mano se queda dentro de un radio pequeño durante SETTLE_MS (el
+                # Cursor asentado: si la mano se queda dentro de un radio pequeÃƒÂ±o durante SETTLE_MS (el
                 # balanceo natural de una mano en el aire), el cursor se queda quieto hasta que la mano
                 # salga de ese radio. En movimiento sigue con la zona muerta normal. No aplica al arrastre.
-                # Con aceleración el temblor ya baja (×0,6 en lento) y el asentado lo volvía pegajoso: solo sin ella.
+                # Con aceleraciÃƒÂ³n el temblor ya baja (Ãƒâ€”0,6 en lento) y el asentado lo volvÃƒÂ­a pegajoso: solo sin ella.
                 radius = self.config.settle_radius_norm if not self.config.pointer_acceleration else self.config.deadzone_norm
                 if self._settle_ref is None or math.hypot(filtered_x - self._settle_ref[0], filtered_y - self._settle_ref[1]) > radius:
                     self._settle_ref = (filtered_x, filtered_y, now_ms)
