@@ -489,3 +489,37 @@ Pedido: «siento que tengo que seguir muchos pasos para usarlo en el momento; es
 - **No probado**: con cámara y manos (guía B1–B5 en `docs/prueba-manual-hardware.md`), la minimización real tras un CONTROL confirmado (sin cámara nunca se llega a CONTROL) y la opinión de otras personas sobre si es más sencillo.
 
 Implementación asistida por Claude; revisión humana pendiente.
+
+
+## Bloque Claude — gestos medidos con videos reales de la persona usuaria (21-11-2026)
+
+La persona usuaria grabó 11 videos (`VIDEOS GESTOS/`, 15 fps, 1280×720, con su cara: **fuera de Git**, en `.gitignore`) nombrados por lo que debe hacer cada gesto. Entrega: lunes; presentación: martes 24-11.
+
+**Banco nuevo** `motor-local/tools/banco_videos.py`: detector MediaPipe e intérprete reales sobre cada video (espejo, 640 px, puntero armado), solo imprime conteos; no guarda imágenes ni puntos. Configuración pedida: sin arrastre y con gestos de ventana.
+
+| Video | Motor del 20-11 | Ahora |
+|---|---|---|
+| Clic izquierdo | **0** clics | 5/5 |
+| Clic derecho | **0** | 1 de ~4 toques (+1 clic izquierdo falso) |
+| Pasar pestaña / ×2 | 0 / 0 (arrastres falsos) | 3 / 3 abanicos |
+| Minimizar | 0 | 2 (+1 restaurar falso, > 1,5 s después) |
+| Traer de vuelta | 0 | 3 |
+| Pausar | 1 | 1 (sin reanudar: el segundo puño no se confirma) |
+| Scroll arriba / abajo | 8 / 0 | 8 / 0 (sin cambios: dirección pendiente de decidir) |
+| Mostrar escritorio | — (3 «navegación») | sin implementar (decisión pendiente) |
+| Mover cursor | nada | nada |
+| **Resumen** | **3/11**, 9 falsos positivos | **7/11**, 5 falsos positivos |
+
+**Commits**
+- `4fa4ab1` + `3e03f26`: **la micro-pinza no hacía ningún clic** con esta mano (palma hacia abajo, dedos colgando): la regla «se cierra en puño» la descartaba siempre. Ahora: guarda de 400 ms tras ver un puño y forma de pinza (índice doblado ≤ 145° y separado del medio ≥ 0,45 palmas), que separa el clic del scroll. `3e03f26` repara la codificación: una prueba de mutaciones hecha con `Get-Content` de PowerShell 5.1 dejó 134 líneas con tildes doblemente codificadas en el primer commit (solo comentarios y textos; se deshizo y se verificó que el diff volviera a ser solo el cambio).
+- `dde0563`: clic derecho sin exigir el índice extendido; umbrales propios (entra ≤ 0,15, suelta ≥ 0,24) medidos frente al reposo del pulgar (0,16–0,42). Barrido 0,13–0,19: ningún clic derecho falso en los otros videos; como mucho 2 de ~4 toques.
+- `a00b7ed`: **pestaña siguiente = abanico** con la mano abierta y ladeada (palmo < 80°; videos 45–71° frente a 91–107° del resto), casi quieta, dedos girando ≥ 500 °/s hacia el pulgar; reemplaza al 🤙. Sin gesto para la pestaña anterior (no se grabó).
+- `bf060dc`: **minimizar/restaurar = golpe de muñeca**: las cuatro puntas bajan (o suben) rápido respecto de sus nudillos y vuelven en < 500 ms; bloqueo de la acción opuesta 1,5 s. Interruptor `windowSwipe` (**apagado por defecto**: actívalo en Calibrar para la demo).
+
+**Verificación**: motor **199** pruebas (+19: pinza de mano real, abanico, golpe de muñeca), cada regla nueva comprobada con mutaciones (salvo el rearme del abanico, redundante con el enfriamiento: documentado); frontend 159/159; `npm run lint` 0; backend pasa; `cargo test` 10/10; `verify:separation` pasa; `npm run verify:tauri` **51/51**.
+
+**Límites honestos**: todo se ajustó con videos de **una** persona y **una** cámara a 15 fps; los umbrales del abanico y del golpe de muñeca pueden no servir a otra mano. Los golpes rápidos duran 1–2 fotogramas y salen borrosos. Nada de esto se probó todavía en vivo con la cámara (guía M6.5b/c y la nueva tabla en `docs/prueba-manual-hardware.md`).
+
+**Pendiente de decisión de la persona usuaria**: dirección del scroll (no se distingue en los videos), mostrar escritorio (se parece a «traer de vuelta» y choca con la regla de no mostrar el escritorio), pestaña anterior, y dejar arrastrar/atrás/adelante/confirmar/cancelar/precisión apagados por defecto.
+
+Implementación asistida por Claude; revisión humana pendiente.
