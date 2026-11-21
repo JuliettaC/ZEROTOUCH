@@ -171,7 +171,9 @@ RIGHT_PINCH_CONFIRM_FRAMES = 2
 RIGHT_PINCH_CONFIRM_MS = 45.0
 RIGHT_PINCH_RELEASE_FRAMES = 2
 RIGHT_PINCH_MAX_MS = 700.0     # una pinza más larga se descarta sin clic (no es un «toque»)
-RIGHT_PINCH_MIDDLE_REACH = 1.1  # la punta del medio sigue lejos de la palma (no es un dedo plegado)
+RIGHT_PINCH_MIDDLE_REACH = 1.1  # (ya no se usa en la regla; se conserva por compatibilidad de importaciones)
+RIGHT_PINCH_ENTER_RATIO = 0.15  # pulgar-medio para entrar (palmas). Videos: toques 0,07-0,14; reposo 0,16-0,42
+RIGHT_PINCH_EXIT_RATIO = 0.24   # pulgar-medio para soltar: la mano relajada vuelve por encima de esto
 
 
 @dataclass(frozen=True)
@@ -1148,10 +1150,14 @@ class GestureInterpreter:
 
         # 4·0b. Clic derecho (gesto local): pinza pulgar-medio con el índice extendido y separado del pulgar.
         if self.config.right_click_enabled and not self.airswipe_active and not self._dragging and not pinch_is_active:
+            # 21-11-2026 (videos reales): antes exigía el índice extendido y el medio lejos de la muñeca, algo que
+            # una mano con los dedos colgando nunca cumple. Ahora: el pulgar toca el medio (umbral propio, más
+            # estricto que el de la pinza: en reposo el pulgar ya queda a 0,16-0,42 palmas del medio), el índice
+            # sigue lejos del pulgar (no es la micro-pinza) y no hay ni hubo un puño hace un instante.
             middle_ratio = _pinch_distance(lms[4], lms[12]) / scale
-            middle_reach = _dist2d(lms[12], lms[0]) > _dist2d(lms[9], lms[0]) * RIGHT_PINCH_MIDDLE_REACH
-            close = index_ext and pinch_open and middle_reach and middle_ratio <= self.config.pinch_enter_ratio
-            in_progress, rp_events = self._right_pinch_step(close, middle_ratio >= self.config.pinch_exit_ratio, now_ms)
+            fist_recent = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
+            close = pinch_open and (not fist_recent) and middle_ratio <= RIGHT_PINCH_ENTER_RATIO
+            in_progress, rp_events = self._right_pinch_step(close, middle_ratio >= RIGHT_PINCH_EXIT_RATIO, now_ms)
             events.extend(rp_events)
             if in_progress or rp_events:
                 self._reset_scroll()
