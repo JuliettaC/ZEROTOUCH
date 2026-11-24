@@ -25,7 +25,10 @@ function hint(status) {
 }
 
 export default function DwellKeyboard({ ctx, status, lexicon, send, header }) {
-  const layout = useMemo(() => dwellLayout(ctx.rect.width, ctx.rect.height), [ctx.rect.width, ctx.rect.height])
+  const layout = useMemo(
+    () => dwellLayout(ctx.rect.width, ctx.rect.height),
+    [ctx.rect.width, ctx.rect.height],
+  )
   const suggester = useMemo(() => (lexicon ? buildSuggester(terms, lexicon) : null), [lexicon])
   const [text, setText] = useState('')
   const [notice, setNotice] = useState('')
@@ -50,7 +53,8 @@ export default function DwellKeyboard({ ctx, status, lexicon, send, header }) {
   const press = useCallback(
     async (key) => {
       if (busyRef.current) return
-      const resolved = key.kind === 'suggestion' ? { ...key, value: suggestionsRef.current[key.index] } : key
+      const resolved =
+        key.kind === 'suggestion' ? { ...key, value: suggestionsRef.current[key.index] } : key
       if (resolved.kind === 'suggestion' && !resolved.value) return
       const plan = planKey(textRef.current, resolved)
       if (plan.effects.length === 0) {
@@ -63,7 +67,11 @@ export default function DwellKeyboard({ ctx, status, lexicon, send, header }) {
         if (result.ok) {
           textRef.current = plan.text
           setText(plan.text)
-          setNotice(plan.searched !== undefined ? `Buscando «${plan.searched}». Elige un resultado con la pinza.` : '')
+          setNotice(
+            plan.searched !== undefined
+              ? `Buscando «${plan.searched}». Elige un resultado con la pinza.`
+              : '',
+          )
         } else setNotice(result.message || 'No se pudo escribir.')
       } finally {
         busyRef.current = false
@@ -107,7 +115,11 @@ export default function DwellKeyboard({ ctx, status, lexicon, send, header }) {
   )
 
   const labelOf = (key) =>
-    key.kind === 'letter' ? key.value : key.kind === 'action' ? key.label : suggestions[key.index] || ''
+    key.kind === 'letter'
+      ? key.value
+      : key.kind === 'action'
+        ? key.label
+        : suggestions[key.index] || ''
 
   return (
     <div className="as-overlay as-dwell">

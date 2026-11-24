@@ -279,7 +279,8 @@ function messageFor({ status, bridgeDown, loadError, kb, ctx }) {
 }
 
 export default function AirSwipeOverlay() {
-  const { ctx, loadError, status, bridgeDown, kb, trail, edge, size, mode, lexicon, actions } = useOverlay()
+  const { ctx, loadError, status, bridgeDown, kb, trail, edge, size, mode, lexicon, actions } =
+    useOverlay()
   const message = messageFor({ status, bridgeDown, loadError, kb, ctx })
   const geometry = ctx?.geometry
   const canReactivate = !bridgeDown && status.running && !status.airswipe
@@ -315,7 +316,12 @@ export default function AirSwipeOverlay() {
             >
               {edge === 'bottom' ? '▲' : '▼'}
             </button>
-            <button type="button" className="as-action close" aria-label="Cerrar teclado" onClick={actions.close}>
+            <button
+              type="button"
+              className="as-action close"
+              aria-label="Cerrar teclado"
+              onClick={actions.close}
+            >
               ✕
             </button>
           </div>
