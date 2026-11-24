@@ -128,7 +128,8 @@ def test_con_la_mano_quieta_la_pinza_sigue_haciendo_clic_y_arrastre() -> None:
     assert [e.type for i, h in enumerate(click) for e in interp.process_frame(h, now_ms=i * 1000.0 / 15)
             if e.type in (EVENT_LEFT_CLICK, EVENT_START_DRAG)] == [EVENT_LEFT_CLICK]
     interp = armed(EngineConfig.from_dict({"drag": True}))
-    drag = [make_open_palm(0.5, 0.5, pinch_dist=0.14)] * 4 + [make_open_palm(0.5, 0.5, pinch_dist=0.02)] * 12
+    # 18 fotogramas = 1,2 s de pinza: por encima de drag_hold_ms (0,9 s desde el 24-11-2026).
+    drag = [make_open_palm(0.5, 0.5, pinch_dist=0.14)] * 4 + [make_open_palm(0.5, 0.5, pinch_dist=0.02)] * 18
     assert EVENT_START_DRAG in [e.type for i, h in enumerate(drag) for e in interp.process_frame(h, now_ms=i * 1000.0 / 15)]
 
 

@@ -217,7 +217,10 @@ TAB_FAN_COOLDOWN_MS = 350.0
 TAB_PREV_MAX_HAND_SPEED = 2.0
 TAB_PREV_MIN_SPEED = 900.0      # más que el abanico: antes de abanicar, la mano toma impulso hacia el otro lado
                                # (en los videos viejos de «pasar pestaña» ese impulso daba «devolver» con 300-600)
-TAB_FAN_REARM_MS = 60.0        # el giro debe seguir calmado al menos esto: en el extremo de un giro contrario los
+TAB_FAN_OPPOSITE_MS = 800.0    # 24-11-2026 (en vivo: «cambiar pestaña funciona a veces»): tras pasar de pestaña en un
+                               # sentido, el contrario no cuenta durante esto. Video «devolver pestaña»: la vuelta del
+                               # abanico inverso daba «siguiente» 380 ms después y deshacía el cambio.
+TAB_FAN_REARM_MS = 60.0       # el giro debe seguir calmado al menos esto: en el extremo de un giro contrario los
                                # dedos se frenan un instante y, con TAB_FAN_MIN_SPEED = 300, su vuelta pasaba por abanico.
 # Golpe de muñeca para ventanas (21-11-2026, videos reales; con el interruptor windowSwipe). Las CUATRO puntas se
 # mueven a la vez respecto de sus nudillos (el scroll solo mueve índice y medio) y vuelven enseguida: bajar y volver
@@ -269,6 +272,21 @@ ALT_HOLD_POSE_MS = 300.0       # y la postura continua al menos esto (sin huecos
 OPEN_SCROLL_GRAB_MS = 350.0     # video: la mano queda quieta ~0,4-0,5 s antes de moverse
 OPEN_SCROLL_STILL_PALM = 0.15
 OPEN_SCROLL_DROPOUT_MS = 300.0  # la mano flexiona un instante los dedos sin dejar de «agarrar»
+# Desplazar doblando dos dedos (24-11-2026, pedido; videos «scroll vertical»): con la palma quieta, índice y medio
+# doblados hacia la palma y anular y meñique arriba. En los videos cada doblez dura 0,2-0,3 s y vuelve a estirarse.
+# Un toque (doblar y estirar antes de CURL_HOLD_MS) sube la página un tramo; mantenerlos doblados baja sin parar
+# hasta estirarlos. Se distingue del clic (índice doblado pero el medio estirado), del Alt+Tab (el anular también
+# se dobla) y del scroll de dos dedos (allí índice y medio están estirados).
+CURL_CONFIRM_FRAMES = 2
+CURL_CONFIRM_MS = 50.0
+CURL_HOLD_MS = 500.0           # más que esto doblados = mantener (bajar); el toque de los videos dura 0,2-0,3 s
+CURL_TAP_NOTCHES = 3.0         # muescas por toque (antes de sensibilidad)
+CURL_HOLD_NOTCHES_PER_SEC = 8.0  # bajada continua (antes de sensibilidad)
+CURL_DROPOUT_FRAMES = 1        # fotogramas dudosos tolerados sin terminar el gesto
+CURL_TAP_MIN_MS = 100.0        # doblez mínimo de un toque. Videos: toques 140-300 ms; de paso entre otros gestos
+                               # (dictado, golpe de muñeca) la postura aparece solo 2 fotogramas (~35 ms)
+CURL_MAX_THUMB = 1.0           # pulgar-índice (palmas): en los toques el pulgar queda recogido (0,29-0,62); al mover el
+                               # cursor con la mano girada la postura aparecía con el pulgar afuera (1,7)
 TAB_FAN_MAX_GAP_MS = 200.0     # dos muestras más separadas que esto no se comparan (mano perdida)
 # Sacudida lateral para pestañas (23-11-2026, pedido: «mover la mano de lado a lado»): con la mano abierta, ir rápido
 # hacia un lado y VOLVER enseguida. Hacia la derecha = pestaña siguiente; hacia la izquierda = anterior. La vuelta es
@@ -613,6 +631,7 @@ class GestureInterpreter:
         self.pinch_diag: dict[str, int] = {}
         self._pinch_reason: str | None = None
         self._fan_last_ms: float = -1e9
+        self._fan_last_kind: str = ""   # último cambio de pestaña por abanico (ver TAB_FAN_OPPOSITE_MS)
         self._flick_prev: tuple[float, tuple[float, ...], float, float] | None = None  # (ms, puntas, cx, cy)
         self._flick_dir: int = 0          # +1 bajada en curso, -1 subida en curso, 0 nada
         self._flick_ms: float = -1e9
@@ -631,6 +650,11 @@ class GestureInterpreter:
         self._grab_hold = _HoldGesture(OPEN_SCROLL_GRAB_MS, 0.0, still_palm=OPEN_SCROLL_STILL_PALM)
         self._grab_active = False
         self._grab_lost_ms: float | None = None
+        self._curl_frames: int = 0
+        self._curl_start_ms: float | None = None
+        self._curl_gap: int = 0
+        self._curl_last_ms: float = 0.0
+        self._curl_accum: float = 0.0
         self._hang_last_ms: float | None = None
         self._rpinch_count: int = 0
         self._rpinch_start_ms: float | None = None
@@ -714,6 +738,45 @@ class GestureInterpreter:
         self._scroll_anchor = None
         self._scroll_pending = 0.0
         self._scroll_accum = 0.0
+        self._reset_curl()  # otro gesto, el puño, una pausa o un cambio de configuración cortan también el doblez
+
+    def _reset_curl(self) -> None:
+        self._curl_frames = 0
+        self._curl_start_ms = None
+        self._curl_gap = 0
+        self._curl_accum = 0.0
+
+    def _curl_step(self, pose: bool, stretched: bool, now_ms: float) -> tuple[bool, list[LogicalEvent]]:
+        """Desplazar doblando índice y medio (ver CURL_*). Devuelve (gesto en curso, eventos SCROLL)."""
+        gain = 0.55 + self.config.sensitivity / 100.0
+        if pose:
+            self._curl_gap = 0
+            if self._curl_start_ms is None:
+                self._curl_start_ms = now_ms
+                self._curl_last_ms = now_ms
+            self._curl_frames += 1
+            held = now_ms - self._curl_start_ms
+            events: list[LogicalEvent] = []
+            if held >= CURL_HOLD_MS:
+                dt = max(0.0, min(0.25, (now_ms - self._curl_last_ms) / 1000.0))
+                self._curl_accum += CURL_HOLD_NOTCHES_PER_SEC * gain * dt
+                steps = int(self._curl_accum)
+                if steps:
+                    self._curl_accum -= steps
+                    events.append(LogicalEvent(EVENT_SCROLL, {"dy": -steps, "gesto": "dos_dedos_doblados"}))
+            self._curl_last_ms = now_ms
+            return True, events
+        if self._curl_start_ms is None:
+            return False, []
+        if self._curl_gap < CURL_DROPOUT_FRAMES and not stretched:
+            self._curl_gap += 1
+            return True, []
+        confirmed = _confirmed(self._curl_frames, self._curl_start_ms, now_ms, CURL_CONFIRM_FRAMES, CURL_CONFIRM_MS)
+        tap = confirmed and stretched and CURL_TAP_MIN_MS <= (self._curl_last_ms - self._curl_start_ms) < CURL_HOLD_MS
+        self._reset_curl()
+        if tap:
+            return False, [LogicalEvent(EVENT_SCROLL, {"dy": max(1, round(CURL_TAP_NOTCHES * gain)), "gesto": "dos_dedos_doblados"})]
+        return False, []
 
     def _cancel_trace(self) -> None:
         self._tracing = False
@@ -1074,10 +1137,12 @@ class GestureInterpreter:
         toward_thumb = -turn if right else turn
         # Pestaña anterior: giro rápido hacia el meñique con el abanico armado (antes de desarmarlo abajo).
         if (self._fan_armed and toward_thumb <= -TAB_PREV_MIN_SPEED and hand_speed < TAB_PREV_MAX_HAND_SPEED
-                and (now_ms - self._fan_last_ms) >= TAB_FAN_COOLDOWN_MS):
+                and (now_ms - self._fan_last_ms) >= TAB_FAN_COOLDOWN_MS
+                and not (self._fan_last_kind == EVENT_NEXT_TAB and (now_ms - self._fan_last_ms) < TAB_FAN_OPPOSITE_MS)):
             self._fan_armed = False
             self._fan_calm_since = None
             self._fan_last_ms = now_ms
+            self._fan_last_kind = EVENT_PREV_TAB
             return True, [LogicalEvent(EVENT_PREV_TAB, {"giro_grados_s": round(turn), "gesto": "abanico_inverso"})]
         if abs(turn) < TAB_FAN_REARM_SPEED:
             if self._fan_calm_since is None:
@@ -1090,9 +1155,11 @@ class GestureInterpreter:
                 # Giro rápido hacia el otro lado: su vuelta (hacia el pulgar) no es un abanico; hay que calmarse antes.
                 self._fan_armed = False
         if (still and self._fan_armed and toward_thumb >= TAB_FAN_MIN_SPEED
-                and (now_ms - self._fan_last_ms) >= TAB_FAN_COOLDOWN_MS):
+                and (now_ms - self._fan_last_ms) >= TAB_FAN_COOLDOWN_MS
+                and not (self._fan_last_kind == EVENT_PREV_TAB and (now_ms - self._fan_last_ms) < TAB_FAN_OPPOSITE_MS)):
             self._fan_armed = False
             self._fan_last_ms = now_ms
+            self._fan_last_kind = EVENT_NEXT_TAB
             return True, [LogicalEvent(EVENT_NEXT_TAB, {"giro_grados_s": round(turn), "gesto": "abanico"})]
         return still, []
 
@@ -1599,6 +1666,21 @@ class GestureInterpreter:
                 self._reset_scroll()
                 self.telemetry = self._telemetry(hand, "PESTANAS", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
                 return events
+
+        # 4·0a'. Desplazar doblando índice y medio (ver CURL_*). Antes del clic derecho: al doblar el medio el pulgar
+        #        puede rozarlo. Mientras dura, el cursor no se mueve.
+        curl_pose = (
+            self.config.scroll_enabled and (not index_ext) and (not middle_ext) and middle_folded
+            and ring_ext and pinky_ext and pinch_ratio <= CURL_MAX_THUMB and (not self._dragging) and (not pinch_is_active) and (not self.airswipe_active)
+        )
+        if self.config.scroll_enabled and not self.airswipe_active:
+            curling, curl_events = self._curl_step(curl_pose, index_ext and middle_ext, now_ms)
+            events.extend(curl_events)
+            if curling or curl_events:
+                self.telemetry = self._telemetry(hand, "SCROLL", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
+                return events
+        elif self._curl_start_ms is not None:
+            self._reset_curl()
 
         # 4·0b. Clic derecho (gesto local): pinza pulgar-medio con el índice extendido y separado del pulgar.
         if self.config.right_click_enabled and not self.airswipe_active and not self._dragging and not pinch_is_active:

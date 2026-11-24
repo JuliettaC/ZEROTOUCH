@@ -222,7 +222,9 @@ class EngineConfig:
     precision_mode: bool = False   # Ganancia fina fija desde configuración (el gesto la alterna en tiempo de ejecución)
     camera_index: int = 0
     click_cooldown_ms: int = 320   # Prevent accidental repeated clicks
-    drag_hold_ms: int = 600        # Sustained pinch duration to enter drag (22-11-2026: 380 convertia en arrastre los clics de 0,3-0,5 s medidos en vivo)
+    drag_hold_ms: int = 900        # Pinza sostenida para entrar en arrastre. 22-11-2026: 380 convertía en arrastre los clics de
+                                   # 0,3-0,5 s. 24-11-2026 (pedido: 600 se confundía con la pinza y con mover el puntero):
+                                   # videos «click izquierdo» ~0,3 s de pinza, «arrastrar» ~1,1 s.
     pause_hold_ms: int = 450       # Closed fist duration to toggle pause/resume
     tracking_loss_frames: int = 5  # Frames without hand before releasing held buttons
     # Acción configurada de cada gesto discreto (palma, barridos, pulgares, precisión).

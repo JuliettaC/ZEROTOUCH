@@ -37,7 +37,8 @@ export const gestures = {
     common: true,
     title: 'Dos dedos',
     action: 'Desplazar',
-    instruction: 'Extiende índice y medio, y sube o baja la mano.',
+    instruction:
+      'Con anular y meñique arriba, dobla índice y medio y estíralos: sube. Mantenlos doblados: baja. También: índice y medio extendidos moviendo la mano.',
     emoji: '✌️',
     icon: 'mobileHand',
     setting: 'stability',
@@ -61,7 +62,7 @@ export const gestures = {
     common: true,
     title: 'Pinza sostenida',
     action: 'Arrastrar',
-    instruction: 'Mantén la pinza un momento y mueve la mano; suelta para terminar.',
+    instruction: 'Mantén la pinza casi un segundo y mueve la mano; suelta para terminar.',
     emoji: '🤏',
     icon: 'pinch',
     setting: 'pinchTolerance',
