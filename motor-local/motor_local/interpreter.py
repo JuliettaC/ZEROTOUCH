@@ -283,6 +283,7 @@ WAVE_MAX_VERTICAL = 0.6        # desvío vertical máximo respecto de la ida (fr
 WAVE_COOLDOWN_MS = 600.0
 WAVE_REARM_MS = 250.0          # tras un cambio, la mano quieta (o cerrada) esto antes del siguiente: sacudir varias
                                # veces seguidas (ida, vuelta, ida...) no alterna siguiente/anterior
+WAVE_POSE_GAP_MS = 300.0       # sin la mano abierta como mucho esto a media sacudida (mano girada al cruzar el cuerpo)
 WAVE_STILL_SPEED = 0.8         # palmas por segundo: por debajo, la mano cuenta como quieta
 
 # Clic derecho (gesto local del equipo): punta del pulgar con punta del medio, índice extendido.
@@ -606,6 +607,7 @@ class GestureInterpreter:
         self._wave_fired_ms: float = -1e9
         self._wave_locked: bool = False
         self._wave_still_ms: float | None = None
+        self._wave_closed_ms: float | None = None
         self._fan_calm_since: float | None = None
         # Diagnóstico de la pinza (ver process_frame): motivo -> fotogramas. Solo conteos.
         self.pinch_diag: dict[str, int] = {}
@@ -862,10 +864,18 @@ class GestureInterpreter:
 
     def _wave_step(self, open_hand: bool, cx: float, cy: float, scale: float, now_ms: float) -> list[LogicalEvent]:
         """Sacudida lateral (ver WAVE_*): ida rápida a un lado y vuelta. Devuelve NEXT_TAB / PREV_TAB."""
-        if not open_hand:
-            self._wave_hist = []
-            self._wave_locked = False
-            return []
+        # La sacudida empieza con la mano abierta, pero a media ida puede no verse abierta: con la mano derecha hacia la
+        # izquierda la muñeca gira y los dedos se ven de lado (en vivo, 23-11-2026: «solo cambia hacia la derecha»).
+        # Se toleran WAVE_POSE_GAP_MS sin la mano abierta antes de olvidar el movimiento.
+        if open_hand:
+            self._wave_closed_ms = None
+        else:
+            if self._wave_closed_ms is None:
+                self._wave_closed_ms = now_ms
+            if not self._wave_hist or now_ms - self._wave_closed_ms > WAVE_POSE_GAP_MS:
+                self._wave_hist = []
+                self._wave_locked = False
+                return []
         hist = self._wave_hist
         if hist and now_ms - hist[-1][0] > TAB_FAN_MAX_GAP_MS:
             hist.clear()

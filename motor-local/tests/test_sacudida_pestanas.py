@@ -130,3 +130,19 @@ def test_con_la_mano_quieta_la_pinza_sigue_haciendo_clic_y_arrastre() -> None:
     interp = armed(EngineConfig.from_dict({"drag": True}))
     drag = [make_open_palm(0.5, 0.5, pinch_dist=0.14)] * 4 + [make_open_palm(0.5, 0.5, pinch_dist=0.02)] * 12
     assert EVENT_START_DRAG in [e.type for i, h in enumerate(drag) for e in interp.process_frame(h, now_ms=i * 1000.0 / 15)]
+
+
+def test_hacia_la_izquierda_con_la_mano_girada_a_media_ida_tambien_cuenta() -> None:
+    """23-11-2026, en vivo: «solo cambia hacia la derecha». Con la mano derecha hacia la izquierda la muñeca gira y en
+    algunos fotogramas los dedos parecen doblados (aquí: dos dedos); antes eso borraba la sacudida."""
+    from tests.test_engine import make_two_fingers
+
+    xs = wave(-1)
+    hands = [make_open_palm(x, 0.5) for x in xs]
+    for i in (6, 7):
+        hands[i] = make_two_fingers(xs[i], 0.5)
+    assert tabs(hands) == [EVENT_PREV_TAB]
+    # Mucho tiempo sin la mano abierta ya no es una sacudida.
+    long_gap = [make_open_palm(0.5, 0.5)] * 5 + [make_two_fingers(0.5 - 0.07 * i, 0.5) for i in range(1, 7)]
+    long_gap += [make_open_palm(0.5 - 0.07 * i, 0.5) for i in range(5, -1, -1)] + [make_open_palm(0.5, 0.5)] * 6
+    assert tabs(long_gap) == []
