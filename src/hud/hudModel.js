@@ -10,6 +10,7 @@ export const ACTION_LABELS = {
   KEYBOARD: 'Abrir teclado',
   KEYBOARD_CLOSE: 'Bajar teclado',
   ALT_TAB: 'Cambiar de ventana',
+  ALT_TAB_HOLD: 'Elegir ventana',
   SCROLL: 'Desplazamiento',
   START_DRAG: 'Arrastre iniciado',
   END_DRAG: 'Arrastre soltado',

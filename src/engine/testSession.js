@@ -28,6 +28,7 @@ export const EVENT_LABELS = {
   KEYBOARD: 'Abrir teclado',
   KEYBOARD_CLOSE: 'Bajar teclado',
   ALT_TAB: 'Cambiar de ventana (Alt + Tab)',
+  ALT_TAB_HOLD: 'Selector de ventanas (Alt mantenido)',
 }
 
 const MAX_SAMPLES = 20000

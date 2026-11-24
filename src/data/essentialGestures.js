@@ -1,11 +1,12 @@
 // «Solo gestos esenciales» (23-11-2026): pocos gestos que funcionen bien antes que muchos inestables.
 //
 // Para buscar una receta basta con: mover el cursor, clic con la pinza, desplazar con dos dedos, pausar con
-// el puño, abrir el teclado con ☝️ y (opcional) el dictado con 🤙. Lo demás se apaga porque las pruebas con
+// el puño y abrir el teclado con ☝️; el dictado 🤙 y Alt+Tab (con su selector de ventanas) quedan como estén.
+// Lo demás se apaga porque las pruebas con
 // videos reales y los informes en vivo (PROGRESO.md, 21-23/11) midieron que esos gestos se disparan solos
 // mientras se mueve el cursor o se hace clic:
 //  - arrastre: la pinza de un clic (0,3-0,5 s) se volvía arrastre (20 START/END_DRAG y 0 clics el 22-11);
-//  - abanico (pestañas), golpe de muñeca (ventanas), Alt+Tab: falsos positivos entre sí y con el cursor;
+//  - abanico (pestañas) y golpe de muñeca (ventanas): falsos positivos entre sí y con el cursor;
 //  - palma sostenida: «navegación» falsa en 3 de 14 videos; barridos: indistinguibles de mover rápido;
 //  - clic derecho, pulgares y precisión: posturas cercanas a la pinza o al puño.
 // Es un ajuste explícito (un botón) y reversible desde la misma lista de gestos; no cambia el motor.
@@ -16,7 +17,6 @@ export const ESSENTIAL_OFF = Object.freeze([
   'tabGestures',
   'windowSwipe',
   'windowGestures',
-  'altTab',
   'rightClick',
   'openHandScroll',
   'palm',

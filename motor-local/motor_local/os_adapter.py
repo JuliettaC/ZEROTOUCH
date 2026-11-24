@@ -137,6 +137,7 @@ class OSAdapterProtocol(Protocol):
     def key_combo(self, keys: tuple[str, ...]) -> None: ...
     def type_text(self, text: str) -> None: ...
     def press_key(self, key: str) -> None: ...
+    def alt_switcher(self, phase: str) -> None: ...
     def release_all(self) -> None: ...
     def close(self) -> None: ...
 
@@ -206,7 +207,19 @@ class MockOSAdapter:
             raise ValueError("Tecla no permitida.")
         self.executed_actions.append(("PRESS_KEY", {"key": key}))
 
+    def alt_switcher(self, phase: str) -> None:
+        held = getattr(self, "alt_held", False)
+        if phase == "abrir":
+            self.alt_held = True
+            self.executed_actions.append(("ALT_SWITCHER", {"fase": "abrir"}))
+        elif phase in ("siguiente", "soltar") and held:
+            self.alt_held = phase == "siguiente"
+            self.executed_actions.append(("ALT_SWITCHER", {"fase": phase}))
+
     def release_all(self) -> None:
+        if getattr(self, "alt_held", False):
+            self.alt_held = False
+            self.executed_actions.append(("ALT_SWITCHER", {"fase": "cancelar"}))
         if self.button_held:
             self.button_held = False
             self.executed_actions.append(("RELEASE_ALL", {}))
@@ -465,7 +478,50 @@ class PynputOSAdapter:
             except Exception:
                 pass
 
+    def _tap(self, key: Any) -> None:
+        ctl = self._controller()
+        ctl.press(key)
+        try:
+            ctl.release(key)
+        except Exception:
+            pass
+
+    def alt_switcher(self, phase: str) -> None:
+        """Selector de ventanas de Windows: «abrir» deja Alt pulsado y pulsa Tab; «siguiente» pulsa Tab con Alt aún
+        pulsado; «soltar» suelta Alt (Windows cambia a la ventana elegida). Solo Alt y Tab: el atajo «cambiar_ventana»."""
+        names = self._key_names()
+        held = getattr(self, "_alt_held", False)
+        if phase == "abrir":
+            if not held:
+                self._controller().press(names["alt"])
+                self._alt_held = True
+            self._tap(names["tab"])
+        elif phase == "siguiente" and held:
+            self._tap(names["tab"])
+        elif phase == "soltar" and held:
+            self._alt_held = False
+            try:
+                self._controller().release(names["alt"])
+            except Exception:
+                pass
+
+    def _cancel_alt_switcher(self) -> None:
+        """Parada, pausa o mano perdida con el selector abierto: Esc lo cierra sin cambiar de ventana y se suelta Alt."""
+        if not getattr(self, "_alt_held", False):
+            return
+        self._alt_held = False
+        names = self._key_names()
+        try:
+            self._tap(names["esc"])
+        except Exception:
+            pass
+        try:
+            self._controller().release(names["alt"])
+        except Exception:
+            pass
+
     def release_all(self) -> None:
+        self._cancel_alt_switcher()
         with self._glide_lock:
             self._glide.cancel()
         if self.button_held:

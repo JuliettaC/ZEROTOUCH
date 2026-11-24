@@ -135,10 +135,10 @@ export const gestures = {
   altTab: {
     order: 14,
     common: true,
-    title: 'Tres dedos y volver',
+    title: 'Tres dedos abajo',
     action: 'Cambiar de ventana (Alt + Tab)',
     instruction:
-      'Desde la mano abierta, dobla rápido índice, medio y anular dejando arriba el meñique (y el pulgar) y vuelve a abrir enseguida (menos de medio segundo). Si los mantienes doblados es la llamada del dictado, no Alt + Tab.',
+      'Desde la mano abierta, dobla rápido índice, medio y anular dejando arriba el meñique. Rápido (sube antes de medio segundo): vuelve a la ventana anterior. Mantenidos abajo con el pulgar pegado a la mano: Windows muestra todas las ventanas y cada segundo pasa a la siguiente; sube los dedos para abrir la elegida. Con el pulgar afuera es la llamada del dictado.',
     emoji: '🤟',
     icon: 'hand',
     setting: 'confidenceThreshold',

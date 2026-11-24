@@ -63,6 +63,7 @@ EVENT_RIGHT_CLICK = "RIGHT_CLICK"      # pinza pulgar-medio: clic derecho en la 
 EVENT_KEYBOARD_CLOSE = "KEYBOARD_CLOSE"  # golpe de muñeca hacia abajo con el teclado abierto: bajarlo (interfaz; 23-11-2026)
 EVENT_KEYBOARD = "KEYBOARD"            # ☝️ sostenido y quieto: abrir el teclado Air-Swipe (lo hace la interfaz; 23-11-2026)
 EVENT_ALT_TAB = "ALT_TAB"              # doblar índice, medio y anular rápido con el meñique arriba: Alt+Tab (23-11-2026)
+EVENT_ALT_SWITCHER = "ALT_TAB_HOLD"    # los mismos tres dedos MANTENIDOS abajo: selector de ventanas (fase abrir/siguiente/soltar)
 EVENT_DICTATION = "DICTATION"          # 🤙 sostenido: dictado de Windows (Win+H), gesto local del equipo (23-11-2026)
 
 # Acción del catálogo -> tipo de evento lógico.
@@ -236,6 +237,17 @@ HANG_FLICK_GUARD_MS = 700.0    # golpe de muñeca ignorado hasta esto después d
 ALT_TAB_RETURN_MS = 400.0
 ALT_TAB_PINKY_RATIO = 0.5      # el meñique se mueve menos que la mitad que el más lento de los tres
 ALT_TAB_COOLDOWN_MS = 600.0
+# Selector de ventanas (23-11-2026, pedido): bajar los tres dedos y MANTENERLOS abajo deja Alt pulsado y pulsa Tab, así
+# Windows muestra todas las ventanas; cada ALT_HOLD_STEP_MS sostenidos pasa a la siguiente; al subir los dedos se suelta
+# Alt y se cambia a la elegida. Bajar y subir rápido sigue siendo el Alt+Tab directo (vuelve en 271-373 ms en el video).
+# El dictado (llamada) tiene la misma bajada pero con el pulgar FUERA: medido en los videos, pulgar respecto del nudillo
+# del índice 0,35-0,51 palmas (media por postura) en «alt tab» y 0,52-0,73 en «activar transcriptor». Con el dictado
+# activo, el selector exige el pulgar recogido (media < ALT_HOLD_THUMB_MAX). Ningún otro video tiene esa postura >= 150 ms.
+ALT_HOLD_MS = 500.0            # postura sostenida desde la bajada: por encima de la vuelta rápida (ALT_TAB_RETURN_MS)
+ALT_HOLD_STEP_MS = 1000.0      # mantenido: una ventana más cada esto
+ALT_HOLD_RELEASE_MS = 150.0    # la postura debe faltar esto para soltar (un fotograma dudoso no cambia de ventana)
+ALT_HOLD_THUMB_MAX = 0.5
+ALT_HOLD_POSE_MS = 300.0       # y la postura continua al menos esto (sin huecos)
 # Desplazar con la mano abierta (23-11-2026, experimental, interruptor openHandScroll APAGADO por defecto). En los
 # videos nuevos la persona desplaza con la palma abierta: la deja quieta (~0,7 s) y luego sube o baja toda la mano.
 # Subir/bajar la mano abierta es también mover el cursor, así que se usa esa quietud previa: mano abierta quieta
@@ -574,6 +586,12 @@ class GestureInterpreter:
         self._alt_prev: tuple[float, tuple[float, ...]] | None = None
         self._alt_down_ms: float | None = None
         self._alt_fired_ms: float = -1e9
+        self._alt_hold_from: float | None = None   # bajada rápida con la postura mantenida desde entonces
+        self._alt_hold_thumbs: list[float] = []
+        self._alt_pose_since: float | None = None
+        self._alt_holding: bool = False
+        self._alt_step_ms: float = 0.0
+        self._alt_lost_ms: float | None = None
         self._grab_hold = _HoldGesture(OPEN_SCROLL_GRAB_MS, 0.0, still_palm=OPEN_SCROLL_STILL_PALM)
         self._grab_active = False
         self._grab_lost_ms: float | None = None
@@ -808,11 +826,72 @@ class GestureInterpreter:
             self._flick_ms = now_ms
         return []
 
-    def _alt_tab_step(self, lms: list[Point3D], blocked: bool, now_ms: float) -> list[LogicalEvent]:
-        """Alt+Tab (ver ALT_TAB_*): bajada rápida de índice, medio y anular con el meñique quieto, y vuelta enseguida."""
+    def _alt_switcher_reset(self) -> None:
+        """Olvida el selector en curso (mano perdida, gesto apagado). Alt lo suelta el motor con release_all."""
+        self._alt_hold_from = None
+        self._alt_pose_since = None
+        self._alt_hold_thumbs = []
+        self._alt_holding = False
+        self._alt_lost_ms = None
+
+    def _alt_switcher_step(self, pose: bool, thumb: float, blocked: bool, now_ms: float) -> list[LogicalEvent]:
+        """Selector de ventanas (ver ALT_HOLD_*): tres dedos mantenidos abajo tras la bajada rápida."""
+        if self._alt_holding:
+            if blocked:
+                self._alt_switcher_reset()
+                return [LogicalEvent(EVENT_ALT_SWITCHER, {"fase": "soltar", "motivo": "bloqueado"})]
+            if pose:
+                self._alt_lost_ms = None
+                if now_ms - self._alt_step_ms >= ALT_HOLD_STEP_MS:
+                    self._alt_step_ms = now_ms
+                    return [LogicalEvent(EVENT_ALT_SWITCHER, {"fase": "siguiente"})]
+                return []
+            if self._alt_lost_ms is None:
+                self._alt_lost_ms = now_ms
+            if now_ms - self._alt_lost_ms >= ALT_HOLD_RELEASE_MS:
+                self._alt_switcher_reset()
+                self._alt_fired_ms = now_ms
+                return [LogicalEvent(EVENT_ALT_SWITCHER, {"fase": "soltar"})]
+            return []
+        if blocked:
+            self._alt_hold_from = None
+            self._alt_pose_since = None
+            self._alt_hold_thumbs = []
+            return []
+        if not pose:
+            # Durante la bajada los dedos aún no están doblados: la bajada solo caduca si no hay postura a tiempo.
+            self._alt_pose_since = None
+            self._alt_hold_thumbs = []
+            if self._alt_hold_from is not None and now_ms - self._alt_hold_from > ALT_HOLD_MS:
+                self._alt_hold_from = None
+            return []
+        if self._alt_pose_since is None:
+            self._alt_pose_since = now_ms
+        if self._alt_hold_from is None:
+            return []
+        self._alt_hold_thumbs.append(thumb)
+        thumb_ok = (not self.config.dictation_enabled) or (
+            sum(self._alt_hold_thumbs) / len(self._alt_hold_thumbs) < ALT_HOLD_THUMB_MAX
+        )
+        if (now_ms - self._alt_hold_from >= ALT_HOLD_MS and now_ms - self._alt_pose_since >= ALT_HOLD_POSE_MS and thumb_ok
+                and (now_ms - self._alt_fired_ms) >= ALT_TAB_COOLDOWN_MS):
+            self._alt_holding = True
+            self._alt_step_ms = now_ms
+            self._alt_lost_ms = None
+            self._alt_down_ms = None   # al subir los dedos se suelta Alt: no es además el Alt+Tab rápido
+            return [LogicalEvent(EVENT_ALT_SWITCHER, {"fase": "abrir"})]
+        return []
+
+    def _alt_tab_step(self, lms: list[Point3D], blocked: bool, now_ms: float, pose: bool = False,
+                      thumb: float = 0.0) -> list[LogicalEvent]:
+        """Alt+Tab (ver ALT_TAB_*): bajada rápida de índice, medio y anular con el meñique quieto, y vuelta enseguida.
+        Con la postura mantenida (pose: tres dedos abajo y meñique arriba) abre el selector de ventanas (ALT_HOLD_*)."""
         size = max(_dist2d(lms[0], lms[5]), _dist2d(lms[0], lms[17]), _dist2d(lms[5], lms[17])) or 1e-6
         tips = tuple((lms[t].y - lms[m].y) / size for t, m in ((8, 5), (12, 9), (16, 13), (20, 17)))
         prev, self._alt_prev = self._alt_prev, (now_ms, tips)
+        held = self._alt_switcher_step(pose, thumb, blocked, now_ms)
+        if held or self._alt_holding:
+            return held
         if self._alt_down_ms is not None and (now_ms - self._alt_down_ms) > ALT_TAB_RETURN_MS:
             self._alt_down_ms = None
         if blocked or prev is None or not (0.0 < now_ms - prev[0] <= FLICK_MAX_GAP_MS):
@@ -825,6 +904,8 @@ class GestureInterpreter:
         if slow > FLICK_MIN_SPEED and abs(v[3]) < ALT_TAB_PINKY_RATIO * slow:
             if self._alt_down_ms is None:
                 self._alt_down_ms = now_ms
+            if self._alt_hold_from is None:
+                self._alt_hold_from = now_ms
             return []
         up = min(-x for x in v[:3])
         if (self._alt_down_ms is not None and up > FLICK_MIN_SPEED and abs(v[3]) < ALT_TAB_PINKY_RATIO * up
@@ -1223,6 +1304,7 @@ class GestureInterpreter:
                 self._accel_prev = None
                 self._accel_out = None
                 events.extend(self._release_pointer_state("tracking_lost"))
+                self._alt_switcher_reset()
                 if self._tracing:
                     self._cancel_trace()
                 if not self._tracking_lost_emitted:
@@ -1378,7 +1460,12 @@ class GestureInterpreter:
             hang_recent = self._hang_last_ms is not None and (now_ms - self._hang_last_ms) < HANG_FLICK_GUARD_MS
         if self.config.alt_tab_enabled:
             fist_recent_alt = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
-            events.extend(self._alt_tab_step(lms, self.airswipe_active or self._dragging or pinch_is_active or fist_recent_alt, now_ms))
+            alt_pose = (not index_ext) and (not middle_ext) and (not ring_ext) and pinky_ext
+            events.extend(self._alt_tab_step(lms, self.airswipe_active or self._dragging or pinch_is_active or fist_recent_alt,
+                                             now_ms, alt_pose, _dist2d(lms[4], lms[5]) / scale))
+        elif self._alt_holding:
+            self._alt_switcher_reset()
+            events.append(LogicalEvent(EVENT_ALT_SWITCHER, {"fase": "soltar", "motivo": "desactivado"}))
         if self.config.window_swipe_enabled or keyboard_close:
             fist_recent = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
             # Solo tras un abanico que SÍ pasó de pestaña: la vuelta de ese abanico no es un golpe de muñeca.

@@ -17,6 +17,7 @@ from typing import Any, Iterable
 from .capabilities import ALLOWED_KEYS, DEVICE_KEYS
 from .interpreter import (
     EVENT_AIRSWIPE_TRACE,
+    EVENT_ALT_SWITCHER,
     EVENT_ALT_TAB,
     EVENT_BACK,
     EVENT_CANCEL,
@@ -78,6 +79,7 @@ _FEEDBACK_EVENTS = frozenset({EVENT_MEDIA_PLAY_PAUSE, EVENT_MEDIA_NEXT, EVENT_MI
 
 ALLOWED_EVENTS = frozenset(
     {
+        EVENT_ALT_SWITCHER,
         EVENT_MOVE_CURSOR,
         EVENT_LEFT_CLICK,
         EVENT_RIGHT_CLICK,
@@ -301,6 +303,10 @@ class LogicalActionEngine:
                 self.adapter.scroll(int(evt.payload.get("dy", 0)))
             elif evt.type in _KEY_EVENTS:
                 self.adapter.key_combo(_KEY_EVENTS[evt.type])
+            elif evt.type == EVENT_ALT_SWITCHER:
+                # Selector de ventanas: Alt mantenido + Tab (mismo atajo permitido «cambiar_ventana»). release_all
+                # (pausa, mano perdida, parada, Observar) lo cancela con Esc y suelta Alt.
+                self.adapter.alt_switcher(str(evt.payload.get("fase", "")))
             elif evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):
                 self._window_event(evt.type)
             if evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):
