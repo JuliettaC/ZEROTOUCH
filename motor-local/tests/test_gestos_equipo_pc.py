@@ -355,30 +355,44 @@ def test_llamada_solo_pulsa_win_h_en_control() -> None:
     assert ("win", "h") in ALLOWED_KEY_COMBOS
 
 
-# ------------------------------------------------------------ abrir el teclado (☝️)
+# ------------------------------------------------------------ Enter (☝️; hasta el 24-11-2026 abría el teclado)
 
-def test_indice_sostenido_y_quieto_pide_abrir_el_teclado() -> None:
-    """23-11-2026: abrir el teclado Air-Swipe con un gesto en vez de ir a la app. Un evento por postura."""
-    from motor_local.interpreter import EVENT_KEYBOARD
+def test_indice_sostenido_y_quieto_pulsa_enter_una_vez() -> None:
+    """24-11-2026 (pedido): el ☝️ sostenido pulsa Enter; el teclado se abre solo con el foco en un campo de texto."""
+    from motor_local.interpreter import EVENT_CONFIRM, EVENT_KEYBOARD
     from tests.test_gestos_catalogo import make_pointing
 
-    assert types(run(armed(), hold(make_pointing, 1500.0))).count(EVENT_KEYBOARD) == 1
-    assert EVENT_KEYBOARD not in types(run(armed(), hold(make_pointing, 700.0)))
-    # Apuntar moviendo la mano (mover el cursor) no lo abre: la espera se reinicia.
+    seen = types(run(armed(), hold(make_pointing, 1500.0)))
+    assert seen.count(EVENT_CONFIRM) == 1 and EVENT_KEYBOARD not in seen, seen
+    assert EVENT_CONFIRM not in types(run(armed(), hold(make_pointing, 700.0)))
+    # Apuntar moviendo la mano (mover el cursor) no pulsa Enter: la espera se reinicia.
     moving = [(make_pointing(cx=0.3 + 0.01 * i), i * FRAME_MS) for i in range(60)]
-    assert EVENT_KEYBOARD not in types(run(armed(), moving))
+    assert EVENT_CONFIRM not in types(run(armed(), moving))
 
 
 def test_indice_sostenido_no_actua_con_el_teclado_abierto_ni_apagado() -> None:
-    from motor_local.interpreter import EVENT_KEYBOARD
+    from motor_local.interpreter import EVENT_CONFIRM
     from tests.test_gestos_catalogo import make_pointing
 
     interp = armed()
-    interp.set_airswipe(True)  # con el teclado abierto, apuntar es trazar
-    assert EVENT_KEYBOARD not in types(run(interp, hold(make_pointing, 1500.0)))
-    assert EVENT_KEYBOARD not in types(run(armed(EngineConfig.from_dict({"keyboardGesture": False})), hold(make_pointing, 1500.0)))
-    assert EVENT_KEYBOARD not in types(run(armed(EngineConfig.from_dict({"airswipe": False})), hold(make_pointing, 1500.0)))
+    interp.set_airswipe(True)  # con el teclado abierto, apuntar es trazar o elegir una tecla
+    assert EVENT_CONFIRM not in types(run(interp, hold(make_pointing, 1500.0)))
+    assert EVENT_CONFIRM not in types(run(armed(EngineConfig.from_dict({"keyboardGesture": False})), hold(make_pointing, 1500.0)))
+    # Enter ya no depende del teclado Air-Swipe.
+    assert EVENT_CONFIRM in types(run(armed(EngineConfig.from_dict({"airswipe": False})), hold(make_pointing, 1500.0)))
     assert EngineConfig.from_dict({}).to_dict()["keyboardGesture"] is True
+
+
+def test_enter_del_indice_solo_llega_al_sistema_en_control() -> None:
+    from motor_local.interpreter import EVENT_CONFIRM
+
+    adapter = MockOSAdapter()
+    engine = LogicalActionEngine(adapter, initial_mode=MODE_OBSERVATION)
+    engine.dispatch([LogicalEvent(EVENT_CONFIRM, {"gesto": "indice_sostenido"})])
+    assert adapter.executed_actions == []
+    engine.set_mode(MODE_CONTROL)
+    engine.dispatch([LogicalEvent(EVENT_CONFIRM, {"gesto": "indice_sostenido"})])
+    assert adapter.executed_actions == [("KEY_COMBO", {"keys": ["enter"]})]
 
 
 def test_abrir_teclado_va_a_la_interfaz_y_nunca_al_sistema() -> None:
@@ -387,9 +401,9 @@ def test_abrir_teclado_va_a_la_interfaz_y_nunca_al_sistema() -> None:
     for mode in (MODE_OBSERVATION, MODE_CONTROL):
         adapter = MockOSAdapter()
         engine = LogicalActionEngine(adapter, initial_mode=mode)
-        engine.dispatch([LogicalEvent(EVENT_KEYBOARD, {"gesto": "indice_sostenido"})])
+        engine.dispatch([LogicalEvent(EVENT_KEYBOARD, {"origen": "foco"})])
         assert adapter.executed_actions == []
-        assert engine.take_app_events() == [{"event": EVENT_KEYBOARD, "gesto": "indice_sostenido"}]
+        assert engine.take_app_events() == [{"event": EVENT_KEYBOARD, "origen": "foco"}]
 
 
 # ------------------------------------------------------------ gestos del 23-11 (videos con la mano izquierda)

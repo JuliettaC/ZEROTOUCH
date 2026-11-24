@@ -47,7 +47,7 @@ export const deviceDefaults = Object.freeze({
   rightClick: true,
   // 🤙 sostenido: dictado de Windows (Win+H). Gesto local del equipo (23-11-2026).
   dictation: true,
-  // ☝️ sostenido y quieto: abrir el teclado Air-Swipe. Gesto local del equipo (23-11-2026).
+  // ☝️ sostenido y quieto: Enter (hasta el 24-11-2026 abría el teclado). Gesto local del equipo.
   keyboardGesture: true,
   // Doblar índice, medio y anular rápido con el meñique arriba: Alt+Tab (23-11-2026).
   altTab: true,

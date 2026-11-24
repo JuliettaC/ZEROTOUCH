@@ -174,9 +174,9 @@ export const gestures = {
     order: 13,
     common: true,
     title: 'Índice sostenido',
-    action: 'Abrir el teclado',
+    action: 'Enter',
     instruction:
-      'Apunta solo con el índice (los demás dedos plegados) y deja la mano quieta un segundo: se abre el teclado Air-Swipe. Si mueves la mano mientras apuntas (mover el cursor) no se abre. Para bajarlo, con la mano abierta y vertical dobla la muñeca rápido hacia abajo y vuelve (el mismo gesto que baja una ventana), o haz una pinza en su botón ✕.',
+      'Apunta solo con el índice (los demás dedos plegados) y deja la mano quieta un segundo: pulsa Enter. Si mueves la mano mientras apuntas (mover el cursor) no se pulsa. Con el teclado Air-Swipe abierto no cuenta (apuntar es escribir): usa su tecla Intro. El teclado se abre solo al hacer clic en un campo de texto y se cierra al salir de él; también puedes bajarlo con un golpe de muñeca hacia abajo o con su botón ✕.',
     emoji: '☝️',
     icon: 'hand',
     setting: 'confidenceThreshold',

@@ -80,8 +80,8 @@ export default function App() {
   const acct = useAccount({ workspace, onNotice: setNotice })
   const { account } = acct
   // Temporizadores y avisos de los eventos del motor (multimedia, ventanas, precisión).
-  // ☝️ sostenido: abre el teclado Air-Swipe como su botón (si ya está abierto o abriéndose, no hace nada).
-  // Golpe de muñeca hacia abajo con el teclado abierto: lo baja como su ✕.
+  // Foco en un campo de texto (motor): abre el teclado Air-Swipe como su botón (si ya está abierto o abriéndose, no
+  // hace nada). Al salir del campo, o con el golpe de muñeca hacia abajo, lo baja como su ✕.
   const { isKeyboardOpen, busy: keyboardBusy, openKeyboard, closeKeyboard } = keyboard
   const requestKeyboard = useCallback(() => {
     if (!keyboardBusy && !isKeyboardOpen()) openKeyboard()

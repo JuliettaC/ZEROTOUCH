@@ -61,7 +61,7 @@ EVENT_NEXT_TAB = "NEXT_TAB"            # abanico con la mano ladeada: pestaña s
 EVENT_PREV_TAB = "PREV_TAB"            # pestaña anterior (Ctrl+Shift+Tab): sin gesto desde el 21-11-2026 (se conserva la tecla)
 EVENT_RIGHT_CLICK = "RIGHT_CLICK"      # pinza pulgar-medio: clic derecho en la posición del puntero
 EVENT_KEYBOARD_CLOSE = "KEYBOARD_CLOSE"  # golpe de muñeca hacia abajo con el teclado abierto: bajarlo (interfaz; 23-11-2026)
-EVENT_KEYBOARD = "KEYBOARD"            # ☝️ sostenido y quieto: abrir el teclado Air-Swipe (lo hace la interfaz; 23-11-2026)
+EVENT_KEYBOARD = "KEYBOARD"            # abrir el teclado Air-Swipe (interfaz): el foco entró en un campo de texto (24-11-2026)
 EVENT_ALT_TAB = "ALT_TAB"              # doblar índice, medio y anular rápido con el meñique arriba: Alt+Tab (23-11-2026)
 EVENT_NEW_TAB = "NEW_TAB"              # ✌️ V (índice y medio separados) sostenida y quieta: pestaña nueva, Ctrl+T (23-11-2026)
 EVENT_ALT_SWITCHER = "ALT_TAB_HOLD"    # los mismos tres dedos MANTENIDOS abajo: selector de ventanas (fase abrir/siguiente/soltar)
@@ -165,9 +165,9 @@ THUMB_UP_LOOSE_DY = 0.44
 # sostenido como el pulgar arriba. Win+H abre y cierra el dictado de Windows: el enfriamiento largo evita que una
 # postura dudosa lo abra y lo cierre seguido.
 CALL_HOLD_MS = 500.0
-# Abrir el teclado Air-Swipe (23-11-2026): ☝️ (solo el índice extendido), sostenido y con la mano casi quieta. Es la
-# postura del trazo, así que con el teclado abierto no cuenta. Al apuntar mientras se mueve el cursor la mano no
-# está quieta y el tiempo vuelve a empezar; el evento va a la interfaz, nunca al sistema operativo.
+# ☝️ (solo el índice extendido), sostenido y con la mano casi quieta: Enter (24-11-2026; del 23-11 al 24-11 abría el
+# teclado Air-Swipe, que ahora se abre solo con el foco en un campo de texto). Es la postura del trazo, así que con el
+# teclado abierto no cuenta. Al apuntar mientras se mueve el cursor la mano no está quieta y el tiempo vuelve a empezar.
 KEYBOARD_HOLD_MS = 1000.0
 KEYBOARD_COOLDOWN_MS = 2000.0
 KEYBOARD_STILL_PALM = 0.2      # recorrido máximo de la palma (palmas) durante la espera
@@ -1829,17 +1829,19 @@ class GestureInterpreter:
         )
         events.extend(self._trace_step(pointing, now_ms))
 
-        # 5a·1. Abrir el teclado (☝️ sostenido y quieto, teclado cerrado). El cursor sigue al índice: si se mueve,
-        #       la espera se reinicia (KEYBOARD_STILL_PALM), así que apuntar para mover el cursor no lo abre.
+        # 5a·1. Enter (☝️ sostenido y quieto, teclado cerrado). Hasta el 24-11-2026 abría el teclado Air-Swipe; ahora
+        #       el teclado se abre solo al entrar en un campo de texto (text_focus.py) y este gesto pulsa Enter (pedido).
+        #       El cursor sigue al índice: si se mueve, la espera se reinicia (KEYBOARD_STILL_PALM). Con el teclado
+        #       abierto no cuenta: ahí apuntar quieto es elegir una tecla (modo de permanencia) o trazar.
         keyboard_pose = (
-            self.config.keyboard_gesture_enabled and self.config.airswipe_enabled and (not self.airswipe_active)
+            self.config.keyboard_gesture_enabled and (not self.airswipe_active)
             and index_ext and (not middle_ext) and (not ring_ext) and (not pinky_ext)
             and middle_folded and ring_folded and pinky_folded and pinch_open
             and (not self._dragging) and (not pinch_is_active)
         )
         self._keyboard_posing = keyboard_pose
         if self._keyboard_hold.step(keyboard_pose, now_ms, palm_cx, palm_cy, scale):
-            events.append(LogicalEvent(EVENT_KEYBOARD, {"gesto": "indice_sostenido"}))
+            events.append(LogicalEvent(EVENT_CONFIRM, {"gesto": "indice_sostenido"}))
 
         # 5b. Barrido horizontal con palma abierta: una acción por barrido. El puntero sigue activo.
         swipe_flags = self.config.swipe_left_enabled or self.config.swipe_right_enabled or self.config.window_swipe_enabled

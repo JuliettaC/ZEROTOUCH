@@ -1,7 +1,7 @@
 // «Solo gestos esenciales» (23-11-2026): pocos gestos que funcionen bien antes que muchos inestables.
 //
 // Para buscar una receta basta con: mover el cursor, clic con la pinza, desplazar con dos dedos, pausar con
-// el puño y abrir el teclado con ☝️; el dictado 🤙, Alt+Tab (con su selector) y las pestañas quedan como estén.
+// el puño y Enter con ☝️ (el teclado se abre solo con el foco en un campo de texto, 24-11-2026); el dictado 🤙, Alt+Tab (con su selector) y las pestañas quedan como estén.
 // Lo demás se apaga porque las pruebas con
 // videos reales y los informes en vivo (PROGRESO.md, 21-23/11) midieron que esos gestos se disparan solos
 // mientras se mueve el cursor o se hace clic:
