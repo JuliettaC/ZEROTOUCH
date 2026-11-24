@@ -257,6 +257,20 @@ OPEN_SCROLL_GRAB_MS = 350.0     # video: la mano queda quieta ~0,4-0,5 s antes d
 OPEN_SCROLL_STILL_PALM = 0.15
 OPEN_SCROLL_DROPOUT_MS = 300.0  # la mano flexiona un instante los dedos sin dejar de «agarrar»
 TAB_FAN_MAX_GAP_MS = 200.0     # dos muestras más separadas que esto no se comparan (mano perdida)
+# Sacudida lateral para pestañas (23-11-2026, pedido: «mover la mano de lado a lado»): con la mano abierta, ir rápido
+# hacia un lado y VOLVER enseguida. Hacia la derecha = pestaña siguiente; hacia la izquierda = anterior. La vuelta es
+# lo que la separa de mover el cursor (un movimiento del cursor no regresa así) y del barrido atrás/adelante (que se
+# reinicia si la mano vuelve). Umbrales sin medir con videos de este gesto: hipótesis a validar en vivo.
+WAVE_WINDOW_MS = 800.0         # ida y vuelta completas dentro de esto
+WAVE_OUT_MAX_MS = 450.0        # la ida dura como mucho esto
+WAVE_MIN_PALM = 0.8            # recorrido de ida, en longitudes de palma
+WAVE_MIN_SPEED = 3.0           # velocidad media de la ida, palmas por segundo
+WAVE_RETURN_FRAC = 0.6         # la vuelta recorre al menos esta fracción de la ida
+WAVE_MAX_VERTICAL = 0.6        # desvío vertical máximo respecto de la ida (fracción)
+WAVE_COOLDOWN_MS = 600.0
+WAVE_REARM_MS = 250.0          # tras un cambio, la mano quieta (o cerrada) esto antes del siguiente: sacudir varias
+                               # veces seguidas (ida, vuelta, ida...) no alterna siguiente/anterior
+WAVE_STILL_SPEED = 0.8         # palmas por segundo: por debajo, la mano cuenta como quieta
 
 # Clic derecho (gesto local del equipo): punta del pulgar con punta del medio, índice extendido.
 RIGHT_PINCH_CONFIRM_FRAMES = 2
@@ -572,6 +586,10 @@ class GestureInterpreter:
         self._cursor_settled: bool = False
         self._fan_hist: list[tuple[float, float, float, float]] = []  # (ms, dirección de los dedos, cx, cy), últimos ~250 ms
         self._fan_armed: bool = True
+        self._wave_hist: list[tuple[float, float, float]] = []
+        self._wave_fired_ms: float = -1e9
+        self._wave_locked: bool = False
+        self._wave_still_ms: float | None = None
         self._fan_calm_since: float | None = None
         # Diagnóstico de la pinza (ver process_frame): motivo -> fotogramas. Solo conteos.
         self.pinch_diag: dict[str, int] = {}
@@ -825,6 +843,62 @@ class GestureInterpreter:
             self._flick_dir = move
             self._flick_ms = now_ms
         return []
+
+    def _wave_step(self, open_hand: bool, cx: float, cy: float, scale: float, now_ms: float) -> list[LogicalEvent]:
+        """Sacudida lateral (ver WAVE_*): ida rápida a un lado y vuelta. Devuelve NEXT_TAB / PREV_TAB."""
+        if not open_hand:
+            self._wave_hist = []
+            self._wave_locked = False
+            return []
+        hist = self._wave_hist
+        if hist and now_ms - hist[-1][0] > TAB_FAN_MAX_GAP_MS:
+            hist.clear()
+        if self._wave_locked:
+            last = self._wave_hist[-1] if self._wave_hist else None
+            hist.append((now_ms, cx, cy))
+            del hist[:-2]
+            speed = (math.hypot(cx - last[1], cy - last[2]) / scale / max(1e-3, (now_ms - last[0]) / 1000.0)) if last else 0.0
+            if speed >= WAVE_STILL_SPEED:
+                self._wave_still_ms = None
+            elif self._wave_still_ms is None:
+                self._wave_still_ms = now_ms
+            if self._wave_still_ms is not None and now_ms - self._wave_still_ms >= WAVE_REARM_MS:
+                self._wave_locked = False   # se conservan las dos últimas muestras quietas: el inicio de la próxima ida
+            return []
+        hist.append((now_ms, cx, cy))
+        while hist and now_ms - hist[0][0] > WAVE_WINDOW_MS:
+            hist.pop(0)
+        if len(hist) < 3 or (now_ms - self._wave_fired_ms) < WAVE_COOLDOWN_MS:
+            return []
+        # Extremo = el punto más lejano de la posición actual; la ida va desde el punto anterior más alejado de él.
+        k = max(range(len(hist) - 1), key=lambda i: abs(hist[i][1] - cx))
+        peak_t, peak_x, peak_y = hist[k]
+        back = (cx - peak_x) / scale
+        if k == 0:
+            return []
+        direction = -1.0 if back > 0 else 1.0          # la ida va en sentido contrario a la vuelta
+        # Inicio de la ida: el punto MÁS RECIENTE casi tan alejado del extremo como el más alejado (con la mano
+        # quieta antes, el más antiguo alargaba la ida y la hacía parecer lenta).
+        far = max(direction * (peak_x - hist[i][1]) for i in range(k))
+        j = max(i for i in range(k) if direction * (peak_x - hist[i][1]) >= 0.9 * far)
+        if j == 0:
+            return []   # el comienzo de la ida ya salió de la ventana: no se ve el movimiento entero
+        start_t, start_x, start_y = hist[j]
+        out = direction * (peak_x - start_x) / scale
+        out_ms = peak_t - start_t
+        if out < WAVE_MIN_PALM or out_ms <= 0 or out_ms > WAVE_OUT_MAX_MS:
+            return []
+        if out / (out_ms / 1000.0) < WAVE_MIN_SPEED or abs(back) < WAVE_RETURN_FRAC * out:
+            return []
+        vertical = max(abs(y - start_y) for _, _, y in hist[j:]) / scale
+        if vertical > WAVE_MAX_VERTICAL * out:
+            return []
+        self._wave_fired_ms = now_ms
+        self._wave_hist = [(now_ms, cx, cy)]
+        self._wave_locked = True
+        self._wave_still_ms = None
+        kind = EVENT_NEXT_TAB if direction > 0 else EVENT_PREV_TAB
+        return [LogicalEvent(kind, {"gesto": "sacudida_lateral"})]
 
     def _alt_switcher_reset(self) -> None:
         """Olvida el selector en curso (mano perdida, gesto apagado). Alt lo suelta el motor con release_all."""
@@ -1485,6 +1559,9 @@ class GestureInterpreter:
         #       al gesto de pulgar y meñique (21-11-2026). Mientras la mano ladeada está quieta, el cursor no se mueve.
         if self.config.tab_gestures_enabled and not self._dragging and not pinch_is_active and not self.airswipe_active:
             open_hand = sum((index_ext, middle_ext, ring_ext, pinky_ext)) >= 3
+            wave_cx = (lms[0].x + lms[5].x + lms[9].x + lms[17].x) * 0.25
+            wave_cy = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25
+            events.extend(self._wave_step(open_hand, wave_cx, wave_cy, scale, now_ms))
             tab_pose, tab_events = self._fan_step(lms, hand.handedness, open_hand, now_ms)
             events.extend(tab_events)
             if tab_pose:

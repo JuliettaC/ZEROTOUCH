@@ -111,10 +111,10 @@ export const gestures = {
   tabs: {
     order: 10,
     common: true,
-    title: 'Abanico',
-    action: 'Pestaña siguiente',
+    title: 'Sacudida lateral',
+    action: 'Pestaña siguiente / anterior',
     instruction:
-      'Mano abierta y ladeada, casi quieta: dobla la muñeca rápido hacia el lado del pulgar, como abanicando. Cada abanico pasa una pestaña; el regreso no cuenta. Hacia el lado del meñique, rápido, vuelve a la pestaña anterior.',
+      'Mano abierta: llévala rápido hacia un lado y vuélvela enseguida a donde estaba, como un vaivén. Hacia la derecha pasa a la pestaña siguiente; hacia la izquierda, a la anterior. Para otra pestaña, deja la mano quieta un momento y repite. (También vale el abanico de antes: mano ladeada y muñeca rápida hacia el pulgar.)',
     emoji: '👋',
     icon: 'hand',
     setting: 'confidenceThreshold',

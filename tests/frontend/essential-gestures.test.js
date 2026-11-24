@@ -17,7 +17,7 @@ test('«solo gestos esenciales» deja mover, clic, desplazar, pausar y teclado, 
   for (const key of ESSENTIAL_ON) assert.notEqual(settings[key], false, `${key} encendido`)
   assert.equal(usesEssentialGestures(settings), true)
   const config = buildEngineConfig(settings, getActiveAssignments(state))
-  for (const key of ['drag', 'tabGestures', 'rightClick', 'windowSwipe', 'palm', 'thumbsUp', 'precision'])
+  for (const key of ['drag', 'rightClick', 'windowSwipe', 'palm', 'thumbsUp', 'precision'])
     assert.equal(config[key], false, `el motor recibe ${key} = false`)
   for (const key of ['pointer', 'pinch', 'scroll', 'fistPause', 'airswipe', 'keyboardGesture'])
     assert.equal(config[key], true, `el motor recibe ${key} = true`)

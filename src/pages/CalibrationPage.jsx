@@ -61,7 +61,7 @@ export default function CalibrationPage({
               >
                 {usesEssentialGestures(settings) ? '✓ Solo gestos esenciales' : 'Usar solo gestos esenciales'}
               </button>{' '}
-              Mover, clic, desplazar, pausar y abrir el teclado (el dictado y Alt + Tab quedan como estén).
+              Mover, clic, desplazar, pausar y abrir el teclado (el dictado, Alt + Tab y las pestañas quedan como estén).
               Apaga el resto, que puede dispararse solo al mover el cursor; cada gesto se vuelve a
               encender desde esta lista.
             </p>
