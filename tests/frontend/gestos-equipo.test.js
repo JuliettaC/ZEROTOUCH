@@ -98,3 +98,16 @@ test('Alt+Tab activado y desplazar con mano abierta apagado por defecto; ambos l
   assert.equal(gestures.openHandScroll.toggle, 'openHandScroll')
   assert.match(describeEvent({ seq: 1, event: 'ALT_TAB', injected: true }).text, /Alt \+ Tab/)
 })
+
+test('pestaña nueva con la V: activada por defecto, del equipo (no sincroniza), llega al motor y se anuncia', () => {
+  const state = createDefaultState()
+  assert.equal(getEffectiveSettings(state).newTab, true)
+  const off = updateActiveSettings(state, { newTab: false })
+  assert.equal(off.device.newTab, false, 'es un ajuste del equipo')
+  assert.deepEqual(off.modes, state.modes)
+  assert.equal(buildEngineConfig(getEffectiveSettings(off), getActiveAssignments(off)).newTab, false)
+  assert.equal(normalizeDevice({}).newTab, true, 'una preferencia guardada antes del gesto lo recibe activado')
+  assert.equal(gestures.newTab.toggle, 'newTab')
+  assert.match(describeEvent({ seq: 1, event: 'NEW_TAB', injected: true }).text, /Pestaña nueva/)
+  assert.match(describeEvent({ seq: 2, event: 'NEW_TAB', injected: false }).text, /Controlar/)
+})

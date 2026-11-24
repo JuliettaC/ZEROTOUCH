@@ -31,6 +31,7 @@ export function buildEngineConfig(effective, assignments) {
     dictation: effective.dictation !== false,
     keyboardGesture: effective.keyboardGesture !== false,
     altTab: effective.altTab !== false,
+    newTab: effective.newTab !== false,
     openHandScroll: effective.openHandScroll === true,
     pointerAcceleration: effective.pointerAcceleration !== false,
     activeBox: effective.activeBox,

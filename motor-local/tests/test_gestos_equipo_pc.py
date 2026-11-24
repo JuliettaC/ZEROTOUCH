@@ -235,7 +235,7 @@ def test_puno_sigue_pausando() -> None:
 def test_teclas_del_equipo_estan_permitidas_y_separadas_del_catalogo() -> None:
     assert caps.DEVICE_KEYS == {
         "pestana_siguiente": ("ctrl", "tab"), "pestana_anterior": ("ctrl", "shift", "tab"), "minimizar_ventana": ("win", "down"),
-        "dictado": ("win", "h"), "cambiar_ventana": ("alt", "tab"),
+        "dictado": ("win", "h"), "cambiar_ventana": ("alt", "tab"), "nueva_pestana": ("ctrl", "t"),
     }
     for keys in caps.DEVICE_KEYS.values():
         assert keys in ALLOWED_KEY_COMBOS

@@ -144,6 +144,18 @@ export const gestures = {
     setting: 'confidenceThreshold',
     toggle: 'altTab',
   },
+  newTab: {
+    order: 14.5,
+    common: true,
+    title: 'V sostenida',
+    action: 'Pestaña nueva (Ctrl + T)',
+    instruction:
+      'Haz la V: índice y medio estirados y bien separados, anular y meñique doblados. Mantenla quieta casi un segundo y se abre una pestaña nueva con el cursor en la barra de direcciones. Con los dedos juntos y moviéndolos es desplazar, no pestaña nueva.',
+    emoji: '✌️',
+    icon: 'hand',
+    setting: 'confidenceThreshold',
+    toggle: 'newTab',
+  },
   openHandScroll: {
     order: 15,
     common: false,

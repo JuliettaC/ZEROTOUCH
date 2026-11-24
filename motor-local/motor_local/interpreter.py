@@ -63,6 +63,7 @@ EVENT_RIGHT_CLICK = "RIGHT_CLICK"      # pinza pulgar-medio: clic derecho en la 
 EVENT_KEYBOARD_CLOSE = "KEYBOARD_CLOSE"  # golpe de muñeca hacia abajo con el teclado abierto: bajarlo (interfaz; 23-11-2026)
 EVENT_KEYBOARD = "KEYBOARD"            # ☝️ sostenido y quieto: abrir el teclado Air-Swipe (lo hace la interfaz; 23-11-2026)
 EVENT_ALT_TAB = "ALT_TAB"              # doblar índice, medio y anular rápido con el meñique arriba: Alt+Tab (23-11-2026)
+EVENT_NEW_TAB = "NEW_TAB"              # ✌️ V (índice y medio separados) sostenida y quieta: pestaña nueva, Ctrl+T (23-11-2026)
 EVENT_ALT_SWITCHER = "ALT_TAB_HOLD"    # los mismos tres dedos MANTENIDOS abajo: selector de ventanas (fase abrir/siguiente/soltar)
 EVENT_DICTATION = "DICTATION"          # 🤙 sostenido: dictado de Windows (Win+H), gesto local del equipo (23-11-2026)
 
@@ -171,6 +172,13 @@ KEYBOARD_HOLD_MS = 1000.0
 KEYBOARD_COOLDOWN_MS = 2000.0
 KEYBOARD_STILL_PALM = 0.2      # recorrido máximo de la palma (palmas) durante la espera
 CALL_COOLDOWN_MS = 1500.0
+# Pestaña nueva (23-11-2026, pedido): ✌️ = índice y medio extendidos y SEPARADOS, anular y meñique plegados, sostenida
+# y quieta. Desplazar usa los mismos dedos pero juntos y moviéndose: medido en los 25 videos, la separación entre las
+# puntas en esa postura es 0,18-0,58 palmas (mediana 0,24) y nunca pasa de 0,45 más de un fotograma seguido.
+NEWTAB_SPREAD = 0.5            # separación mínima entre las puntas del índice y el medio (palmas)
+NEWTAB_HOLD_MS = 900.0
+NEWTAB_COOLDOWN_MS = 1500.0
+NEWTAB_STILL_PALM = 0.2        # recorrido máximo de la palma durante la espera: moverse en V es desplazar
 CALL_THUMB_OUT = 0.6           # punta del pulgar lejos del nudillo del índice (palmas); con el pulgar recogido queda más cerca
 PRECISION_HOLD_MS = 400.0
 PRECISION_COOLDOWN_MS = 800.0
@@ -575,6 +583,7 @@ class GestureInterpreter:
         self._precision_hold = _HoldGesture(PRECISION_HOLD_MS, PRECISION_COOLDOWN_MS)
         self._call_hold = _HoldGesture(CALL_HOLD_MS, CALL_COOLDOWN_MS)
         self._keyboard_hold = _HoldGesture(KEYBOARD_HOLD_MS, KEYBOARD_COOLDOWN_MS, still_palm=KEYBOARD_STILL_PALM)
+        self._newtab_hold = _HoldGesture(NEWTAB_HOLD_MS, NEWTAB_COOLDOWN_MS, still_palm=NEWTAB_STILL_PALM)
         self._keyboard_posing = False
         self._palm_hold = _HoldGesture(PALM_HOLD_MS, PALM_COOLDOWN_MS, still_palm=PALM_STILL_PALM)
         self._discrete_locked_pos: tuple[float, float] | None = None
@@ -1672,6 +1681,16 @@ class GestureInterpreter:
         elif self._grab_active:
             self._grab_active = False
             self._reset_scroll()
+
+        # 4d. Pestaña nueva (gesto local): ✌️ con los dedos separados, sostenida y quieta (ver NEWTAB_*). No corta el
+        #     desplazar: con la V en movimiento la espera se reinicia y los dos dedos desplazan como siempre.
+        newtab_pose = (
+            self.config.new_tab_enabled and index_ext and middle_ext and (not ring_ext) and (not pinky_ext)
+            and ring_folded and pinky_folded and pinch_open and (not self._dragging) and (not pinch_is_active)
+            and (not self.airswipe_active) and _dist2d(lms[8], lms[12]) / scale >= NEWTAB_SPREAD
+        )
+        if self._newtab_hold.step(newtab_pose, now_ms, palm_cx, palm_cy, scale):
+            events.append(LogicalEvent(EVENT_NEW_TAB, {"gesto": "v_sostenida"}))
 
         # 5. Dos dedos (scroll): postura confirmada + movimiento vertical fuera de la zona muerta.
         pose = (

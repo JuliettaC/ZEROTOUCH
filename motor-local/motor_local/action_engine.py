@@ -33,6 +33,7 @@ from .interpreter import (
     EVENT_MINIMIZE_WINDOW,
     EVENT_MOVE_CURSOR,
     EVENT_NAVIGATION,
+    EVENT_NEW_TAB,
     EVENT_NEXT_TAB,
     EVENT_PAUSE,
     EVENT_PRECISION,
@@ -67,6 +68,7 @@ _KEY_EVENTS: dict[str, tuple[str, ...]] = {
     EVENT_PREV_TAB: DEVICE_KEYS["pestana_anterior"],
     EVENT_DICTATION: DEVICE_KEYS["dictado"],
     EVENT_ALT_TAB: DEVICE_KEYS["cambiar_ventana"],
+    EVENT_NEW_TAB: DEVICE_KEYS["nueva_pestana"],
 }
 # Con el teclado Air-Swipe abierto, estas acciones las interpreta la interfaz (aceptar candidato,
 # cancelar, espacio, borrar) y NO se inyectan al sistema operativo.
@@ -75,10 +77,11 @@ _AIRSWIPE_REDIRECTED = frozenset({EVENT_BACK, EVENT_FORWARD, EVENT_CONFIRM, EVEN
 _APP_EVENTS = frozenset({EVENT_TIMER, EVENT_PRECISION, EVENT_NAVIGATION, EVENT_AIRSWIPE_TRACE, EVENT_KEYBOARD, EVENT_KEYBOARD_CLOSE})
 # Acciones que SÍ llegan al SO pero de las que la interfaz muestra un aviso (multimedia y ventanas):
 # además de ejecutarse, se encolan como evento informativo con `injected` (y `result` en ventanas).
-_FEEDBACK_EVENTS = frozenset({EVENT_MEDIA_PLAY_PAUSE, EVENT_MEDIA_NEXT, EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW, EVENT_NEXT_TAB, EVENT_PREV_TAB, EVENT_DICTATION, EVENT_ALT_TAB})
+_FEEDBACK_EVENTS = frozenset({EVENT_MEDIA_PLAY_PAUSE, EVENT_MEDIA_NEXT, EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW, EVENT_NEXT_TAB, EVENT_PREV_TAB, EVENT_DICTATION, EVENT_ALT_TAB, EVENT_NEW_TAB})
 
 ALLOWED_EVENTS = frozenset(
     {
+        EVENT_NEW_TAB,
         EVENT_ALT_SWITCHER,
         EVENT_MOVE_CURSOR,
         EVENT_LEFT_CLICK,

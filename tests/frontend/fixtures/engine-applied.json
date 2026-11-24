@@ -1,5 +1,5 @@
 {
-  "_nota": "Generado el 11-11-2026 y regenerado el 19-11-2026 (gestos locales tabGestures y rightClick; QA de comodidad: windowSwipe apagado por defecto y pointerAcceleration; 23-11-2026: dictation, keyboardGesture, altTab y openHandScroll) con EngineConfig.from_dict(desired).to_dict() de motor-local (solo parseo, sin motor ni cámara). Regenerar si cambia buildEngineConfig o el contrato.",
+  "_nota": "Generado el 11-11-2026 y regenerado el 19-11-2026 (gestos locales tabGestures y rightClick; QA de comodidad: windowSwipe apagado por defecto y pointerAcceleration; 23-11-2026: dictation, keyboardGesture, altTab y openHandScroll; newTab) con EngineConfig.from_dict(desired).to_dict() de motor-local (solo parseo, sin motor ni cámara). Regenerar si cambia buildEngineConfig o el contrato.",
   "default": {
     "desired": {
       "format_version": 2,
@@ -19,6 +19,7 @@
       "dictation": true,
       "keyboardGesture": true,
       "altTab": true,
+      "newTab": true,
       "openHandScroll": false,
       "pointerAcceleration": true,
       "activeBox": null,
@@ -114,6 +115,7 @@
       "dictation": true,
       "keyboardGesture": true,
       "altTab": true,
+      "newTab": true,
       "openHandScroll": false,
       "pointerAcceleration": true,
       "precisionMode": false,
@@ -297,6 +299,7 @@
       "dictation": false,
       "keyboardGesture": false,
       "altTab": false,
+      "newTab": false,
       "openHandScroll": true,
       "pointerAcceleration": true
     },
@@ -317,6 +320,7 @@
       "dictation": false,
       "keyboardGesture": false,
       "altTab": false,
+      "newTab": false,
       "openHandScroll": true,
       "pointerAcceleration": true,
       "precisionMode": false,

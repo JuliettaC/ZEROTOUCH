@@ -88,6 +88,10 @@ export function describeEvent(event) {
       return event.injected
         ? { text: '🤟 Cambiar de ventana (Alt + Tab)', tone: 'info' }
         : { text: '🤟 Alt + Tab (no enviado: activa Controlar)', tone: 'warn' }
+    case 'NEW_TAB':
+      return event.injected
+        ? { text: '✌️ Pestaña nueva (Ctrl + T)', tone: 'info' }
+        : { text: '✌️ Pestaña nueva (no enviada: activa Controlar)', tone: 'warn' }
     case 'DICTATION':
       return event.injected
         ? {

@@ -51,6 +51,8 @@ export const deviceDefaults = Object.freeze({
   keyboardGesture: true,
   // Doblar índice, medio y anular rápido con el meñique arriba: Alt+Tab (23-11-2026).
   altTab: true,
+  // ✌️ V (índice y medio separados) sostenida y quieta: pestaña nueva, Ctrl+T (23-11-2026).
+  newTab: true,
   // Experimental: mano abierta quieta y luego subir/bajar = desplazar. Apagado: choca con mover el cursor.
   openHandScroll: false,
   // Aceleración del cursor: movimientos lentos más finos (sin temblor), rápidos completos.
@@ -235,6 +237,7 @@ export function normalizeDevice(raw) {
     dictation: bool(r.dictation, true),
     keyboardGesture: bool(r.keyboardGesture, true),
     altTab: bool(r.altTab, true),
+    newTab: bool(r.newTab, true),
     openHandScroll: bool(r.openHandScroll, false),
     pointerAcceleration: bool(r.pointerAcceleration, true),
     timerMinutes: clamp(r.timerMinutes, 5, 1, 120),

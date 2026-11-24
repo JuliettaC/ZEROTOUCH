@@ -49,13 +49,14 @@
     "pestana_anterior": ["ctrl", "shift", "tab"],
     "minimizar_ventana": ["win", "down"],
     "dictado": ["win", "h"],
-    "cambiar_ventana": ["alt", "tab"]
+    "cambiar_ventana": ["alt", "tab"],
+    "nueva_pestana": ["ctrl", "t"]
   },
   "eventos_interfaz": ["temporizador_iniciar", "precision", "navegacion", "escritura_airswipe"],
   "predeterminados_interfaz": {
     "pointer": true, "pinch": true, "drag": true, "scroll": true, "fistPause": true, "palm": true,
     "swipeLeft": false, "swipeRight": false, "thumbsUp": false, "thumbsDown": false, "precision": true, "airswipe": true
   },
-  "ajustes_equipo": ["preferredHand", "mirrorCamera", "cameraIndex", "movementArea", "confidenceThreshold", "diagnosticOverlay", "windowGestures", "windowSwipe", "tabGestures", "rightClick", "dictation", "keyboardGesture", "altTab", "openHandScroll", "pointerAcceleration", "timerMinutes", "activeBox", "gaze"],
+  "ajustes_equipo": ["preferredHand", "mirrorCamera", "cameraIndex", "movementArea", "confidenceThreshold", "diagnosticOverlay", "windowGestures", "windowSwipe", "tabGestures", "rightClick", "dictation", "keyboardGesture", "altTab", "newTab", "openHandScroll", "pointerAcceleration", "timerMinutes", "activeBox", "gaze"],
   "ajustes_sincronizados": ["sensitivity", "stability", "pinchTolerance", "deskRest", "gazeAssist"]
 }

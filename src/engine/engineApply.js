@@ -27,6 +27,7 @@ const SCALARS = [
   'dictation',
   'keyboardGesture',
   'altTab',
+  'newTab',
   'openHandScroll',
   'pointerAcceleration',
 ]

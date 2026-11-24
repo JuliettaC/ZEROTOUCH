@@ -425,6 +425,7 @@ class PynputOSAdapter:
             "down": key.down,
             "win": key.cmd,
             "h": "h",  # letra: solo dentro de la combinación permitida Win+H (dictado)
+            "t": "t",  # letra: solo dentro de la combinación permitida Ctrl+T (pestaña nueva)
             "enter": key.enter,
             "esc": key.esc,
             "backspace": key.backspace,

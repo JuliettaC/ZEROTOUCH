@@ -216,6 +216,7 @@ class EngineConfig:
     dictation_enabled: bool = True         # 🤙 sostenido: dictado de Windows, Win+H (local, 23-11-2026)
     keyboard_gesture_enabled: bool = True  # ☝️ sostenido: abrir el teclado Air-Swipe (local, 23-11-2026)
     alt_tab_enabled: bool = True           # doblar tres dedos con el meñique arriba y volver: Alt+Tab (local, 23-11-2026)
+    new_tab_enabled: bool = True           # ✌️ V sostenida y quieta: pestaña nueva, Ctrl+T (local, 23-11-2026)
     open_hand_scroll_enabled: bool = False # experimental: mano abierta quieta y luego subir/bajar = desplazar (local)
     pointer_acceleration: bool = True      # movimientos lentos más finos, rápidos completos (local, QA 19-11)
     precision_mode: bool = False   # Ganancia fina fija desde configuración (el gesto la alterna en tiempo de ejecución)
@@ -298,6 +299,7 @@ class EngineConfig:
             dictation_enabled=_bool_field(data, ("dictation",), True),
             keyboard_gesture_enabled=_bool_field(data, ("keyboardGesture",), True),
             alt_tab_enabled=_bool_field(data, ("altTab",), True),
+            new_tab_enabled=_bool_field(data, ("newTab",), True),
             open_hand_scroll_enabled=_bool_field(data, ("openHandScroll",), False),
             pointer_acceleration=_bool_field(data, ("pointerAcceleration",), True),
             precision_mode=_bool_field(data, ("precisionMode", "modo_precision"), False),
@@ -336,6 +338,7 @@ class EngineConfig:
             "dictation": self.dictation_enabled,
             "keyboardGesture": self.keyboard_gesture_enabled,
             "altTab": self.alt_tab_enabled,
+            "newTab": self.new_tab_enabled,
             "openHandScroll": self.open_hand_scroll_enabled,
             "pointerAcceleration": self.pointer_acceleration,
             "precisionMode": self.precision_mode,
