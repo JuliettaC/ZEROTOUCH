@@ -67,6 +67,7 @@ export const PINCH_LABELS = {
   PINZA: 'pinza aceptada (clic o arrastre)',
   INDICE_JUNTO_AL_MEDIO: 'descartada: índice pegado al medio (así se distingue del desplazar)',
   INDICE_RECTO: 'descartada: índice recto (doblarlo hacia el pulgar)',
+  MANO_EN_MOVIMIENTO: 'descartada: mano en movimiento rápido (detenla antes de la pinza)',
   PUNO_RECIENTE: 'descartada: puño hace un instante',
   PINZA_DESACTIVADA: 'descartada: pinza desactivada',
   TRAZO_AIRSWIPE: 'descartada: trazo de Air-Swipe',

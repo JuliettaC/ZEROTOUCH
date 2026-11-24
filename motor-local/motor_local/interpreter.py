@@ -85,6 +85,11 @@ PINCH_CONFIRM_FRAMES = 2       # muestras consecutivas dentro del umbral para co
 PINCH_CONFIRM_MS = 45.0        # y tiempo mínimo desde la primera muestra
 PINCH_DEPTH_WEIGHT = 0.6       # peso de la profundidad (z de MediaPipe) en la distancia de la pinza
 PINCH_RELEASE_FRAMES = 2       # muestras consecutivas fuera del umbral para soltar la pinza
+# 23-11-2026 (en vivo: la sacudida lateral arrastraba la ventana hasta el borde derecho y Windows la acoplaba): con la
+# mano desplazándose rápido no EMPIEZA una pinza. Un clic real se hace con la mano casi quieta (medido en los videos de
+# clic); el pulgar junto al índice de una mano abierta en movimiento se leía como pinza sostenida -> arrastre. No afecta
+# a una pinza ya confirmada (el arrastre necesita mover la mano).
+PINCH_START_MAX_HAND_SPEED = 2.5   # palmas por segundo (centro de la palma); clics reales: 0,03-0,58
 PINCH_CANDIDATE_MAX_MS = 600.0  # una pinza candidata que no se confirma en este tiempo caduca
 SCROLL_DROPOUT_FRAMES = 2       # fotogramas seguidos sin postura de dos dedos que se toleran sin soltar el desplazamiento
 SCROLL_CONFIRM_FRAMES = 3      # muestras consecutivas de postura de dos dedos
@@ -587,6 +592,8 @@ class GestureInterpreter:
         self._fan_hist: list[tuple[float, float, float, float]] = []  # (ms, dirección de los dedos, cx, cy), últimos ~250 ms
         self._fan_armed: bool = True
         self._wave_hist: list[tuple[float, float, float]] = []
+        self._palm_prev: tuple[float, float, float] | None = None
+        self.palm_speed: float = 0.0
         self._wave_fired_ms: float = -1e9
         self._wave_locked: bool = False
         self._wave_still_ms: float | None = None
@@ -1521,6 +1528,11 @@ class GestureInterpreter:
         pinch_is_active = self._pinching or self._pinch_candidate_count > 0
         palm_cx = (lms[0].x + lms[5].x + lms[9].x + lms[17].x) * 0.25
         palm_cy = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25
+        prev_palm, self._palm_prev = self._palm_prev, (now_ms, palm_cx, palm_cy)
+        if prev_palm is not None and 0.0 < now_ms - prev_palm[0] <= TAB_FAN_MAX_GAP_MS:
+            self.palm_speed = math.hypot(palm_cx - prev_palm[1], palm_cy - prev_palm[2]) / scale / ((now_ms - prev_palm[0]) / 1000.0)
+        else:
+            self.palm_speed = 0.0
 
         # 4·0. Golpe de muñeca para ventanas (con windowSwipe): observa el movimiento sin cortar los demás gestos.
         #      Con el teclado Air-Swipe abierto (y keyboardGesture), el golpe hacia abajo BAJA EL TECLADO en vez de la
@@ -1750,7 +1762,9 @@ class GestureInterpreter:
         # la mano está en puño o lo estuvo hace menos de FIST_PINCH_GUARD_MS: abrir el puño pasa por posturas
         # parecidas a una pinza, y cerrarlo ya descarta la pinza sin clic (_release_pointer_state).
         index_curled = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
-        is_entering_pinch = pinch_ratio <= enter_ratio and not index_curled and _index_pinch_shape(lms, scale)
+        hand_fast = self.palm_speed > PINCH_START_MAX_HAND_SPEED and self._pinch_candidate_count == 0 and not self._pinching
+        is_entering_pinch = (pinch_ratio <= enter_ratio and not index_curled and not hand_fast
+                             and _index_pinch_shape(lms, scale))
         if pinch_ratio <= enter_ratio:
             if not self.config.pinch_enabled:
                 self._pinch_reason = "PINZA_DESACTIVADA"
@@ -1760,6 +1774,8 @@ class GestureInterpreter:
                 self._pinch_reason = "PINZA"
             elif index_curled:
                 self._pinch_reason = "PUNO_RECIENTE"
+            elif hand_fast:
+                self._pinch_reason = "MANO_EN_MOVIMIENTO"
             elif _dist2d(lms[8], lms[12]) / scale < PINCH_INDEX_SEPARATION:
                 self._pinch_reason = "INDICE_JUNTO_AL_MEDIO"
             else:
@@ -1816,7 +1832,10 @@ class GestureInterpreter:
                         self._last_click_ms = now_ms
                         events.append(LogicalEvent(EVENT_LEFT_CLICK))
                         active_gesture = "CLICK"
-                elif self.config.drag_enabled and (not self._dragging) and held_ms >= self.config.drag_hold_ms:
+                # El arrastre empieza con la mano casi quieta (se sostiene la pinza y luego se mueve): una pinza leída
+                # a media sacudida no arrastra la ventana hasta el borde (23-11-2026). Solo se aplaza.
+                elif (self.config.drag_enabled and (not self._dragging) and held_ms >= self.config.drag_hold_ms
+                      and self.palm_speed <= PINCH_START_MAX_HAND_SPEED):
                     self._dragging = True
                     self._pinch_locked_pos = None
                     events.append(LogicalEvent(EVENT_START_DRAG))

@@ -133,8 +133,10 @@ def test_pointer_toggle_off_moves_nothing_but_needs_no_arming() -> None:
     interp = GestureInterpreter(EngineConfig(pointer_enabled=False, click_cooldown_ms=0))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
     frames = [(make_open_palm(0.3, 0.3, pinch_dist=0.14), 0.0)]
-    frames += [(make_open_palm(0.5, 0.5, pinch_dist=0.02), t) for t in (40.0, 80.0, 120.0)]
-    frames += [(make_open_palm(0.5, 0.5, pinch_dist=0.14), t) for t in (160.0, 200.0)]
+    # La mano salta de 0,3 a 0,5 en 40 ms: con la mano tan rápida no empieza la pinza (PINCH_START_MAX_HAND_SPEED,
+    # 23-11-2026); empieza en el fotograma siguiente, ya quieta.
+    frames += [(make_open_palm(0.5, 0.5, pinch_dist=0.02), t) for t in (40.0, 80.0, 120.0, 160.0)]
+    frames += [(make_open_palm(0.5, 0.5, pinch_dist=0.14), t) for t in (200.0, 240.0)]
     seen = _types(_run(interp, frames, engine))
     assert EVENT_LEFT_CLICK in seen and EVENT_MOVE_CURSOR not in seen
 
