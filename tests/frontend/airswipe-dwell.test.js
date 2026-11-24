@@ -133,8 +133,9 @@ test('sugerencia: completa solo lo que falta y corrige la tilde', () => {
 test('sugerencias de recetas primero, luego el léxico; sin tildes al comparar', () => {
   const lexicon = { palabras: ['lasaña', 'lasitud', 'pollera', 'polla', 'pollo', 'canción'], pesos: [10, 200, 150, 5, 100, 50] }
   const s = buildSuggester(terms, lexicon)
-  assert.deepEqual(suggest(s, ''), terms.inicio.slice(0, 4))
-  assert.deepEqual(suggest(s, 'pollo '), terms.siguientes.slice(0, 4))
+  assert.deepEqual(suggest(s, ''), [], 'con el teclado recién abierto no se sugiere nada')
+  assert.deepEqual(suggest(s, 'pollo '), [], 'tras un espacio tampoco: hasta escribir la primera letra')
+  assert.ok(suggest(s, 'r').includes('receta de'), 'con una letra ya aparecen los términos de recetas')
   assert.equal(suggest(s, 'las')[0], 'lasaña', 'el término de recetas va antes que una palabra más frecuente')
   assert.ok(suggest(s, 'cancio').includes('canción'))
   assert.ok(!suggest(s, 'pollo').includes('pollo'), 'no propone la palabra ya completa')

@@ -77,7 +77,7 @@ export const fold = (s) =>
 
 /**
  * Prepara el sugeridor: términos de recetas (primero, en su orden) y el léxico general por peso.
- * @param {{inicio:string[], siguientes:string[], terminos:string[]}} terms
+ * @param {{terminos:string[]}} terms
  * @param {{palabras:string[], pesos:number[]}} lexicon
  */
 export function buildSuggester(terms, lexicon) {
@@ -89,14 +89,18 @@ export function buildSuggester(terms, lexicon) {
     .sort((a, b) => b.weight - a.weight)
     .map((entry) => ({ word: entry.word, folded: fold(entry.word) }))
   const own = (terms?.terminos || []).map((word) => ({ word, folded: fold(word) }))
-  return { starters: terms?.inicio || [], next: terms?.siguientes || [], own, general }
+  return { own, general }
 }
 
-/** Hasta `max` sugerencias para el texto actual (sin repetir y sin la palabra ya escrita completa). */
+/**
+ * Hasta `max` sugerencias para la palabra que se está escribiendo (sin repetir ni la palabra ya completa).
+ * Sin ninguna letra escrita no se sugiere nada (23-11-2026, pedido: con el teclado recién abierto parecía un
+ * teclado solo para recetas); en cuanto hay una letra, primero los términos de recetas y luego el léxico.
+ */
 export function suggest(suggester, text, max = 4) {
   if (!suggester) return []
   const word = currentWord(text)
-  if (word === '') return (text.trim() === '' ? suggester.starters : suggester.next).slice(0, max)
+  if (word === '') return []
   const prefix = fold(word)
   const out = []
   const seen = new Set()

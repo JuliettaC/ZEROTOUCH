@@ -64,11 +64,18 @@ def emit_ack(cmd_id: Any, cmd: str, ok: bool, code: str = "", message: str = "",
     emit_json(payload)
 
 
-def stdin_reader(cmd_queue: "queue.Queue[dict[str, Any]]", stop_event: threading.Event) -> None:
+def stdin_reader(cmd_queue: "queue.Queue[dict[str, Any]]", stop_event: threading.Event, source: Any = None) -> None:
     """Solo encola. El apagado lo ejecuta el bucle principal al procesar STOP, en orden,
-    para que los comandos anteriores no se pierdan."""
+    para que los comandos anteriores no se pierdan.
+
+    Se leen BYTES y se decodifican como UTF-8 (lo que escribe el puente Rust). Con `sys.stdin` en texto, Python en
+    Windows usa la página de códigos ANSI (cp1252) para una tubería y el texto del teclado llegaba dañado:
+    «cómo» se escribía «cÃ³mo» y «ñ» «Ã±» (23-11-2026, captura de la persona usuaria)."""
+    if source is None:
+        source = getattr(sys.stdin, "buffer", sys.stdin)
     try:
-        for line in sys.stdin:
+        for raw in source:
+            line = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
             text = line.strip()
             if not text:
                 continue
