@@ -1,4 +1,6 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Sin consola en Windows también en compilaciones de depuración (`npm run desktop:build`):
+// la app no escribe en stdout/stderr y el motor Python ya se lanza con CREATE_NO_WINDOW.
+#![windows_subsystem = "windows"]
 
 mod bridge;
 mod engine;
