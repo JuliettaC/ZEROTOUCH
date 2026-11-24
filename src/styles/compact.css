@@ -1,0 +1,189 @@
+@media (min-width: 768px) and (max-width: 1250px) {
+  .gesture-badge {
+    font-size: 8px;
+  }
+}
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
+@media (max-width: 767px) {
+  .app {
+    background: #f4f4f6;
+  }
+  .app-header {
+    height: 72px;
+    padding: 16px 20px;
+    gap: 10px;
+  }
+  .brand {
+    gap: 12px;
+    min-width: 0;
+  }
+  .brand-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+  .brand-logo.round {
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+  }
+  .brand strong {
+    font-size: 16px;
+    line-height: 20px;
+    letter-spacing: -0.4px;
+  }
+  .brand small {
+    font-size: 9px;
+    line-height: 14px;
+    letter-spacing: 0;
+  }
+  .header-status {
+    gap: 12px;
+  }
+  .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .mobile-calibration {
+    flex-direction: column;
+    width: 100%;
+    max-width: 480px;
+    margin: auto;
+  }
+  .mobile-calibration {
+    padding: 20px 31px 10px;
+    min-height: 956px;
+  }
+  .device {
+    padding: 12px;
+    gap: 12px;
+    border-radius: 12px;
+  }
+  .device strong {
+    font-size: 14px;
+  }
+  .device small {
+    font-size: 10px;
+    line-height: 15px;
+  }
+  .distance {
+    position: absolute;
+    top: 78px;
+    left: 15px;
+    border-radius: 8px;
+    background: var(--soft);
+    border: 1px solid #e5e6ea;
+    padding: 1px 10px;
+    font-size: 10px;
+    color: white;
+  }
+  .fullscreen {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+    background: #ffffff33;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+  }
+  .sensor:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+  .range-control .section-line {
+    font-size: 13px;
+    line-height: 20px;
+  }
+  .range-control input {
+    margin-top: 12px;
+  }
+  .dialog {
+    max-width: calc(100vw - 24px);
+    padding: 24px;
+  }
+  .context-dialog {
+    max-width: 100%;
+    width: 390px;
+    max-height: calc(var(--context-height, 100dvh) - 16px);
+    inset: auto 0 var(--context-bottom, 0px);
+    margin: 0 auto;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 24px 32px;
+    overflow: hidden;
+  }
+  .context-dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
+  .context-dialog input[type='range'] {
+    touch-action: pan-y;
+  }
+  .context-dialog h2 {
+    font-size: 20px;
+    line-height: 25px;
+  }
+  .context-dialog form {
+    gap: 24px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .name-field input {
+    min-height: 49px;
+  }
+  .context-dialog .dialog-actions {
+    justify-content: space-between;
+    margin-top: 0;
+    flex-shrink: 0;
+    background: white;
+    padding: 12px 0 0;
+  }
+  .dialog-actions .button {
+    padding: 14px 20px;
+  }
+  .dialog h2 {
+    font-size: 18px;
+  }
+  .dialog.context-dialog h2 {
+    font-size: 20px;
+  }
+  .gesture-dialog {
+    padding: 22px;
+  }
+  .gesture-dialog .dialog-actions {
+    gap: 0;
+  }
+  .gesture-dialog .dialog-actions .button {
+    font-size: 12px;
+    padding: 12px;
+  }
+  .unavailable {
+    flex-direction: column;
+  }
+}
+@media (max-width: 370px) {
+  .app-header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .brand strong {
+    font-size: 14px;
+  }
+  .header-status {
+    gap: 6px;
+  }
+  .mobile-calibration {
+    padding-left: 21px;
+    padding-right: 21px;
+  }
+}

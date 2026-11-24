@@ -1,0 +1,11 @@
+{
+  "name": "ZeroTouch local sin secretos",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:3000/api/v1",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}

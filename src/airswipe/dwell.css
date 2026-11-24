@@ -1,0 +1,116 @@
+/* Teclado por permanencia. Más opaco que el de trazo: aquí hay que leer cada tecla de un vistazo. */
+.as-dwell {
+  background: rgba(40, 44, 52, 0.82);
+}
+.dw-top {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  align-items: center;
+  gap: 1.6vh;
+  padding: 0 2vh;
+  background: rgba(30, 33, 40, 0.92);
+  border-radius: 2.4vh 2.4vh 0 0;
+}
+.dw-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 2vh;
+  height: 72%;
+  padding: 0 2vh;
+  border-radius: 1.6vh;
+  background: #fff;
+  color: #1f2329;
+  text-shadow: none;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1;
+  align-items: center;
+}
+.dw-typed {
+  font-size: 7vh;
+  font-weight: 600;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dw-caret {
+  display: inline-block;
+  width: 0.5vh;
+  height: 7vh;
+  margin-left: 0.3vh;
+  vertical-align: -1vh;
+  background: #2f6f4f;
+  animation: dw-blink 1s steps(1) infinite;
+}
+@keyframes dw-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.dw-hint {
+  font-size: 4.6vh;
+  color: #5b616b;
+}
+.dw-notice {
+  margin-left: auto;
+  font-size: 3.6vh;
+  color: #8a5a00;
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dw-slot {
+  position: absolute;
+}
+.dw-key {
+  position: absolute;
+  inset: 0.8vh;
+  border: 0.5vh solid transparent;
+  border-radius: 2vh;
+  /* Relleno de abajo arriba = progreso de la permanencia (--p de 0 a 1). */
+  background: linear-gradient(
+    to top,
+    rgba(108, 196, 140, 0.95) calc(var(--p, 0) * 100%),
+    rgba(72, 78, 90, 0.95) calc(var(--p, 0) * 100%)
+  );
+  color: #fff;
+  font: inherit;
+  font-size: 7.5vh;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dw-key.suggestion {
+  background: linear-gradient(
+    to top,
+    rgba(108, 196, 140, 0.95) calc(var(--p, 0) * 100%),
+    rgba(232, 236, 240, 0.96) calc(var(--p, 0) * 100%)
+  );
+  color: #1f2329;
+  text-shadow: none;
+  font-size: 5.4vh;
+}
+.dw-key.action {
+  background: linear-gradient(
+    to top,
+    rgba(108, 196, 140, 0.95) calc(var(--p, 0) * 100%),
+    rgba(52, 57, 66, 0.95) calc(var(--p, 0) * 100%)
+  );
+  font-size: 4.6vh;
+  border-color: #a1a5ad;
+}
+.dw-key.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 0.6vh rgba(108, 196, 140, 0.6);
+}
+.dw-key:focus-visible {
+  outline: 0.6vh solid #fff;
+  outline-offset: 0.4vh;
+}

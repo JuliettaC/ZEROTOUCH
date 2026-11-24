@@ -1,0 +1,22 @@
+{
+  "name": "zerotouch-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "db:init": "node scripts/init-db.js",
+    "db:migrate": "node scripts/migrate-db.js",
+    "admin:bootstrap": "node scripts/bootstrap-admin.js",
+    "test": "node --test --test-concurrency=1 test/database/*.test.js test/security/*.test.js test/resources/*.test.js"
+  },
+  "dependencies": {
+    "argon2": "0.45.1",
+    "better-sqlite3": "13.0.3",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "nodemailer": "10.2.1"
+  },
+  "engines": { "node": ">=24 <25" }
+}

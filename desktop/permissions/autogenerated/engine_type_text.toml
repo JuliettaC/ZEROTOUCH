@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-engine-type-text"
+description = "Enables the engine_type_text command without any pre-configured scope."
+commands.allow = ["engine_type_text"]
+
+[[permission]]
+identifier = "deny-engine-type-text"
+description = "Denies the engine_type_text command without any pre-configured scope."
+commands.deny = ["engine_type_text"]

@@ -1,0 +1,413 @@
+{
+  "_nota": "Generado el 11-11-2026 y regenerado el 19-11-2026 (gestos locales tabGestures y rightClick; QA de comodidad: windowSwipe apagado por defecto y pointerAcceleration; 23-11-2026: dictation, keyboardGesture, altTab y openHandScroll; newTab) con EngineConfig.from_dict(desired).to_dict() de motor-local (solo parseo, sin motor ni cámara). Regenerar si cambia buildEngineConfig o el contrato.",
+  "default": {
+    "desired": {
+      "format_version": 2,
+      "preferredHand": "RIGHT",
+      "mirrorCamera": true,
+      "cameraIndex": 0,
+      "movementArea": 65,
+      "confidenceThreshold": 65,
+      "sensitivity": 70,
+      "stability": 45,
+      "pinchTolerance": 55,
+      "deskRest": false,
+      "windowGestures": false,
+      "windowSwipe": false,
+      "tabGestures": true,
+      "rightClick": true,
+      "dictation": true,
+      "keyboardGesture": true,
+      "altTab": true,
+      "newTab": true,
+      "openHandScroll": false,
+      "pointerAcceleration": true,
+      "activeBox": null,
+      "gaze": {
+        "enabled": false,
+        "yawTolerance": 22,
+        "pitchTolerance": 18,
+        "awayMs": 800,
+        "backMs": 300,
+        "calibration": null
+      },
+      "pointer": true,
+      "pinch": true,
+      "drag": true,
+      "scroll": true,
+      "fistPause": true,
+      "palm": true,
+      "swipeLeft": false,
+      "swipeRight": false,
+      "thumbsUp": false,
+      "thumbsDown": false,
+      "precision": true,
+      "airswipe": true,
+      "gestos": {
+        "mano_abierta_sostenida": {
+          "accion": "activar_puntero",
+          "habilitado": true
+        },
+        "micro_pinza": {
+          "accion": "clic",
+          "habilitado": true
+        },
+        "pinza_sostenida": {
+          "accion": "arrastrar",
+          "habilitado": true
+        },
+        "liberacion_pinza": {
+          "accion": "soltar",
+          "habilitado": true
+        },
+        "dos_dedos": {
+          "accion": "desplazar",
+          "habilitado": true
+        },
+        "puno_cerrado": {
+          "accion": "pausar",
+          "habilitado": true
+        },
+        "palma_abierta": {
+          "accion": "navegacion",
+          "habilitado": true
+        },
+        "deslizamiento_izquierda": {
+          "accion": "atras",
+          "habilitado": false
+        },
+        "deslizamiento_derecha": {
+          "accion": "adelante",
+          "habilitado": false
+        },
+        "pulgar_arriba": {
+          "accion": "confirmar",
+          "habilitado": false
+        },
+        "pulgar_abajo": {
+          "accion": "cancelar",
+          "habilitado": false
+        },
+        "modo_precision": {
+          "accion": "precision",
+          "habilitado": true
+        },
+        "trazo_airswipe": {
+          "accion": "escritura_airswipe",
+          "habilitado": true
+        }
+      }
+    },
+    "applied": {
+      "format_version": 2,
+      "preferredHand": "RIGHT",
+      "mirrorCamera": true,
+      "sensitivity": 70,
+      "stability": 45,
+      "pinchTolerance": 55,
+      "movementArea": 65,
+      "confidenceThreshold": 65,
+      "deskRest": false,
+      "windowGestures": false,
+      "windowSwipe": false,
+      "tabGestures": true,
+      "rightClick": true,
+      "dictation": true,
+      "keyboardGesture": true,
+      "altTab": true,
+      "newTab": true,
+      "openHandScroll": false,
+      "pointerAcceleration": true,
+      "precisionMode": false,
+      "cameraIndex": 0,
+      "activeBox": null,
+      "gaze": {
+        "enabled": false,
+        "yawTolerance": 22,
+        "pitchTolerance": 18,
+        "awayMs": 800,
+        "backMs": 300,
+        "calibration": null
+      },
+      "pointer": true,
+      "pinch": true,
+      "drag": true,
+      "scroll": true,
+      "fistPause": true,
+      "swipeLeft": false,
+      "swipeRight": false,
+      "palm": true,
+      "thumbsUp": false,
+      "thumbsDown": false,
+      "precision": true,
+      "airswipe": true,
+      "gestos": {
+        "mano_abierta_sostenida": {
+          "accion": "activar_puntero",
+          "habilitado": true
+        },
+        "micro_pinza": {
+          "accion": "clic",
+          "habilitado": true
+        },
+        "pinza_sostenida": {
+          "accion": "arrastrar",
+          "habilitado": true
+        },
+        "liberacion_pinza": {
+          "accion": "soltar",
+          "habilitado": true
+        },
+        "dos_dedos": {
+          "accion": "desplazar",
+          "habilitado": true
+        },
+        "puno_cerrado": {
+          "accion": "pausar",
+          "habilitado": true
+        },
+        "palma_abierta": {
+          "accion": "navegacion",
+          "habilitado": true
+        },
+        "deslizamiento_izquierda": {
+          "accion": "atras",
+          "habilitado": false
+        },
+        "deslizamiento_derecha": {
+          "accion": "adelante",
+          "habilitado": false
+        },
+        "pulgar_arriba": {
+          "accion": "confirmar",
+          "habilitado": false
+        },
+        "pulgar_abajo": {
+          "accion": "cancelar",
+          "habilitado": false
+        },
+        "modo_precision": {
+          "accion": "precision",
+          "habilitado": true
+        },
+        "trazo_airswipe": {
+          "accion": "escritura_airswipe",
+          "habilitado": true
+        }
+      }
+    }
+  },
+  "custom": {
+    "desired": {
+      "format_version": 2,
+      "preferredHand": "RIGHT",
+      "mirrorCamera": true,
+      "cameraIndex": 0,
+      "movementArea": 65,
+      "confidenceThreshold": 65,
+      "sensitivity": 70,
+      "stability": 45,
+      "pinchTolerance": 55,
+      "deskRest": false,
+      "windowGestures": true,
+      "activeBox": [
+        0.1,
+        0.9,
+        0.2,
+        0.8
+      ],
+      "gaze": {
+        "enabled": true,
+        "yawTolerance": 22,
+        "pitchTolerance": 18,
+        "awayMs": 800,
+        "backMs": 300,
+        "calibration": {
+          "yaw": 3.5,
+          "pitch": -2
+        }
+      },
+      "pointer": false,
+      "pinch": false,
+      "drag": true,
+      "scroll": true,
+      "fistPause": true,
+      "palm": true,
+      "swipeLeft": true,
+      "swipeRight": false,
+      "thumbsUp": true,
+      "thumbsDown": false,
+      "precision": true,
+      "airswipe": true,
+      "gestos": {
+        "mano_abierta_sostenida": {
+          "accion": "activar_puntero",
+          "habilitado": false
+        },
+        "micro_pinza": {
+          "accion": "sin_accion",
+          "habilitado": true
+        },
+        "pinza_sostenida": {
+          "accion": "arrastrar",
+          "habilitado": true
+        },
+        "liberacion_pinza": {
+          "accion": "soltar",
+          "habilitado": true
+        },
+        "dos_dedos": {
+          "accion": "desplazar",
+          "habilitado": true
+        },
+        "puno_cerrado": {
+          "accion": "pausar",
+          "habilitado": true
+        },
+        "palma_abierta": {
+          "accion": "multimedia_play_pause",
+          "habilitado": true
+        },
+        "deslizamiento_izquierda": {
+          "accion": "atras",
+          "habilitado": true
+        },
+        "deslizamiento_derecha": {
+          "accion": "adelante",
+          "habilitado": false
+        },
+        "pulgar_arriba": {
+          "accion": "confirmar",
+          "habilitado": true
+        },
+        "pulgar_abajo": {
+          "accion": "sin_accion",
+          "habilitado": true
+        },
+        "modo_precision": {
+          "accion": "precision",
+          "habilitado": true
+        },
+        "trazo_airswipe": {
+          "accion": "escritura_airswipe",
+          "habilitado": true
+        }
+      },
+      "windowSwipe": false,
+      "tabGestures": true,
+      "rightClick": true,
+      "dictation": false,
+      "keyboardGesture": false,
+      "altTab": false,
+      "newTab": false,
+      "openHandScroll": true,
+      "pointerAcceleration": true
+    },
+    "applied": {
+      "format_version": 2,
+      "preferredHand": "RIGHT",
+      "mirrorCamera": true,
+      "sensitivity": 70,
+      "stability": 45,
+      "pinchTolerance": 55,
+      "movementArea": 65,
+      "confidenceThreshold": 65,
+      "deskRest": false,
+      "windowGestures": true,
+      "windowSwipe": false,
+      "tabGestures": true,
+      "rightClick": true,
+      "dictation": false,
+      "keyboardGesture": false,
+      "altTab": false,
+      "newTab": false,
+      "openHandScroll": true,
+      "pointerAcceleration": true,
+      "precisionMode": false,
+      "cameraIndex": 0,
+      "activeBox": [
+        0.1,
+        0.9,
+        0.2,
+        0.8
+      ],
+      "gaze": {
+        "enabled": true,
+        "yawTolerance": 22,
+        "pitchTolerance": 18,
+        "awayMs": 800,
+        "backMs": 300,
+        "calibration": {
+          "yaw": 3.5,
+          "pitch": -2.0
+        }
+      },
+      "pointer": false,
+      "pinch": false,
+      "drag": true,
+      "scroll": true,
+      "fistPause": true,
+      "swipeLeft": true,
+      "swipeRight": false,
+      "palm": true,
+      "thumbsUp": true,
+      "thumbsDown": false,
+      "precision": true,
+      "airswipe": true,
+      "gestos": {
+        "mano_abierta_sostenida": {
+          "accion": "activar_puntero",
+          "habilitado": false
+        },
+        "micro_pinza": {
+          "accion": "clic",
+          "habilitado": false
+        },
+        "pinza_sostenida": {
+          "accion": "arrastrar",
+          "habilitado": true
+        },
+        "liberacion_pinza": {
+          "accion": "soltar",
+          "habilitado": true
+        },
+        "dos_dedos": {
+          "accion": "desplazar",
+          "habilitado": true
+        },
+        "puno_cerrado": {
+          "accion": "pausar",
+          "habilitado": true
+        },
+        "palma_abierta": {
+          "accion": "multimedia_play_pause",
+          "habilitado": true
+        },
+        "deslizamiento_izquierda": {
+          "accion": "atras",
+          "habilitado": true
+        },
+        "deslizamiento_derecha": {
+          "accion": "adelante",
+          "habilitado": false
+        },
+        "pulgar_arriba": {
+          "accion": "confirmar",
+          "habilitado": true
+        },
+        "pulgar_abajo": {
+          "accion": "sin_accion",
+          "habilitado": false
+        },
+        "modo_precision": {
+          "accion": "precision",
+          "habilitado": true
+        },
+        "trazo_airswipe": {
+          "accion": "escritura_airswipe",
+          "habilitado": true
+        }
+      }
+    }
+  }
+}

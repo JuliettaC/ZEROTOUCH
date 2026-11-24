@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-mode-gestures"
+description = "Enables the set_mode_gestures command without any pre-configured scope."
+commands.allow = ["set_mode_gestures"]
+
+[[permission]]
+identifier = "deny-set-mode-gestures"
+description = "Denies the set_mode_gestures command without any pre-configured scope."
+commands.deny = ["set_mode_gestures"]
