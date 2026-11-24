@@ -126,14 +126,14 @@ en el teléfono ni sustitución por detección falsa.
 Desde la raíz del repositorio:
 
 ```powershell
-./android/test-core.ps1 -JavaHome 'C:\Users\cespe\.jdks\jbr-21.0.11'
+./android/test-core.ps1 -JavaHome "$env:USERPROFILE\.jdks\jbr-21.0.11"
 ./android/prepare-model.ps1
 
-$env:JAVA_HOME = 'C:\Users\cespe\.jdks\jbr-21.0.11'
-$env:ANDROID_HOME = 'C:\Users\cespe\AppData\Local\Android\Sdk'
+$env:JAVA_HOME = "$env:USERPROFILE\.jdks\jbr-21.0.11"
+$env:ANDROID_HOME = "$env:USERPROFILE\AppData\Local\Android\Sdk"
 $env:GRADLE_USER_HOME = 'C:\workspace\zt-android-gradle'
-$env:GRADLE_RO_DEP_CACHE = 'C:\Users\cespe\.gradle\caches'
-$gradle = 'C:\Users\cespe\.gradle\wrapper\dists\gradle-8.14.3-all\10utluxaxniiv4wxiphsi49nj\gradle-8.14.3\bin\gradle.bat'
+$env:GRADLE_RO_DEP_CACHE = "$env:USERPROFILE\.gradle\caches"
+$gradle = "$env:USERPROFILE\.gradle\wrapper\dists\gradle-8.14.3-all\10utluxaxniiv4wxiphsi49nj\gradle-8.14.3\bin\gradle.bat"
 & $gradle -p android --no-daemon --project-cache-dir C:/workspace/zt-android-project-cache -PztBuildRoot=C:/workspace/zt-android-build :app:assembleDebug
 ```
 

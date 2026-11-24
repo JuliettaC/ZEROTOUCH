@@ -9,7 +9,7 @@ Los ejemplos de abajo son respuestas **reales** del backend del repositorio con 
 ficticios (20-11-2026), obtenidas con curl y sin cabecera `Origin` (como el teléfono). Se reproducen con:
 
 ```powershell
-& "C:\Program Files\Git\bin\bash.exe" scripts/probar-contrato-movil.sh 'C:\Users\cespe\.jdks\jbr-21.0.11'
+& "C:\Program Files\Git\bin\bash.exe" scripts/probar-contrato-movil.sh "$env:USERPROFILE\.jdks\jbr-21.0.11"
 ```
 
 El script crea una base temporal fuera del repositorio (nunca lee `DATABASE_PATH` de `.env`), registra y
@@ -50,7 +50,7 @@ Set-Cookie: zt_session=<token>; Max-Age=28800; Path=/api/v1; Expires=Sat, 21 Nov
   "data": {
     "usuario": { "id": "1a118616-777d-4409-b30e-1736b27e123f", "nombre_usuario": "demo_movil",
                  "rol": "user", "estado": "activo", "correo_verificado": true },
-    "csrf_token": "ZgFIqS6moCNTyMg84zRI8Low-l8ShJIlI-9CAh0y_uk"
+    "csrf_token": "<csrf_token>"
   }
 }
 ```

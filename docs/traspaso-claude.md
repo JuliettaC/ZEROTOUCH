@@ -33,7 +33,7 @@ La UI debe serializar sincronización/edición/cambio de cuenta y persistir chec
 No hay proyecto Android versionado (consulta `git ls-files '*gradle*' '*AndroidManifest*'`).
 `desktop/gen` contiene esquemas Tauri; su configuración es de escritorio y no hay
 build Android reutilizable observado. Se preparará un módulo nativo aislado.
-Existe Android Studio con JBR 25 y SDK en `C:/Users/cespe/AppData/Local/Android/Sdk`.
+Existe Android Studio con JBR 25 y SDK en `%USERPROFILE%/AppData/Local/Android/Sdk`.
 Hay distribuciones Gradle en caché; falta comprobar versiones/dependencias utilizables.
 El PATH resuelve Java a Java 8 y javac a JDK 25: no confiar en PATH para compilar.
 No se inició cámara, motor ni se instaló APK.
@@ -67,7 +67,7 @@ UI nativa de permisos/observación/activación/pausa/parada y notificación de p
 No solicita contenido de pantalla ni permiso INTERNET. No reutiliza el motor Python
 de Windows ni cambia el frontend de escritorio.
 
-`android/test-core.ps1 -JavaHome C:/Users/cespe/.jdks/jbr-21.0.11`:
+`android/test-core.ps1 -JavaHome %USERPROFILE%/.jdks/jbr-21.0.11`:
 **95 aserciones JVM aprobadas**. Cubren observación, activación explícita, hold,
 repetición, pausa, pérdida de mano, latencia, watchdog, accesibilidad, confianza
 no válida, gaps y resultados de sesiones anteriores. No prueban cámara/modelo/Android.
@@ -77,7 +77,7 @@ SHA-256 `97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482`.
 Ignorado por Git; `prepare-model.ps1` permite reproducir la descarga verificando hash.
 No se activó cámara ni se ejecutó en teléfono.
 
-Existe JBR 21 en `C:/Users/cespe/.jdks/jbr-21.0.11`, Gradle 8.14.3 y SDK 36.
+Existe JBR 21 en `%USERPROFILE%/.jdks/jbr-21.0.11`, Gradle 8.14.3 y SDK 36.
 Primera resolución offline falló por ruta incorrecta de caché de solo lectura;
 corregida de `.../.gradle/caches/modules-2` a `.../.gradle/caches`.
 Compilación Android pendiente de resultado; no afirmar todavía que hay APK.

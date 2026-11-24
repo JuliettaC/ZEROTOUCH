@@ -56,3 +56,19 @@ dist-app
 # Videos de gestos grabados por la persona usuaria (muestran su cara): nunca al repositorio.
 VIDEOS GESTOS/
 VIDEOS GESTOS*/
+
+# Grabaciones e informes de pruebas con la cámara (pueden mostrar la cara o datos de uso): nunca al repositorio.
+*.mp4
+*.webm
+*.mov
+*.avi
+/informe-*.md
+# Binarios: el .exe y la APK se publican como Release de GitHub, no en Git.
+*.exe
+*.apk
+*.aab
+*.jks
+*.keystore
+# Salidas locales de herramientas (grafo de graphify, capturas de sesiones con Claude).
+graphify-out/
+Claude outputs/
