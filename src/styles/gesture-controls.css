@@ -1,0 +1,151 @@
+/* Lista de gestos */
+.gesture-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gesture-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 2px solid var(--soft);
+  border-radius: 16px;
+  padding-right: 14px;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+.gesture-item.live {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+}
+.gesture-item.disabled .gesture-text {
+  opacity: 0.75;
+}
+.gesture-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: 14px;
+  min-width: 0;
+}
+.gesture-open > .icon {
+  width: 12px;
+  height: 12px;
+  margin-left: 4px;
+}
+.gesture-item .emoji-icon {
+  width: 44px;
+  height: 44px;
+  background: var(--background);
+  font-size: 22px;
+}
+.gesture-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gesture-text strong {
+  font-size: 15px;
+  line-height: 20px;
+}
+.gesture-text small {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--active);
+}
+.gesture-badge {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--brown);
+  white-space: nowrap;
+}
+.gesture-badge.live {
+  background: var(--ok);
+  color: #fff;
+}
+.gesture-badge i {
+  font-style: normal;
+}
+
+/* Interruptor: pista con contraste ≥ 3:1 en ambos estados */
+.switch {
+  background: var(--control-off);
+}
+.switch.on {
+  background: var(--brown);
+}
+.switch:disabled {
+  opacity: 0.5;
+}
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  font-size: 15px;
+}
+.toggle-row + .toggle-row {
+  border-top: 1px solid var(--soft);
+}
+.toggle-row > span {
+  display: flex;
+  flex-direction: column;
+}
+.toggle-row small {
+  font-size: 13px;
+  color: var(--active);
+}
+
+/* Deslizadores */
+.range-control {
+  padding: 8px 0;
+}
+.range-control .section-line {
+  margin-bottom: 0 !important;
+  font-size: 15px;
+  font-weight: 500;
+}
+.range-control output {
+  font-weight: 600;
+  color: var(--brown);
+}
+.range-control input {
+  height: 8px;
+  margin: 14px 0 6px;
+  background: linear-gradient(
+    to right,
+    var(--brown) 0 var(--range-value),
+    var(--control-off) var(--range-value) 100%
+  );
+}
+.range-control input::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+}
+.range-control input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+}
+.range-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--active);
+}
+.range-control > small {
+  font-size: 13px;
+  color: var(--active);
+  margin-top: 2px;
+}

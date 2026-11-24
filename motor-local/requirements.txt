@@ -1,0 +1,4 @@
+mediapipe==0.10.13
+opencv-contrib-python==5.0.0.93
+pynput==1.8.2
+numpy==2.4.6

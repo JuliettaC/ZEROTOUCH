@@ -1,63 +1,408 @@
-import { useId } from 'react'
+import { pageUrl } from '../app/routes'
+import { useId, useEffect, useState } from 'react'
+import { describeHand, getEngineState, HAND_LABELS } from '../data/engineStatus'
+import { settingLabels } from '../data/gestures'
+import { APPLY, APPLY_LABELS } from '../engine/engineApply'
 
 const ASSETS = `${import.meta.env.BASE_URL}assets/`
-const iconFiles = { logo: 'home-imgImg2', eye: 'home-imgImg', eyeOff: 'home-imgImg1', wand: 'home-imgImg3', kitchen: 'home-imgImg4', moon: 'home-imgImg5', grid: 'home-imgImg6', desk: 'home-imgImg7', bolt: 'home-imgImg8', check: 'home-imgImg9', assistance: 'home-imgImg10', target: 'home-imgImg11', plus: 'home-imgImg12', phone: 'home-imgImg13', chevron: 'home-imgImg14', tip: 'home-imgImg15', back: 'calibration-imgImg3', next: 'calibration-imgImg4', hand: 'calibration-imgImg1', stable: 'calibration-imgImg2', laptop: 'mobile-calibration-imgLaptop', mobileBack: 'mobile-calibration-imgImg', fullscreen: 'mobile-calibration-imgImg1', mobileHand: 'mobile-calibration-imgImg2', fist: 'mobile-calibration-imgImg4', mobileNext: 'mobile-imgSvg1', close: 'gesture-imgImg', pinch: 'gesture-imgImg1', testHand: 'gesture-imgImg2', ergonomic: 'ergonomic-imgImg', rest: 'ergonomic-imgImg1', pause: 'playground-imgImg1' }
+const iconFiles = {
+  logo: 'home-imgImg2',
+  eye: 'home-imgImg',
+  eyeOff: 'home-imgImg1',
+  wand: 'home-imgImg3',
+  kitchen: 'home-imgImg4',
+  moon: 'home-imgImg5',
+  grid: 'home-imgImg6',
+  desk: 'home-imgImg7',
+  bolt: 'home-imgImg8',
+  check: 'home-imgImg9',
+  assistance: 'home-imgImg10',
+  target: 'home-imgImg11',
+  plus: 'home-imgImg12',
+  phone: 'home-imgImg13',
+  chevron: 'home-imgImg14',
+  tip: 'home-imgImg15',
+  back: 'calibration-imgImg3',
+  next: 'calibration-imgImg4',
+  hand: 'calibration-imgImg1',
+  stable: 'calibration-imgImg2',
+  laptop: 'mobile-calibration-imgLaptop',
+  mobileBack: 'mobile-calibration-imgImg',
+  fullscreen: 'mobile-calibration-imgImg1',
+  mobileHand: 'mobile-calibration-imgImg2',
+  fist: 'mobile-calibration-imgImg4',
+  mobileNext: 'mobile-imgSvg1',
+  close: 'gesture-imgImg',
+  pinch: 'gesture-imgImg1',
+  testHand: 'gesture-imgImg2',
+  ergonomic: 'ergonomic-imgImg',
+  rest: 'ergonomic-imgImg1',
+  pause: 'playground-imgImg1',
+}
 
 export function Icon({ name, className = '', muted = false }) {
-  if (name === 'logo' || name === 'mobile-imgSvg') return <img className={`icon ${className}`} src={`${ASSETS}zerotouch-dark.png`} width={name === 'logo' ? 25 : 20} height={name === 'logo' ? 20 : 16} style={{ objectFit: 'contain' }} alt="" aria-hidden="true" />
-  return <img className={`icon ${className}`} src={`${ASSETS}${iconFiles[name] || name}${muted ? '-muted' : ''}.svg`} alt="" aria-hidden="true" />
+  if (name === 'logo')
+    return (
+      <img
+        className={`icon ${className}`}
+        src={`${ASSETS}zerotouch-light.png`}
+        width={25}
+        height={20}
+        style={{ objectFit: 'contain' }}
+        alt=""
+        aria-hidden="true"
+      />
+    )
+  return (
+    <img
+      className={`icon ${className}`}
+      src={`${ASSETS}${iconFiles[name] || name}${muted ? '-muted' : ''}.svg`}
+      alt=""
+      aria-hidden="true"
+    />
+  )
 }
 
 export function NavLink({ to, navigate, children, className = '', ...props }) {
-  return <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}${to}`} className={className} {...props} onClick={event => {
-    if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); navigate(to) }
-  }}>{children}</a>
+  return (
+    <a
+      href={pageUrl(to)}
+      className={className}
+      {...props}
+      onClick={(event) => {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          !event.altKey &&
+          event.button === 0
+        ) {
+          event.preventDefault()
+          navigate(to)
+        }
+      }}
+    >
+      {children}
+    </a>
+  )
 }
 
-export function Header({ path, navigate, hasContexts, activeContext }) {
-  const calibration = path === '/calibracion', keyboard = path === '/teclado', playground = path === '/prueba'
-  const title = calibration ? 'Atajos y Calibración' : keyboard ? 'Air-Swipe' : playground ? 'Entorno de prueba' : 'ZEROTOUCH'
-  return <header className={`app-header ${path === '/' ? 'dashboard-header' : ''}`}>
-    <NavLink to={playground ? '/calibracion' : '/'} navigate={navigate} className="brand" aria-label={path === '/' ? 'ZeroTouch, panel principal' : 'Volver'}>
-      <span className="brand-logo desktop-only"><Icon name="logo" /></span><span className={`brand-logo mobile-only ${path !== '/' ? 'round' : ''}`}><Icon name={path === '/' ? 'mobile-imgSvg' : 'mobileBack'} /></span>
-      <span><strong>{title}</strong><small className="desktop-only">{calibration || keyboard || playground ? activeContext : hasContexts ? 'AIRTOUCH CONTROL' : 'PANEL PRINCIPAL'}</small><small className="mobile-only">{path === '/' ? 'PANEL DE CONTROL' : activeContext}</small></span>
-    </NavLink>
-    <div className="header-status desktop-only"><span className="status-pill"><i />{keyboard ? 'Ejemplo: 32 PPM · Precisión 96%' : 'Cámara simulada · 60 FPS de ejemplo'}</span>{!keyboard && <span className="profile"><img src={`${ASSETS}home-imgLucia.png`} alt="" />Lucía S. - Oficina & Cocina</span>}</div>
-    <div className="header-status mobile-only"><span className="android-pill"><i />Android Hub</span><img className="avatar" src={`${ASSETS}mobile-imgContainer.png`} alt="Perfil de Lucía" /></div>
-  </header>
+export function StatusBadge({ state, className = '' }) {
+  return (
+    <span className={`status-badge tone-${state.tone} ${className}`}>
+      <i aria-hidden="true" />
+      {state.label}
+    </span>
+  )
 }
 
-export function DeviceStatus({ mobile = false }) {
-  return <section className="device-status panel"><div className="section-line"><span>Dispositivo de ejemplo</span><strong className="connected">Simulado</strong></div><div className="device"><span className="device-icon"><Icon name={mobile ? 'laptop' : 'phone'} /></span><span><strong>{mobile ? 'PC Principal' : 'Android Hub'}</strong><small>{mobile ? 'Receptor propuesto / Wi-Fi Local' : 'Proximidad / Giroscopio'}</small></span></div></section>
+/** Panel principal de la cámara: estado + acciones, siempre en el mismo orden. */
+export function EngineCard({
+  engineStatus,
+  engineBusy,
+  onStartEngine,
+  onStopEngine,
+  onToggleControlMode,
+  onTogglePause,
+  hud,
+  compact = false,
+  headingLevel = 2,
+}) {
+  const state = getEngineState(engineStatus)
+  const hand = describeHand(engineStatus)
+  const Heading = `h${headingLevel}`
+  const headingId = useId()
+  const setMode = (mode) => {
+    if ((engineStatus?.mode === 'CONTROL') !== (mode === 'CONTROL')) onToggleControlMode()
+  }
+  return (
+    <section
+      className={`engine-card panel tone-${state.tone} ${compact ? 'compact' : ''}`}
+      aria-labelledby={headingId}
+      aria-busy={engineBusy}
+    >
+      <div className="engine-summary">
+        <span className="engine-icon" aria-hidden="true">
+          {state.cameraOpen ? '📷' : '⏻'}
+        </span>
+        <div>
+          <Heading id={headingId} className="engine-title">
+            {state.label}
+          </Heading>
+          <p className="engine-hint">{state.hint}</p>
+          {hand && <p className={`engine-hand ${state.handDetected ? 'ok' : ''}`}>{hand}</p>}
+        </div>
+      </div>
+      <div className="engine-actions">
+        {!state.running ? (
+          <button
+            type="button"
+            className="button primary big"
+            disabled={engineBusy}
+            onClick={onStartEngine}
+          >
+            {engineBusy ? 'Activando…' : 'Activar cámara'}
+          </button>
+        ) : (
+          <>
+            {state.cameraOpen && (
+              <div className="mode-switch" role="group" aria-label="Modo">
+                <button
+                  type="button"
+                  aria-pressed={!state.control}
+                  disabled={engineBusy}
+                  onClick={() => setMode('OBSERVATION')}
+                >
+                  Observar
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={state.control}
+                  disabled={engineBusy}
+                  onClick={() => setMode('CONTROL')}
+                >
+                  Controlar
+                </button>
+              </div>
+            )}
+            <div className="engine-secondary">
+              {state.cameraOpen && onTogglePause && (
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={engineBusy}
+                  onClick={onTogglePause}
+                >
+                  {engineStatus.paused ? 'Reanudar' : 'Pausar'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="button danger-text"
+                disabled={engineBusy}
+                onClick={onStopEngine}
+              >
+                Apagar cámara
+              </button>
+              {hud && (
+                <button
+                  type="button"
+                  className="button secondary hud-toggle"
+                  aria-pressed={hud.enabled}
+                  onClick={hud.toggle}
+                >
+                  {hud.enabled ? 'Ocultar indicador flotante' : 'Mostrar indicador flotante'}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      {state.running && (
+        <p className="kbd-hint">
+          <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Z</kbd> detiene el control al instante
+        </p>
+      )}
+    </section>
+  )
 }
 
-export function Switch({ checked, onChange, label }) {
-  return <button className={`switch ${checked ? 'on' : ''}`} type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}><span /></button>
+export function HandSelectionOptions({ settings, onChange }) {
+  const name = useId()
+  const camId = useId()
+  const currentHand = settings.preferredHand || 'RIGHT'
+  const currentCam = Number.isFinite(settings.cameraIndex) ? settings.cameraIndex : 0
+  return (
+    <div className="hand-selection-group">
+      <fieldset className="radio-pills">
+        <legend>Mano que usarás</legend>
+        <div>
+          {Object.entries(HAND_LABELS).map(([code, label]) => (
+            <label key={code} className={currentHand === code ? 'checked' : ''}>
+              <input
+                type="radio"
+                name={name}
+                value={code}
+                checked={currentHand === code}
+                onChange={() => onChange({ ...settings, preferredHand: code })}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div className="field-row">
+        <label htmlFor={camId}>Cámara</label>
+        <select
+          id={camId}
+          className="compact-select"
+          value={currentCam}
+          onChange={(e) => onChange({ ...settings, cameraIndex: Number(e.target.value) })}
+        >
+          <option value={0}>Principal</option>
+          <option value={1}>Segunda</option>
+          <option value={2}>Tercera (externa)</option>
+        </select>
+      </div>
+      <ToggleRow
+        label="Vista espejo"
+        checked={settings.mirrorCamera !== false}
+        onChange={(mirrorCamera) => onChange({ ...settings, mirrorCamera })}
+      />
+      <ToggleRow
+        label="Cursor con aceleración (lento = preciso)"
+        checked={settings.pointerAcceleration !== false}
+        onChange={(pointerAcceleration) => onChange({ ...settings, pointerAcceleration })}
+      />
+    </div>
+  )
 }
 
-export function RangeControl({ label, value, onChange, description }) {
+export function Switch({ checked, onChange, label, labelledBy, describedBy, disabled }) {
+  return (
+    <button
+      className={`switch ${checked ? 'on' : ''}`}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={labelledBy ? undefined : label}
+      aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    >
+      <span />
+    </button>
+  )
+}
+
+export function ToggleRow({ label, help, checked, onChange }) {
   const id = useId()
-  return <div className="range-control"><div className="section-line"><label htmlFor={id}>{label}</label><output htmlFor={id}>{value}%</output></div><input id={id} type="range" min="0" max="100" value={value} onChange={event => onChange(Number(event.target.value))} style={{ '--range-value': `${value}%` }} />{description && <small>{description}</small>}</div>
+  return (
+    <div className="toggle-row">
+      <span>
+        <span id={`${id}-l`}>{label}</span>
+        {help && <small id={`${id}-h`}>{help}</small>}
+      </span>
+      <Switch
+        checked={checked}
+        onChange={onChange}
+        labelledBy={`${id}-l`}
+        describedBy={help ? `${id}-h` : undefined}
+      />
+    </div>
+  )
 }
 
-export function ErgonomicControls({ settings, onChange, detailed = false }) {
-  return <div className="ergonomic-controls"><RangeControl label={detailed ? 'Sensibilidad del puntero' : 'Sensibilidad Puntero'} value={settings.sensitivity} onChange={sensitivity => onChange({ ...settings, sensitivity })} description={detailed && 'Ajuste del contexto activo. El movimiento del puntero aún no se simula.'} /><RangeControl label="Filtro Antitemblor" value={settings.stability} onChange={stability => onChange({ ...settings, stability })} description={detailed && 'Valor de demostración; no se procesa movimiento real.'} />{detailed && <div className="desk-rest"><span className="device-icon"><Icon name="rest" /></span><span><strong>Modo Desk-Rest</strong><small>Antebrazo apoyado en mesa</small></span><Switch checked={settings.deskRest} onChange={deskRest => onChange({ ...settings, deskRest })} label="Modo Desk-Rest" /></div>}<div className="context-gesture-settings"><span>Clic con micro-pinza</span><Switch checked={settings.pinch} onChange={pinch => onChange({ ...settings, pinch })} label="Clic con micro-pinza" /><span>Desplazamiento con dos dedos</span><Switch checked={settings.scroll} onChange={scroll => onChange({ ...settings, scroll })} label="Desplazamiento con dos dedos" /><small>Preferencias del contexto; reconocimiento gestual pendiente.</small></div></div>
+export function RangeControl({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  description,
+  minLabel,
+  maxLabel,
+}) {
+  const id = useId()
+  const pct = Math.round(((value - min) / Math.max(1, max - min)) * 100)
+  return (
+    <div className="range-control">
+      <div className="section-line">
+        <label htmlFor={id}>{label}</label>
+        <output htmlFor={id}>{value}%</output>
+      </div>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        aria-describedby={description ? `${id}-d` : undefined}
+        aria-valuetext={`${value}%`}
+        onChange={(event) => onChange(Number(event.target.value))}
+        style={{ '--range-value': `${pct}%` }}
+      />
+      {(minLabel || maxLabel) && (
+        <div className="range-ends" aria-hidden="true">
+          <span>{minLabel}</span>
+          <span>{maxLabel}</span>
+        </div>
+      )}
+      {description && <small id={`${id}-d`}>{description}</small>}
+    </div>
+  )
 }
 
-function toggleFullscreen(event) {
-  if (document.fullscreenElement) document.exitFullscreen?.()
-  else event.currentTarget.parentElement.requestFullscreen?.().catch(() => {})
+/** Control deslizante a partir de la clave del parámetro (etiquetas sencillas centralizadas). */
+export function SettingSlider({ name, settings, onChange, fallback = 50 }) {
+  const meta = settingLabels[name]
+  const [min, max] = meta.range || [0, 100]
+  return (
+    <RangeControl
+      label={meta.label}
+      description={meta.help}
+      minLabel={meta.min}
+      maxLabel={meta.max}
+      min={min}
+      max={max}
+      value={settings[name] ?? fallback}
+      onChange={(value) => onChange({ ...settings, [name]: value })}
+    />
+  )
 }
 
-export function SensorPreview({ variant }) {
-  return <div className={`sensor sensor-${variant}`} aria-label="Vista de sensor simulada con imagen de referencia">
-    {variant === 'desktop' && <><img className="sensor-photo" src={`${ASSETS}calibration-imgFirstPersonViewOfAHandReachingOutInFrontOfAModernWorkspaceDeskSoftLighting4KDigi.png`} alt="Mano frente a un escritorio" /><div className="tracking-overlay"><img src={`${ASSETS}tracking-overlay.svg`} alt="Puntos de seguimiento de mano simulados" /></div><span className="live-label">● DEMO</span><div className="sensor-bottom"><span><Icon name="hand" />MANO DETECTADA: IZQUIERDA</span><span><Icon name="stable" />PUNTERO: ESTABLE</span></div></>}
-    {variant === 'home' && <><div className="home-sensor-images"><div className="kitchen-image"><img src={`${ASSETS}mobile-imgWarmTonedKitchenWorkspacePrepCounterWoodCuttingBoardSoftDaylightCulinarySceneOverhe.png`} alt="Cocina" /></div><img className="home-hand" src={`${ASSETS}mobile-imgImage6.png`} alt="Palma abierta frente a la cámara" /></div><div className="detected"><Icon name="mobile-imgImg2" />Ejemplo: Mano abierta</div></>}
-    {variant === 'calibration' && <><img className="mobile-calibration-photo" src={`${ASSETS}mobile-calibration-imgImage7.png`} alt="Mano abierta para calibración" /><div className="mobile-tracking"><Icon name="mobile-calibration-imgSvg" /></div><span className="distance">Distancia: 38 px</span><span className="live-label">● DEMO</span><button className="fullscreen" aria-label="Ampliar vista del sensor" onClick={toggleFullscreen}><Icon name="fullscreen" /></button></>}
-    {variant === 'playground' && <><img className="recipe-photo" src={`${ASSETS}playground-imgPovOfHandsMixingCookieDoughInAGlassBowlKitchenBackgroundSoftFocusCinematicLighting.png`} alt="Manos preparando masa de galletas" /><span className="live-label">● DEMO · 60 FPS · 1.2 ms</span><button className="fullscreen" aria-label="Ampliar vista de cámara" onClick={toggleFullscreen}><Icon name="fullscreen" /></button></>}
-  </div>
+export function AdvancedSettings({ settings, onChange }) {
+  return (
+    <div className="advanced-settings">
+      <SettingSlider name="sensitivity" settings={settings} onChange={onChange} fallback={65} />
+      <SettingSlider name="stability" settings={settings} onChange={onChange} fallback={40} />
+      <SettingSlider name="movementArea" settings={settings} onChange={onChange} fallback={65} />
+      <SettingSlider name="pinchTolerance" settings={settings} onChange={onChange} />
+      <SettingSlider
+        name="confidenceThreshold"
+        settings={settings}
+        onChange={onChange}
+        fallback={65}
+      />
+      <ToggleRow
+        label="Brazo apoyado (Desk-Rest)"
+        help="Recorrido corto con el antebrazo en la mesa."
+        checked={Boolean(settings.deskRest)}
+        onChange={(deskRest) => onChange({ ...settings, deskRest })}
+      />
+      <ToggleRow
+        label="Mostrar puntos de la mano"
+        checked={settings.diagnosticOverlay !== false}
+        onChange={(diagnosticOverlay) => onChange({ ...settings, diagnosticOverlay })}
+      />
+    </div>
+  )
 }
 
-export function MobileAction({ to, navigate, children }) {
-  return <NavLink to={to} navigate={navigate} className="mobile-action">{children}<span><Icon name="mobileNext" /></span></NavLink>
+/** Estado de la configuración: guardada en este equipo y, si el motor está activo, aplicada o rechazada. */
+export function ConfigStatus({ apply, onRetry, brief = false }) {
+  const [expired, setExpired] = useState(false)
+  useEffect(() => {
+    if (!brief || apply.state !== APPLY.APPLIED) return
+    const timer = setTimeout(() => setExpired(true), 3000)
+    return () => clearTimeout(timer)
+  }, [brief, apply.state])
+  if (brief && (apply.state === APPLY.NO_ENGINE || (apply.state === APPLY.APPLIED && expired)))
+    return null
+  const rejected = apply.state === APPLY.REJECTED
+  return (
+    <p className={`config-status tone-${apply.state}`} role={rejected ? 'alert' : 'status'}>
+      <i aria-hidden="true" />
+      <span>
+        {APPLY_LABELS[apply.state]}
+        {rejected && apply.message ? ` ${apply.message}` : ''}
+      </span>
+      {rejected && (
+        <button type="button" className="tiny-button ghost" onClick={onRetry}>
+          Reintentar
+        </button>
+      )}
+    </p>
+  )
 }

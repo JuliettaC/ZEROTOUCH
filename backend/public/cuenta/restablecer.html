@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Restablecer contraseña · ZeroTouch</title>
+  <link rel="stylesheet" href="/cuenta/cuenta.css">
+  <script src="/cuenta/cuenta.js" defer></script>
+</head>
+<body data-pagina="restablecer">
+  <main class="tarjeta" aria-labelledby="titulo">
+    <p class="marca">ZEROTOUCH</p>
+    <h1 id="titulo" tabindex="-1">Restablecer contraseña</h1>
+
+    <form id="nueva" class="formulario" data-vista="nueva" hidden novalidate>
+      <p>Elige una contraseña nueva. Al guardarla se cerrarán todas tus sesiones.</p>
+      <label for="contrasena">Contraseña nueva</label>
+      <span class="campo-clave">
+        <input id="contrasena" name="contrasena" type="password" autocomplete="new-password" minlength="8" maxlength="128" required aria-describedby="pista">
+        <button type="button" class="boton mini" data-mostrar="contrasena" aria-pressed="false">Mostrar</button>
+      </span>
+      <small id="pista" class="pista">Mínimo 8 caracteres. Evita contraseñas comunes como 12345678.</small>
+      <label for="confirmacion">Repite la contraseña</label>
+      <input id="confirmacion" name="confirmacion" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+      <button type="submit" class="boton">Guardar contraseña</button>
+    </form>
+
+    <section data-vista="exito" hidden>
+      <p class="estado ok" role="status">Contraseña actualizada.</p>
+      <p>Se cerraron todas las sesiones. Vuelve a ZeroTouch e inicia sesión con tu contraseña nueva.</p>
+    </section>
+
+    <section data-vista="expirado" hidden>
+      <p class="estado error" role="alert">El enlace venció (dura 30 minutos).</p>
+    </section>
+
+    <section data-vista="invalido" hidden>
+      <p class="estado error" role="alert">El enlace no es válido o ya fue utilizado.</p>
+    </section>
+
+    <form id="solicitar" class="formulario" data-vista="solicitar" hidden novalidate>
+      <p>Escribe el correo de tu cuenta. Si existe, te enviaremos un enlace para elegir una contraseña nueva.</p>
+      <label for="correo">Correo de la cuenta</label>
+      <input id="correo" name="correo" type="email" autocomplete="email" maxlength="254" required>
+      <button type="submit" class="boton secundario">Enviar enlace de recuperación</button>
+    </form>
+
+    <p id="mensaje" class="estado" role="status" aria-live="polite" hidden></p>
+  </main>
+</body>
+</html>

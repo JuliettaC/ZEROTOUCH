@@ -1,0 +1,461 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod bridge;
+mod engine;
+
+use bridge::{Bridge, BridgeError, ContextInput, Credentials, EmailRequest, GesturesInput, ProfileInput, Registration};
+use engine::{resolve_motor_dir, EngineStatus, GestureEngineManager};
+use serde_json::{json, Value};
+use std::sync::{Arc, Mutex};
+use tauri::Manager;
+
+type Shared = Arc<Mutex<Result<Bridge, BridgeError>>>;
+type SharedEngine = Arc<Mutex<GestureEngineManager>>;
+
+const MAIN_WINDOW: &str = "main";
+/// Teclado Air-Swipe: ventana no activable y siempre visible, para escribir en otra aplicación.
+const AIRSWIPE_WINDOW: &str = "airswipe";
+/// Indicador flotante (HUD): estado del motor y última acción. No activable, siempre visible y
+/// transparente a los clics (no tapa lo que hay debajo). Solo lee `engine_status`.
+const HUD_WINDOW: &str = "hud";
+const HUD_WIDTH: f64 = 400.0;
+const HUD_HEIGHT: f64 = 60.0;
+
+fn err(code: &str, message: &str) -> BridgeError {
+    BridgeError {
+        code: code.into(),
+        message: message.into(),
+    }
+}
+
+/// Solo las ventanas de la aplicación (origen https://tauri.localhost) pueden invocar comandos.
+fn verify_origin(window: &tauri::WebviewWindow) -> Result<(), BridgeError> {
+    let label_ok = window.label() == MAIN_WINDOW || window.label() == AIRSWIPE_WINDOW || window.label() == HUD_WINDOW;
+    let origin_ok = window
+        .url()
+        .ok()
+        .map(|u| u.origin().ascii_serialization())
+        == Some("https://tauri.localhost".into());
+    if !label_ok || !origin_ok {
+        return Err(err("FORBIDDEN", "Origen no autorizado."));
+    }
+    Ok(())
+}
+
+macro_rules! endpoint {
+    ($name:ident $(, $arg:ident : $ty:ty)*) => {
+        #[tauri::command]
+        async fn $name(window: tauri::WebviewWindow, state: tauri::State<'_, Shared>, $($arg:$ty),*) -> Result<Value,BridgeError> {
+            verify_origin(&window)?;
+            let shared=state.inner().clone();
+            tauri::async_runtime::spawn_blocking(move|| {
+                let mut state=shared.lock().map_err(|_|BridgeError{code:"SERVICE_OFFLINE".into(),message:"Reinicia ZEROTOUCH.".into()})?;
+                match state.as_mut() {Ok(bridge)=>bridge.$name($($arg),*),Err(e)=>Err(e.clone())}
+            }).await.map_err(|_|BridgeError{code:"SERVICE_OFFLINE".into(),message:"El servicio local se interrumpió.".into()})?
+        }
+    }
+}
+endpoint!(register, c:Registration);
+endpoint!(resend_verification, e:EmailRequest);
+endpoint!(forgot_password, e:EmailRequest);
+endpoint!(link_email, c:Registration);
+endpoint!(login, c:Credentials);
+endpoint!(account);
+endpoint!(logout);
+endpoint!(backend_info);
+endpoint!(profiles, offset:u32);
+endpoint!(create_profile, p:ProfileInput, idempotency_key:Option<String>);
+endpoint!(update_profile, id:String, p:ProfileInput);
+endpoint!(delete_profile, id:String, if_match:String);
+endpoint!(contexts, profile_id:String, offset:u32);
+endpoint!(create_context, profile_id:String, c:ContextInput, idempotency_key:Option<String>);
+endpoint!(update_context, id:String, c:ContextInput);
+endpoint!(delete_context, id:String, if_match:String);
+endpoint!(mode_gestures, id:String);
+endpoint!(set_mode_gestures, id:String, g:GesturesInput);
+endpoint!(capabilities);
+
+async fn with_engine<T: Send + 'static>(
+    engine: SharedEngine,
+    operation: impl FnOnce(&mut GestureEngineManager) -> Result<T, BridgeError> + Send + 'static,
+) -> Result<T, BridgeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut mgr = engine
+            .lock()
+            .map_err(|_| err("ENGINE_LOCK", "No se pudo acceder al motor gestual."))?;
+        operation(&mut mgr)
+    })
+    .await
+    .map_err(|_| err("ENGINE_ERROR", "Fallo al comunicarse con el motor gestual."))?
+}
+
+#[tauri::command]
+async fn engine_start(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, config: Option<Value>) -> Result<EngineStatus, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), move |mgr| mgr.start(config)).await
+}
+
+#[tauri::command]
+async fn engine_stop(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>) -> Result<EngineStatus, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), |mgr| Ok(mgr.stop())).await
+}
+
+#[tauri::command]
+async fn engine_status(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>) -> Result<EngineStatus, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), |mgr| Ok(mgr.get_status())).await
+}
+
+#[tauri::command]
+async fn engine_preview(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    if window.label() != MAIN_WINDOW {
+        return Err(err("FORBIDDEN", "Solo la ventana principal puede ver la cámara."));
+    }
+    with_engine(engine.inner().clone(), |mgr| mgr.preview_frame()).await
+}
+
+#[tauri::command]
+async fn engine_update_config(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, config: Value) -> Result<EngineStatus, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), move |mgr| mgr.update_config(config)).await
+}
+
+#[tauri::command]
+async fn engine_set_mode(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, mode: String) -> Result<EngineStatus, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), move |mgr| mgr.set_mode(mode)).await
+}
+
+#[tauri::command]
+async fn engine_set_paused(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, paused: bool) -> Result<EngineStatus, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), move |mgr| mgr.set_paused(paused)).await
+}
+
+#[tauri::command]
+async fn engine_load_export(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, document: Value, runtime: Option<Value>) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), move |mgr| mgr.load_export(document, runtime)).await
+}
+
+#[tauri::command]
+async fn engine_airswipe(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, active: bool) -> Result<EngineStatus, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), move |mgr| mgr.set_airswipe(active)).await
+}
+
+#[tauri::command]
+async fn engine_type_text(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, text: String) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), move |mgr| mgr.type_text(text)).await
+}
+
+#[tauri::command]
+async fn engine_press_key(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, key: String) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), move |mgr| mgr.press_key(key)).await
+}
+
+#[tauri::command]
+async fn engine_gaze_calibrate(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    with_engine(engine.inner().clone(), |mgr| mgr.gaze_calibrate()).await
+}
+
+/// Tamaño del teclado: «compact» (por defecto, deja ver la aplicación) o «large» (teclas más grandes para trazar).
+fn airswipe_size(work_w: f64, work_h: f64, scale: f64, large: bool) -> (f64, f64) {
+    if large {
+        // ~62 % del ancho y como mucho ~46 % del alto (23-11-2026): lo usa el teclado por permanencia,
+        // que necesita teclas grandes (en 1920×1080 al 100 %, 1180×470: teclas de ~115×70 px).
+        let width = (work_w * 0.62).clamp(600.0 * scale, 1180.0 * scale).min(work_w);
+        let height = (width * 0.40).clamp(280.0 * scale, 470.0 * scale).min(work_h * 0.46);
+        (width, height)
+    } else {
+        // ~40 % del ancho y como mucho ~26 % del alto: en 1920×1080, unos 768×256 px.
+        let width = (work_w * 0.40).clamp(460.0 * scale, 760.0 * scale).min(work_w);
+        let height = (width / 3.0).clamp(170.0 * scale, 250.0 * scale).min(work_h * 0.26);
+        (width, height)
+    }
+}
+
+#[cfg(test)]
+mod airswipe_size_tests {
+    use super::airswipe_size;
+
+    #[test]
+    fn compacto_por_defecto_deja_ver_la_pantalla() {
+        // 1920×1080 al 100 %: el compacto ocupa como mucho el 40 % del ancho y el 26 % del alto.
+        let (w, h) = airswipe_size(1920.0, 1040.0, 1.0, false);
+        assert!(w <= 1920.0 * 0.40 + 0.5 && h <= 1040.0 * 0.26 + 0.5, "{w}×{h}");
+        let (lw, lh) = airswipe_size(1920.0, 1040.0, 1.0, true);
+        assert!(w < lw && h < lh, "el grande es mayor: {w}×{h} frente a {lw}×{lh}");
+        assert_eq!((lw.round(), lh.round()), (1180.0, 470.0), "el grande da teclas de permanencia de ~115×70 px");
+    }
+
+    #[test]
+    fn respeta_la_escala_y_las_pantallas_pequenas() {
+        // 1920×1080 físicos al 150 % (notebook): mínimo 460 lógicos de ancho.
+        let (w, h) = airswipe_size(1920.0, 1032.0, 1.5, false);
+        assert!(w >= 460.0 * 1.5 - 0.5 && h <= 1032.0 * 0.26 + 0.5, "{w}×{h}");
+        // Pantalla muy pequeña: nunca más ancho que el área de trabajo ni más alto que su 26 %.
+        let (w, h) = airswipe_size(800.0, 560.0, 1.0, false);
+        assert!(w <= 800.0 && h <= 560.0 * 0.26 + 0.5, "{w}×{h}");
+    }
+}
+
+/// Geometría del teclado Air-Swipe: centrado en la parte inferior (o superior, con `at_top`) del área
+/// de trabajo del monitor principal, con el tamaño de `airswipe_size`. Se devuelve en píxeles físicos junto con el
+/// rectángulo del escritorio virtual, que es el espacio en el que el motor expresa el cursor normalizado.
+fn airswipe_geometry(app: &tauri::AppHandle, at_top: bool, large: bool) -> Result<Value, BridgeError> {
+    let monitor = app
+        .primary_monitor()
+        .map_err(|_| err("MONITOR", "No se pudo consultar el monitor principal."))?
+        .ok_or_else(|| err("MONITOR", "No hay monitor principal."))?;
+    let scale = monitor.scale_factor();
+    let work = monitor.work_area();
+    let work_w = work.size.width as f64;
+    let work_h = work.size.height as f64;
+    let (width, height) = airswipe_size(work_w, work_h, scale, large);
+    let x = work.position.x as f64 + (work_w - width) / 2.0;
+    let y = if at_top {
+        work.position.y as f64 + 12.0 * scale
+    } else {
+        work.position.y as f64 + work_h - height - 12.0 * scale
+    };
+    let mut left = i32::MAX;
+    let mut top = i32::MAX;
+    let mut right = i32::MIN;
+    let mut bottom = i32::MIN;
+    for m in app.available_monitors().unwrap_or_default() {
+        left = left.min(m.position().x);
+        top = top.min(m.position().y);
+        right = right.max(m.position().x + m.size().width as i32);
+        bottom = bottom.max(m.position().y + m.size().height as i32);
+    }
+    if left == i32::MAX {
+        left = monitor.position().x;
+        top = monitor.position().y;
+        right = left + monitor.size().width as i32;
+        bottom = top + monitor.size().height as i32;
+    }
+    Ok(json!({
+        "x": x.round(), "y": y.round(), "width": width.round(), "height": height.round(), "scale": scale,
+        "size": if large { "large" } else { "compact" },
+        "work": { "width": work_w, "height": work_h },
+        "screen": { "left": left, "top": top, "width": right - left, "height": bottom - top }
+    }))
+}
+
+#[tauri::command]
+async fn airswipe_window_open(window: tauri::WebviewWindow, app: tauri::AppHandle, edge: Option<String>, size: Option<String>) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    // `edge`: "top" o "bottom" mueve el teclado ya abierto (botón Subir/Bajar de la overlay).
+    // `size`: "large" o, cualquier otro valor o ausente, "compact" (botón Agrandar/Achicar de la overlay).
+    let at_top = edge.as_deref() == Some("top");
+    let large = size.as_deref() == Some("large");
+    let geometry = airswipe_geometry(&app, at_top, large)?;
+    let scale = geometry["scale"].as_f64().unwrap_or(1.0);
+    if let Some(existing) = app.get_webview_window(AIRSWIPE_WINDOW) {
+        // Primero el tamaño y luego la posición: anclada abajo, la esquina depende del alto nuevo.
+        let _ = existing.set_size(tauri::PhysicalSize::new(geometry["width"].as_f64().unwrap_or(760.0) as u32, geometry["height"].as_f64().unwrap_or(250.0) as u32));
+        let _ = existing.set_position(tauri::PhysicalPosition::new(geometry["x"].as_f64().unwrap_or(0.0) as i32, geometry["y"].as_f64().unwrap_or(0.0) as i32));
+        if edge.is_none() {
+            let _ = existing.show();
+        }
+        return Ok(geometry);
+    }
+    tauri::WebviewWindowBuilder::new(&app, AIRSWIPE_WINDOW, tauri::WebviewUrl::App("index.html#airswipe".into()))
+        .title("ZeroTouch · Air-Swipe")
+        // Mismo origen que la ventana principal (https://tauri.localhost): comparte localStorage (latido del
+        // teclado) y supera `verify_origin`. Sin esto la overlay cargaba en http:// y todos sus comandos fallaban.
+        .use_https_scheme(true)
+        .decorations(false)
+        // Ventana transparente: el fondo semitransparente de overlay.css deja ver la aplicación de debajo.
+        .transparent(true)
+        .always_on_top(true)
+        // Ni activable ni con el foco al crearse: el texto debe seguir yendo a la aplicación que la persona usa.
+        .focused(false)
+        .focusable(false)
+        .skip_taskbar(true)
+        .resizable(false)
+        .inner_size(geometry["width"].as_f64().unwrap_or(900.0) / scale, geometry["height"].as_f64().unwrap_or(320.0) / scale)
+        .position(geometry["x"].as_f64().unwrap_or(0.0) / scale, geometry["y"].as_f64().unwrap_or(0.0) / scale)
+        .build()
+        .map_err(|_| err("AIRSWIPE_WINDOW", "No se pudo abrir el teclado Air-Swipe."))?;
+    Ok(geometry)
+}
+
+#[tauri::command]
+async fn airswipe_window_close(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    if let Some(existing) = app.get_webview_window(AIRSWIPE_WINDOW) {
+        existing
+            .close()
+            .map_err(|_| err("AIRSWIPE_WINDOW", "No se pudo cerrar el teclado Air-Swipe."))?;
+    }
+    Ok(json!({ "closed": true }))
+}
+
+#[tauri::command]
+async fn airswipe_window_rect(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    let mut geometry = airswipe_geometry(&app, false, false)?;
+    if let Some(existing) = app.get_webview_window(AIRSWIPE_WINDOW) {
+        if let (Ok(pos), Ok(size)) = (existing.inner_position(), existing.inner_size()) {
+            geometry["x"] = json!(pos.x);
+            geometry["y"] = json!(pos.y);
+            geometry["width"] = json!(size.width);
+            geometry["height"] = json!(size.height);
+        }
+    }
+    Ok(geometry)
+}
+
+/// Esquina superior derecha del área de trabajo del monitor principal, en píxeles lógicos.
+fn hud_position(app: &tauri::AppHandle) -> Result<(f64, f64), BridgeError> {
+    let monitor = app
+        .primary_monitor()
+        .map_err(|_| err("MONITOR", "No se pudo consultar el monitor principal."))?
+        .ok_or_else(|| err("MONITOR", "No hay monitor principal."))?;
+    let scale = monitor.scale_factor();
+    let work = monitor.work_area();
+    let x = (work.position.x as f64 + work.size.width as f64) / scale - HUD_WIDTH - 16.0;
+    let y = work.position.y as f64 / scale + 16.0;
+    Ok((x, y))
+}
+
+#[tauri::command]
+async fn hud_window_open(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    if window.label() != MAIN_WINDOW {
+        return Err(err("FORBIDDEN", "Solo la ventana principal controla el indicador."));
+    }
+    if let Some(existing) = app.get_webview_window(HUD_WINDOW) {
+        let _ = existing.show();
+        return Ok(json!({ "open": true }));
+    }
+    let (x, y) = hud_position(&app)?;
+    let hud = tauri::WebviewWindowBuilder::new(&app, HUD_WINDOW, tauri::WebviewUrl::App("index.html#hud".into()))
+        .title("ZeroTouch · HUD")
+        // Mismo origen que la principal para superar `verify_origin` (ver la overlay de Air-Swipe).
+        .use_https_scheme(true)
+        .decorations(false)
+        .always_on_top(true)
+        .focused(false)
+        .focusable(false)
+        .skip_taskbar(true)
+        .resizable(false)
+        .inner_size(HUD_WIDTH, HUD_HEIGHT)
+        .position(x, y)
+        .build()
+        .map_err(|_| err("HUD_WINDOW", "No se pudo abrir el indicador flotante."))?;
+    // Los clics atraviesan el indicador: nunca bloquea lo que hay debajo ni se le puede hacer clic por error.
+    let _ = hud.set_ignore_cursor_events(true);
+    Ok(json!({ "open": true }))
+}
+
+#[tauri::command]
+async fn hud_window_close(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    if let Some(existing) = app.get_webview_window(HUD_WINDOW) {
+        existing
+            .close()
+            .map_err(|_| err("HUD_WINDOW", "No se pudo cerrar el indicador flotante."))?;
+    }
+    Ok(json!({ "closed": true }))
+}
+
+fn main() {
+    let app = tauri::Builder::default()
+        .setup(|app| {
+            let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            // Instalación: el motor viaja como recurso (`bundle.resources` en tauri.conf.json).
+            if let Ok(resource_dir) = app.path().resource_dir() {
+                let bundled = resource_dir.join("motor-local");
+                if bundled.exists() && std::env::var_os("ZEROTOUCH_MOTOR_DIR").is_none() {
+                    std::env::set_var("ZEROTOUCH_MOTOR_DIR", bundled);
+                }
+            }
+            let motor_dir = resolve_motor_dir(&manifest_dir);
+            app.manage(Arc::new(Mutex::new(Bridge::new())));
+            app.manage(Arc::new(Mutex::new(GestureEngineManager::new(motor_dir))));
+            Ok(())
+        })
+        .on_page_load(|window, payload| {
+            #[cfg(feature = "vertical-smoke")]
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) && window.label() == MAIN_WINDOW {
+                let _ = window.eval(include_str!("../tests/vertical-smoke.js"));
+            }
+            #[cfg(not(feature = "vertical-smoke"))]
+            let _ = (window, payload);
+        })
+        .invoke_handler(tauri::generate_handler![
+            register,
+            resend_verification,
+            forgot_password,
+            link_email,
+            login,
+            account,
+            logout,
+            backend_info,
+            profiles,
+            create_profile,
+            update_profile,
+            delete_profile,
+            contexts,
+            create_context,
+            update_context,
+            delete_context,
+            mode_gestures,
+            set_mode_gestures,
+            capabilities,
+            engine_start,
+            engine_stop,
+            engine_status,
+            engine_preview,
+            engine_update_config,
+            engine_set_mode,
+            engine_set_paused,
+            engine_load_export,
+            engine_airswipe,
+            engine_type_text,
+            engine_press_key,
+            engine_gaze_calibrate,
+            airswipe_window_open,
+            airswipe_window_close,
+            airswipe_window_rect,
+            hud_window_open,
+            hud_window_close
+        ])
+        .build(tauri::generate_context!())
+        .expect("No se pudo iniciar ZEROTOUCH");
+    app.run(|handle, event| {
+        // La ventana principal es la raíz de la aplicación: al cerrarla se sale (y se detiene el motor) aunque siga
+        // abierta la overlay del teclado. Sin esto el proceso, el motor y la cámara quedaban vivos sin ninguna
+        // ventana principal desde la que controlarlos.
+        if let tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. } = &event {
+            if label == MAIN_WINDOW {
+                handle.exit(0);
+            }
+        }
+        if matches!(event, tauri::RunEvent::Exit) {
+            let shared_engine = handle.state::<SharedEngine>();
+            if let Ok(mut mgr) = shared_engine.lock() {
+                mgr.stop();
+            }
+            let shared = handle.state::<Shared>();
+            if let Ok(mut guard) = shared.lock() {
+                let prior = std::mem::replace(
+                    &mut *guard,
+                    Err(BridgeError {
+                        code: "CLOSED".into(),
+                        message: "Aplicación cerrada.".into(),
+                    }),
+                );
+                drop(prior);
+            };
+        }
+    });
+}

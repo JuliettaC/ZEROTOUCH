@@ -1,6 +1,94 @@
-import { DeviceStatus, ErgonomicControls, Icon, MobileAction, NavLink, SensorPreview } from '../components/UI'
-import { gestures as catalog } from '../data/gestures'
-export default function CalibrationPage({ preferences, update, navigate, openModal }) {
-  return <main className="calibration-page"><div className="desktop-calibration desktop-only"><div className="calibration-grid"><div className="calibration-left"><SensorPreview variant="desktop" /><div className="metrics"><div><small>Latencia de ejemplo</small><strong>1.2<span>ms</span></strong><em>▼ 0.2</em></div><div><small>Puntos Clave</small><strong>21 <span>/ 21</span></strong><em>OK</em></div><div><small>CPU de ejemplo</small><strong>4.2<span>%</span></strong><em>Eco-Modo</em></div></div></div><aside className="calibration-aside"><section className="ergonomic-summary panel"><h2>Control Ergonómico</h2><button className="tiny-button" onClick={() => openModal({ type: 'ergonomic' })}>AJUSTAR</button></section><section className="configured-gestures"><h2>Gestos Configurados</h2><div>{Object.entries(catalog).map(([id, { emoji, title, action: subtitle }]) => <button key={title} className="configured-gesture" onClick={() => openModal({ type: 'gesture', gesture: id })}><span className="emoji-icon">{emoji}</span><span><strong>{title}</strong><small>{subtitle}</small></span><span className="gesture-badge">DEMO</span></button>)}</div></section></aside></div><nav className="page-actions"><NavLink to="/" navigate={navigate} className="button secondary"><Icon name="back" />Volver al Panel Principal</NavLink><NavLink to="/teclado" navigate={navigate} className="button primary">Ir al Teclado Gestual<Icon name="next" /></NavLink></nav></div>
-    <div className="mobile-calibration mobile-only"><div className="mobile-calibration-top"><DeviceStatus mobile /><SensorPreview variant="calibration" /></div><section className="mobile-ergonomics"><h2>Ajustes Ergonómicos</h2><div className="panel"><ErgonomicControls settings={preferences.settings} onChange={settings => update({ settings })} /></div></section><section className="mobile-gestures"><h2>Gestos Configurados</h2>{['scroll', 'pause'].map(id => { const { icon, title } = catalog[id]; return <button key={title} onClick={() => openModal({ type: 'gesture', gesture: id })}><span className="emoji-icon"><Icon name={icon} /></span><span>{title}</span><Icon name="chevron" /></button> })}</section><MobileAction to="/prueba" navigate={navigate}>Abrir Entorno de prueba</MobileAction></div></main>
+import { AdvancedSettings, NavLink, ConfigStatus, EngineCard } from '../components/UI'
+import { GestureList } from '../components/GestureCatalog'
+import { usesEssentialGestures, withEssentialGestures } from '../data/essentialGestures'
+
+export default function CalibrationPage({
+  favorites,
+  onFavorite,
+  navigate,
+  settings,
+  assignments,
+  modeName,
+  apply,
+  onRetryApply,
+  onChangeSettings,
+  openModal,
+  engineStatus,
+  engineBusy,
+  onStartEngine,
+  onStopEngine,
+  onToggleControlMode,
+  onTogglePause,
+}) {
+  const onChange = onChangeSettings
+  return (
+    <main id="main" tabIndex={-1} className="page calibration-page">
+      <div className="section-line">
+        <h1 className="page-title">Gestos</h1>{' '}
+        <NavLink to="/teclado" navigate={navigate} className="text-link">
+          Escritura Air-Swipe →
+        </NavLink>
+      </div>
+      <div>
+        <div className="calibration-steps">
+          <section className="panel step" aria-labelledby="step1">
+            <h2 id="step1" className="sr-only">
+              Control de la cámara
+            </h2>
+
+            <EngineCard
+              compact
+              headingLevel={3}
+              engineStatus={engineStatus}
+              engineBusy={engineBusy}
+              onStartEngine={onStartEngine}
+              onStopEngine={onStopEngine}
+              onToggleControlMode={onToggleControlMode}
+              onTogglePause={onTogglePause}
+            />
+          </section>
+          <section className="panel step" aria-labelledby="step2">
+            <h2 id="step2">Prueba cada gesto</h2>
+            <p className="step-hint">
+              Haz el gesto: se marcará como <strong>Detectado</strong>. Ábrelo para ajustarlo.
+            </p>
+            <p className="step-hint">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={usesEssentialGestures(settings)}
+                onClick={() => onChange(withEssentialGestures(settings))}
+              >
+                {usesEssentialGestures(settings) ? '✓ Solo gestos esenciales' : 'Usar solo gestos esenciales'}
+              </button>{' '}
+              Mover, clic, desplazar, pausar y abrir el teclado (el dictado, Alt + Tab y las pestañas quedan como estén).
+              Apaga el resto, que puede dispararse solo al mover el cursor; cada gesto se vuelve a
+              encender desde esta lista.
+            </p>
+            <GestureList
+              favorites={favorites}
+              onFavorite={onFavorite}
+              engineStatus={engineStatus}
+              settings={settings}
+              assignments={assignments}
+              onOpen={(gesture) => openModal({ type: 'gesture', gesture })}
+            />
+          </section>
+          <section className="panel step">
+            <details className="advanced">
+              <summary className="step-summary">
+                Ajustes finos <small>(opcional)</small>
+              </summary>
+              <p className="step-hint">
+                Se aplican al instante al modo «{modeName}». Cámara, mano, recorrido y exigencia de
+                detección son de este equipo y no se sincronizan.
+              </p>
+              <AdvancedSettings settings={settings} onChange={onChange} />
+            </details>
+            <ConfigStatus apply={apply} onRetry={onRetryApply} />
+          </section>
+        </div>
+      </div>
+    </main>
+  )
 }

@@ -1,0 +1,146 @@
+/* Ventana del teclado Air-Swipe. Solo se carga en la ventana overlay (import dinámico en main.jsx).
+   Las medidas usan vh porque el teclado ocupa toda la ventana y la geometría es proporcional. */
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* Fondo semitransparente (la ventana nativa es transparente): se ve la aplicación de debajo. Barra y teclas
+   más opacas y texto con sombra para leerse sobre fondos claros u oscuros. */
+.as-overlay {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(52, 57, 66, 0.45);
+  border-radius: 2.4vh;
+  color: #fff;
+  text-shadow: 0 0.2vh 0.6vh rgba(0, 0, 0, 0.55);
+  font-family: 'Outfit', sans-serif;
+}
+.as-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2vh;
+  padding: 0 2vh;
+  background: rgba(42, 46, 54, 0.85);
+  border-radius: 2.4vh 2.4vh 0 0;
+}
+.as-proposals {
+  display: flex;
+  align-items: center;
+  gap: 1.6vh;
+  min-width: 0;
+  flex: 1;
+}
+.as-message {
+  margin: 0;
+  font-size: 5.2vh;
+  line-height: 1.2;
+  color: #e5e6ea;
+  overflow-wrap: anywhere;
+}
+.as-message.warn {
+  color: #f2d9a0;
+}
+.as-message.error {
+  color: #f5b4a8;
+}
+
+.as-chip {
+  min-height: 13vh;
+  padding: 0 3vh;
+  border-radius: 3vh;
+  border: 0.5vh solid #a1a5ad;
+  background: rgba(62, 67, 78, 0.9);
+  color: #fff;
+  font: inherit;
+  font-size: 6.4vh;
+  font-weight: 600;
+  cursor: pointer;
+}
+.as-chip.chosen {
+  background: #fff;
+  color: #343942;
+  border-color: #fff;
+}
+.as-chip.ghost {
+  min-width: 13vh;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: #e5e6ea;
+}
+.as-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.2vh;
+  flex-shrink: 0;
+}
+.as-action {
+  min-height: 13vh;
+  padding: 0 2.6vh;
+  border-radius: 3vh;
+  border: 0.5vh solid #a1a5ad;
+  background: rgba(52, 57, 66, 0.6);
+  color: #fff;
+  font: inherit;
+  font-size: 5vh;
+  font-weight: 500;
+  cursor: pointer;
+}
+.as-action.close {
+  min-width: 13vh;
+  padding: 0;
+}
+
+.as-key-slot {
+  position: absolute;
+}
+.as-key {
+  position: absolute;
+  inset: 0.7vh;
+  border: 0;
+  border-radius: 2.2vh;
+  background: rgba(75, 81, 93, 0.78);
+  color: #fff;
+  font: inherit;
+  font-size: 8vh;
+  font-weight: 500;
+  text-transform: lowercase;
+  cursor: pointer;
+}
+.as-chip:hover,
+.as-action:hover,
+.as-key:hover {
+  filter: brightness(1.15);
+}
+:where(.as-chip, .as-action, .as-key):focus-visible {
+  outline: 0.6vh solid #fff;
+  outline-offset: 0.4vh;
+}
+
+.as-trail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.as-trail polyline {
+  fill: none;
+  stroke: #9db5a4;
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}

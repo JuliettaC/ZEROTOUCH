@@ -1,0 +1,273 @@
+/* ZeroTouch · capa de usabilidad y accesibilidad (WCAG 2.2 AA).
+   Conserva la identidad: Outfit, paleta grafito/cálida y estilo minimalista.
+   Se carga después de App.css y solo redefine lo necesario. */
+
+:root {
+  --ok: #4f6857; /* verde ZeroTouch oscurecido: 5,2:1 sobre #E8EEEA */
+  --ok-bg: #e8eeea;
+  --warn: #7a5b1f; /* ámbar cálido: 5,4:1 sobre #F6EEDC */
+  --warn-bg: #f6eedc;
+  --error: #a33a2b; /* 6,6:1 sobre blanco */
+  --error-bg: #f9ecea;
+  --control-off: #7a7f88; /* contorno de controles ≥ 3:1 (1.4.11) */
+  --focus: #343942;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Foco visible y consistente (2.4.7 / 2.4.11): anillo doble que se ve sobre claro y oscuro. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px #fff;
+}
+main:focus {
+  outline: none;
+}
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -60px;
+  z-index: 20;
+  background: var(--brown);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+/* Objetivos táctiles ≥ 24×24 (2.5.8) y textos pequeños con contraste suficiente. */
+.button {
+  min-height: 44px;
+}
+.button.big {
+  min-height: 52px;
+  padding: 14px 32px;
+  font-size: 16px;
+}
+.button.secondary {
+  background: var(--soft);
+  color: var(--brown);
+}
+.button.light {
+  background: #fff;
+  color: var(--brown);
+}
+.button.full {
+  width: 100%;
+}
+.button.danger-text {
+  color: var(--error);
+  background: transparent;
+  padding-inline: 12px;
+}
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.tiny-button {
+  min-height: 28px;
+  min-width: 32px;
+  padding: 4px 12px;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.tiny-button.ghost {
+  background: transparent;
+  color: var(--brown);
+  border: 1px solid var(--control-off);
+}
+.tiny-button.danger {
+  background: var(--error);
+}
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brown);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.text-link .icon {
+  width: 12px;
+  height: 12px;
+}
+.icon-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--active);
+  font-size: 14px;
+}
+.icon-button:hover {
+  background: var(--soft);
+  color: var(--error);
+}
+kbd {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--control-off);
+  background: #fff;
+}
+
+/* ---------- Cabecera ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  height: 64px;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--soft);
+}
+.brand strong {
+  font-size: 18px;
+  letter-spacing: 0.5px;
+}
+.main-nav {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+  margin-left: 24px;
+}
+.main-nav a {
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--active);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+.main-nav a:hover {
+  color: var(--brown);
+  background: var(--background);
+}
+.main-nav a[aria-current='page'] {
+  background: var(--brown);
+  color: #fff;
+  font-weight: 600;
+}
+.account-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--soft);
+  font-size: 14px;
+}
+.account-button .icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Insignia de estado: punto + texto (el color nunca es la única señal, 1.4.1). */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--background);
+  color: var(--brown);
+}
+.status-badge i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--control-off);
+}
+.status-badge.tone-off i {
+  background: transparent;
+  border: 2px solid var(--control-off);
+}
+.status-badge.tone-observe {
+  background: var(--soft);
+}
+.status-badge.tone-observe i {
+  background: var(--active);
+}
+.status-badge.tone-control {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.status-badge.tone-control i {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgb(79 104 87 / 25%);
+}
+.status-badge.tone-paused {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.status-badge.tone-paused i {
+  background: transparent;
+  border-left: 3px solid var(--warn);
+  border-right: 3px solid var(--warn);
+  border-radius: 0;
+  width: 9px;
+}
+.status-badge.tone-error {
+  background: var(--error-bg);
+  color: var(--error);
+}
+.status-badge.tone-error i {
+  background: var(--error);
+}
+.status-badge.on-dark {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+}
+
+/* ---------- Estructura de página ---------- */
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.page-title {
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 700;
+}
+.page .panel {
+  padding: 24px;
+  border-radius: 24px;
+}
+.page h2 {
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 700;
+}
+.page .section-line {
+  margin-bottom: 16px;
+}

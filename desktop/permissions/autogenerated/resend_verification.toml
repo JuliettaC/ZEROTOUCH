@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-resend-verification"
+description = "Enables the resend_verification command without any pre-configured scope."
+commands.allow = ["resend_verification"]
+
+[[permission]]
+identifier = "deny-resend-verification"
+description = "Denies the resend_verification command without any pre-configured scope."
+commands.deny = ["resend_verification"]

@@ -1,0 +1,63 @@
+import { useId } from 'react'
+
+const ASSETS = `${import.meta.env.BASE_URL}assets/`
+const iconFiles = { logo: 'home-imgImg2', eye: 'home-imgImg', eyeOff: 'home-imgImg1', wand: 'home-imgImg3', kitchen: 'home-imgImg4', moon: 'home-imgImg5', grid: 'home-imgImg6', desk: 'home-imgImg7', bolt: 'home-imgImg8', check: 'home-imgImg9', assistance: 'home-imgImg10', target: 'home-imgImg11', plus: 'home-imgImg12', phone: 'home-imgImg13', chevron: 'home-imgImg14', tip: 'home-imgImg15', back: 'calibration-imgImg3', next: 'calibration-imgImg4', hand: 'calibration-imgImg1', stable: 'calibration-imgImg2', laptop: 'mobile-calibration-imgLaptop', mobileBack: 'mobile-calibration-imgImg', fullscreen: 'mobile-calibration-imgImg1', mobileHand: 'mobile-calibration-imgImg2', fist: 'mobile-calibration-imgImg4', mobileNext: 'mobile-imgSvg1', close: 'gesture-imgImg', pinch: 'gesture-imgImg1', testHand: 'gesture-imgImg2', ergonomic: 'ergonomic-imgImg', rest: 'ergonomic-imgImg1', pause: 'playground-imgImg1' }
+
+export function Icon({ name, className = '', muted = false }) {
+  if (name === 'logo' || name === 'mobile-imgSvg') return <img className={`icon ${className}`} src={`${ASSETS}zerotouch-dark.png`} width={name === 'logo' ? 25 : 20} height={name === 'logo' ? 20 : 16} style={{ objectFit: 'contain' }} alt="" aria-hidden="true" />
+  return <img className={`icon ${className}`} src={`${ASSETS}${iconFiles[name] || name}${muted ? '-muted' : ''}.svg`} alt="" aria-hidden="true" />
+}
+
+export function NavLink({ to, navigate, children, className = '', ...props }) {
+  return <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}${to}`} className={className} {...props} onClick={event => {
+    if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); navigate(to) }
+  }}>{children}</a>
+}
+
+export function Header({ path, navigate, hasContexts, activeContext }) {
+  const calibration = path === '/calibracion', keyboard = path === '/teclado', playground = path === '/prueba'
+  const title = calibration ? 'Atajos y Calibración' : keyboard ? 'Air-Swipe' : playground ? 'Entorno de prueba' : 'ZEROTOUCH'
+  return <header className={`app-header ${path === '/' ? 'dashboard-header' : ''}`}>
+    <NavLink to={playground ? '/calibracion' : '/'} navigate={navigate} className="brand" aria-label={path === '/' ? 'ZeroTouch, panel principal' : 'Volver'}>
+      <span className="brand-logo desktop-only"><Icon name="logo" /></span><span className={`brand-logo mobile-only ${path !== '/' ? 'round' : ''}`}><Icon name={path === '/' ? 'mobile-imgSvg' : 'mobileBack'} /></span>
+      <span><strong>{title}</strong><small className="desktop-only">{calibration || keyboard || playground ? activeContext : hasContexts ? 'AIRTOUCH CONTROL' : 'PANEL PRINCIPAL'}</small><small className="mobile-only">{path === '/' ? 'PANEL DE CONTROL' : activeContext}</small></span>
+    </NavLink>
+    <div className="header-status desktop-only"><span className="status-pill"><i />{keyboard ? 'Ejemplo: 32 PPM · Precisión 96%' : 'Cámara simulada · 60 FPS de ejemplo'}</span>{!keyboard && <span className="profile"><img src={`${ASSETS}home-imgLucia.png`} alt="" />Lucía S. - Oficina & Cocina</span>}</div>
+    <div className="header-status mobile-only"><span className="android-pill"><i />Android Hub</span><img className="avatar" src={`${ASSETS}mobile-imgContainer.png`} alt="Perfil de Lucía" /></div>
+  </header>
+}
+
+export function DeviceStatus({ mobile = false }) {
+  return <section className="device-status panel"><div className="section-line"><span>Dispositivo de ejemplo</span><strong className="connected">Simulado</strong></div><div className="device"><span className="device-icon"><Icon name={mobile ? 'laptop' : 'phone'} /></span><span><strong>{mobile ? 'PC Principal' : 'Android Hub'}</strong><small>{mobile ? 'Receptor propuesto / Wi-Fi Local' : 'Proximidad / Giroscopio'}</small></span></div></section>
+}
+
+export function Switch({ checked, onChange, label }) {
+  return <button className={`switch ${checked ? 'on' : ''}`} type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}><span /></button>
+}
+
+export function RangeControl({ label, value, onChange, description }) {
+  const id = useId()
+  return <div className="range-control"><div className="section-line"><label htmlFor={id}>{label}</label><output htmlFor={id}>{value}%</output></div><input id={id} type="range" min="0" max="100" value={value} onChange={event => onChange(Number(event.target.value))} style={{ '--range-value': `${value}%` }} />{description && <small>{description}</small>}</div>
+}
+
+export function ErgonomicControls({ settings, onChange, detailed = false }) {
+  return <div className="ergonomic-controls"><RangeControl label={detailed ? 'Sensibilidad del puntero' : 'Sensibilidad Puntero'} value={settings.sensitivity} onChange={sensitivity => onChange({ ...settings, sensitivity })} description={detailed && 'Ajuste del contexto activo. El movimiento del puntero aún no se simula.'} /><RangeControl label="Filtro Antitemblor" value={settings.stability} onChange={stability => onChange({ ...settings, stability })} description={detailed && 'Valor de demostración; no se procesa movimiento real.'} />{detailed && <div className="desk-rest"><span className="device-icon"><Icon name="rest" /></span><span><strong>Modo Desk-Rest</strong><small>Antebrazo apoyado en mesa</small></span><Switch checked={settings.deskRest} onChange={deskRest => onChange({ ...settings, deskRest })} label="Modo Desk-Rest" /></div>}<div className="context-gesture-settings"><span>Clic con micro-pinza</span><Switch checked={settings.pinch} onChange={pinch => onChange({ ...settings, pinch })} label="Clic con micro-pinza" /><span>Desplazamiento con dos dedos</span><Switch checked={settings.scroll} onChange={scroll => onChange({ ...settings, scroll })} label="Desplazamiento con dos dedos" /><small>Preferencias del contexto; reconocimiento gestual pendiente.</small></div></div>
+}
+
+function toggleFullscreen(event) {
+  if (document.fullscreenElement) document.exitFullscreen?.()
+  else event.currentTarget.parentElement.requestFullscreen?.().catch(() => {})
+}
+
+export function SensorPreview({ variant }) {
+  return <div className={`sensor sensor-${variant}`} aria-label="Vista de sensor simulada con imagen de referencia">
+    {variant === 'desktop' && <><img className="sensor-photo" src={`${ASSETS}calibration-imgFirstPersonViewOfAHandReachingOutInFrontOfAModernWorkspaceDeskSoftLighting4KDigi.png`} alt="Mano frente a un escritorio" /><div className="tracking-overlay"><img src={`${ASSETS}tracking-overlay.svg`} alt="Puntos de seguimiento de mano simulados" /></div><span className="live-label">● DEMO</span><div className="sensor-bottom"><span><Icon name="hand" />MANO DETECTADA: IZQUIERDA</span><span><Icon name="stable" />PUNTERO: ESTABLE</span></div></>}
+    {variant === 'home' && <><div className="home-sensor-images"><div className="kitchen-image"><img src={`${ASSETS}mobile-imgWarmTonedKitchenWorkspacePrepCounterWoodCuttingBoardSoftDaylightCulinarySceneOverhe.png`} alt="Cocina" /></div><img className="home-hand" src={`${ASSETS}mobile-imgImage6.png`} alt="Palma abierta frente a la cámara" /></div><div className="detected"><Icon name="mobile-imgImg2" />Ejemplo: Mano abierta</div></>}
+    {variant === 'calibration' && <><img className="mobile-calibration-photo" src={`${ASSETS}mobile-calibration-imgImage7.png`} alt="Mano abierta para calibración" /><div className="mobile-tracking"><Icon name="mobile-calibration-imgSvg" /></div><span className="distance">Distancia: 38 px</span><span className="live-label">● DEMO</span><button className="fullscreen" aria-label="Ampliar vista del sensor" onClick={toggleFullscreen}><Icon name="fullscreen" /></button></>}
+    {variant === 'playground' && <><img className="recipe-photo" src={`${ASSETS}playground-imgPovOfHandsMixingCookieDoughInAGlassBowlKitchenBackgroundSoftFocusCinematicLighting.png`} alt="Manos preparando masa de galletas" /><span className="live-label">● DEMO · 60 FPS · 1.2 ms</span><button className="fullscreen" aria-label="Ampliar vista de cámara" onClick={toggleFullscreen}><Icon name="fullscreen" /></button></>}
+  </div>
+}
+
+export function MobileAction({ to, navigate, children }) {
+  return <NavLink to={to} navigate={navigate} className="mobile-action">{children}<span><Icon name="mobileNext" /></span></NavLink>
+}

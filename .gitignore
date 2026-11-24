@@ -10,12 +10,37 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-app
 *.local
+
+# Copias de trabajo, archivos internos y resultados locales.
+/.worktrees/
+/codex-interno/
+/tmp/
+/output/
+**/.pytest_cache/
+**/__pycache__/
+**/.venv/
+*.pyc
+*.ztbackup
 
 # Environment files
 .env
 .env.*
 !.env.example
+
+# Datos y secretos locales (el SQL y los ejemplos sí se versionan)
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.db-wal
+*.db-shm
+*.key
+*.pem
+*.p12
 
 # Editor directories and files
 .vscode/*
@@ -28,26 +53,22 @@ dist-ssr
 *.sln
 *.sw?
 
-# Bases y secretos locales: solo se versiona el esquema SQL.
-*.sqlite
-*.sqlite-*
-*.sqlite3
-*.sqlite3-*
-*.db
-*.db-*
-*.ztbackup
-*.key
-*.pem
-*.p12
+# Videos de gestos grabados por la persona usuaria (muestran su cara): nunca al repositorio.
+VIDEOS GESTOS/
+VIDEOS GESTOS*/
 
-# Copias de trabajo y artefactos locales; no forman parte de esta entrega.
-/.worktrees/
-/codex-interno/
-/tmp/
-/output/
-/desktop/target/
-/desktop/runtime/
-/desktop/downloads/
-/dist-app/
-**/.venv/
-**/__pycache__/
+# Grabaciones e informes de pruebas con la cámara (pueden mostrar la cara o datos de uso): nunca al repositorio.
+*.mp4
+*.webm
+*.mov
+*.avi
+/informe-*.md
+# Binarios: el .exe y la APK se publican como Release de GitHub, no en Git.
+*.exe
+*.apk
+*.aab
+*.jks
+*.keystore
+# Salidas locales de herramientas (grafo de graphify, capturas de sesiones con Claude).
+graphify-out/
+Claude outputs/
