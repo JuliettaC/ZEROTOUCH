@@ -65,12 +65,11 @@ test('un valor dañado, de otra versión o un almacenamiento bloqueado vuelven a
 })
 
 test('los pasos avanzan y retroceden sin salirse', () => {
-  assert.deepEqual(STEPS, ['bienvenida', 'camara', 'gestos', 'uso', 'listo'])
-  assert.equal(nextStep('bienvenida'), 'camara')
-  assert.equal(nextStep('listo'), 'listo')
-  assert.equal(previousStep('bienvenida'), 'bienvenida')
-  assert.equal(previousStep('uso'), 'gestos')
-  assert.equal(nextStep('inexistente'), 'camara')
+  assert.deepEqual(STEPS, ['camara', 'gestos'])
+  assert.equal(nextStep('camara'), 'gestos')
+  assert.equal(nextStep('gestos'), 'gestos')
+  assert.equal(previousStep('camara'), 'camara')
+  assert.equal(previousStep('gestos'), 'camara')
 })
 
 test('la práctica marca cada gesto reconocido y lo conserva', () => {

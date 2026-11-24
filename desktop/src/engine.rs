@@ -57,6 +57,12 @@ pub struct EngineStatus {
     pub latency_ms: f64,
     pub total_clicks: u32,
     pub total_scrolls: u32,
+    /// Veces que el motor disparó cada evento desde que arrancó (solo conteos).
+    pub event_counts: Value,
+    /// Destino de cada evento: {evento: {"SO" | "BLOQUEADO_…" | "VENTANA_…" | …: veces}} (solo conteos).
+    pub delivery_counts: Value,
+    /// Fotogramas con pulgar e índice juntos, por motivo de que hubiera o no clic (solo conteos).
+    pub pinch_diag: Value,
     /// Última configuración que el motor confirmó haber aplicado (READY o ACK de SET_CONFIG/LOAD_EXPORT).
     pub applied_config: Value,
     /// Secuencia del último evento de aplicación recibido y los últimos eventos (TIMER, PRECISION,
@@ -101,6 +107,9 @@ impl Default for EngineStatus {
             latency_ms: 0.0,
             total_clicks: 0,
             total_scrolls: 0,
+            event_counts: json!({}),
+            delivery_counts: json!({}),
+            pinch_diag: json!({}),
             applied_config: Value::Null,
             event_seq: 0,
             recent_events: Vec::new(),
@@ -326,6 +335,15 @@ fn apply_telemetry(st: &mut EngineStatus, val: &Value) {
     }
     if let Some(ts) = val["totalScrolls"].as_u64() {
         st.total_scrolls = ts as u32;
+    }
+    if val["eventCounts"].is_object() {
+        st.event_counts = val["eventCounts"].clone();
+    }
+    if val["pinchDiag"].is_object() {
+        st.pinch_diag = val["pinchDiag"].clone();
+    }
+    if val["deliveryCounts"].is_object() {
+        st.delivery_counts = val["deliveryCounts"].clone();
     }
     if val["config"].is_object() {
         st.applied_config = val["config"].clone();
@@ -574,6 +592,11 @@ impl GestureEngineManager {
                 st.applied_config = ack["config"].clone();
             }
         }
+    }
+
+    pub fn preview_frame(&mut self) -> Result<Value, BridgeError> {
+        let mut ack = self.send_cmd(json!({ "cmd": "PREVIEW_FRAME" }))?;
+        Ok(ack["preview"].take())
     }
 
     pub fn update_config(&mut self, config: Value) -> Result<EngineStatus, BridgeError> {

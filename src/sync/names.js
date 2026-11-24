@@ -1,4 +1,4 @@
-const key = value => String(value).trim().normalize('NFC').toLowerCase()
+const key = (value) => String(value).trim().normalize('NFC').toLowerCase()
 const truncate = (value, length) => value.slice(0, length).replace(/[\uD800-\uDBFF]$/, '')
 
 export function uniqueName(name, taken) {

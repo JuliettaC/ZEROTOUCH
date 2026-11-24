@@ -6,6 +6,10 @@ import { getEngineState } from '../data/engineStatus.js'
 export const ACTION_LABELS = {
   LEFT_CLICK: 'Clic',
   RIGHT_CLICK: 'Clic derecho',
+  DICTATION: 'Dictado (Win + H)',
+  KEYBOARD: 'Abrir teclado',
+  KEYBOARD_CLOSE: 'Bajar teclado',
+  ALT_TAB: 'Cambiar de ventana',
   SCROLL: 'Desplazamiento',
   START_DRAG: 'Arrastre iniciado',
   END_DRAG: 'Arrastre soltado',
@@ -45,19 +49,27 @@ export function actionLabel(code) {
  * sirve para resaltar el HUD un momento.
  */
 export function actionSignature(status) {
-  return [status?.lastEvent ?? 'NONE', status?.totalClicks ?? 0, status?.totalScrolls ?? 0, status?.eventSeq ?? 0].join('|')
+  return [
+    status?.lastEvent ?? 'NONE',
+    status?.totalClicks ?? 0,
+    status?.totalScrolls ?? 0,
+    status?.eventSeq ?? 0,
+  ].join('|')
 }
 
 /** Contenido del HUD. `bridgeDown`: el puente no respondió (no se inventa un estado). */
 export function describeHud(status, { bridgeDown = false } = {}) {
-  if (bridgeDown) return { tone: 'error', state: 'Sin conexión con el motor', action: '', observing: false }
+  if (bridgeDown)
+    return { tone: 'error', state: 'Sin conexión con el motor', action: '', observing: false }
   const engine = getEngineState(status)
   const observing = engine.key === 'observe'
   const action = engine.running ? actionLabel(status?.lastEvent) : ''
   return {
     tone: engine.tone,
     state: engine.label,
-    action: action ? `Última acción: ${action}${observing && status?.lastEvent && status.lastEvent !== 'NONE' ? ' (no se envió)' : ''}` : '',
+    action: action
+      ? `Última acción: ${action}${observing && status?.lastEvent && status.lastEvent !== 'NONE' ? ' (no se envió)' : ''}`
+      : '',
     observing,
   }
 }

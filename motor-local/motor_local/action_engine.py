@@ -17,9 +17,13 @@ from typing import Any, Iterable
 from .capabilities import ALLOWED_KEYS, DEVICE_KEYS
 from .interpreter import (
     EVENT_AIRSWIPE_TRACE,
+    EVENT_ALT_TAB,
     EVENT_BACK,
     EVENT_CANCEL,
     EVENT_CONFIRM,
+    EVENT_DICTATION,
+    EVENT_KEYBOARD,
+    EVENT_KEYBOARD_CLOSE,
     EVENT_END_DRAG,
     EVENT_FORWARD,
     EVENT_LEFT_CLICK,
@@ -60,15 +64,17 @@ _KEY_EVENTS: dict[str, tuple[str, ...]] = {
     # Gestos locales del equipo (contrato `teclas_equipo`).
     EVENT_NEXT_TAB: DEVICE_KEYS["pestana_siguiente"],
     EVENT_PREV_TAB: DEVICE_KEYS["pestana_anterior"],
+    EVENT_DICTATION: DEVICE_KEYS["dictado"],
+    EVENT_ALT_TAB: DEVICE_KEYS["cambiar_ventana"],
 }
 # Con el teclado Air-Swipe abierto, estas acciones las interpreta la interfaz (aceptar candidato,
 # cancelar, espacio, borrar) y NO se inyectan al sistema operativo.
 _AIRSWIPE_REDIRECTED = frozenset({EVENT_BACK, EVENT_FORWARD, EVENT_CONFIRM, EVENT_CANCEL})
 # Eventos que solo informan a la interfaz de ZeroTouch.
-_APP_EVENTS = frozenset({EVENT_TIMER, EVENT_PRECISION, EVENT_NAVIGATION, EVENT_AIRSWIPE_TRACE})
+_APP_EVENTS = frozenset({EVENT_TIMER, EVENT_PRECISION, EVENT_NAVIGATION, EVENT_AIRSWIPE_TRACE, EVENT_KEYBOARD, EVENT_KEYBOARD_CLOSE})
 # Acciones que SÍ llegan al SO pero de las que la interfaz muestra un aviso (multimedia y ventanas):
 # además de ejecutarse, se encolan como evento informativo con `injected` (y `result` en ventanas).
-_FEEDBACK_EVENTS = frozenset({EVENT_MEDIA_PLAY_PAUSE, EVENT_MEDIA_NEXT, EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW, EVENT_NEXT_TAB, EVENT_PREV_TAB})
+_FEEDBACK_EVENTS = frozenset({EVENT_MEDIA_PLAY_PAUSE, EVENT_MEDIA_NEXT, EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW, EVENT_NEXT_TAB, EVENT_PREV_TAB, EVENT_DICTATION, EVENT_ALT_TAB})
 
 ALLOWED_EVENTS = frozenset(
     {
@@ -115,6 +121,13 @@ class LogicalActionEngine:
         self.last_window_result: str = "NONE"
         self.total_clicks: int = 0
         self.total_scrolls: int = 0
+        # Cuántas veces el intérprete disparó cada evento (en cualquier modo, enviado o no al SO).
+        # Solo conteos: sirve para medir pruebas de gestos sin guardar imágenes ni puntos.
+        self.event_counts: dict[str, int] = {}
+        # Qué pasó con cada evento disparado: llegó al SO («SO»), se bloqueó (y por qué), lo recibió la
+        # interfaz o el teclado Air-Swipe, o, en ventanas, el resultado de Win32. Distingue «el motor no
+        # reconoce el gesto» de «lo reconoce pero no llega a la aplicación». Solo conteos.
+        self.delivery_counts: dict[str, dict[str, int]] = {}
         self.app_events: list[dict[str, Any]] = []
 
     def set_mode(self, mode: str) -> str:
@@ -154,10 +167,15 @@ class LogicalActionEngine:
 
     def _window_event(self, evt_type: str) -> None:
         if self.window_actions is None:
-            self.last_window_result = "UNAVAILABLE"
+            # Sin control de ventanas Win32 aún se puede bajar la ventana con el atajo; traerla no.
+            if evt_type == EVENT_MINIMIZE_WINDOW:
+                self.adapter.key_combo(DEVICE_KEYS["minimizar_ventana"])
+                self.last_window_result = "WIN_DOWN"
+            else:
+                self.last_window_result = "UNAVAILABLE"
             return
         result: WindowResult = (
-            self.window_actions.minimize_target()
+            self.window_actions.minimize_target(send_keys=lambda: self.adapter.key_combo(DEVICE_KEYS["minimizar_ventana"]))
             if evt_type == EVENT_MINIMIZE_WINDOW
             else self.window_actions.restore_last()
         )
@@ -179,6 +197,26 @@ class LogicalActionEngine:
             and not self.external_hold
             and not self.tracking_lost
         )
+
+    def _block_reason(self) -> str:
+        """Primera razón por la que `can_inject` es falso (mismo orden de prioridad que la parada)."""
+        if self.mode != MODE_CONTROL:
+            return "BLOQUEADO_OBSERVAR"
+        if self.emergency_stopped:
+            return "BLOQUEADO_PARADA"
+        if self.paused:
+            return "BLOQUEADO_PAUSA"
+        if self.external_hold:
+            return "BLOQUEADO_MIRADA"
+        if self.tracking_lost:
+            return "BLOQUEADO_MANO_PERDIDA"
+        return "BLOQUEADO"
+
+    def _delivered(self, evt_type: str, outcome: str) -> None:
+        if evt_type == EVENT_MOVE_CURSOR:
+            return
+        per_event = self.delivery_counts.setdefault(evt_type, {})
+        per_event[outcome] = per_event.get(outcome, 0) + 1
 
     def _injection_gate(self) -> tuple[bool, str, str]:
         """Centralized check for IPC keyboard injection (TYPE_TEXT / PRESS_KEY)."""
@@ -204,6 +242,7 @@ class LogicalActionEngine:
             handled.append(evt.type)
             if evt.type != EVENT_MOVE_CURSOR:
                 self.last_dispatched_event = evt.type
+                self.event_counts[evt.type] = self.event_counts.get(evt.type, 0) + 1
 
             if evt.type == EVENT_LEFT_CLICK:
                 self.total_clicks += 1
@@ -214,16 +253,20 @@ class LogicalActionEngine:
             if evt.type == EVENT_PAUSE:
                 self.paused = True
                 self.adapter.release_all()
+                self._delivered(evt.type, "MOTOR")
                 continue
             if evt.type == EVENT_RESUME:
                 self.paused = False
+                self._delivered(evt.type, "MOTOR")
                 continue
             if evt.type == EVENT_TRACKING_LOST:
                 self.tracking_lost = True
                 self.adapter.release_all()
+                self._delivered(evt.type, "MOTOR")
                 continue
             if evt.type == EVENT_END_DRAG:
                 self.adapter.release_all()
+                self._delivered(evt.type, "SO")
                 continue
 
             # Any active hand event clears a prior tracking-loss lock.
@@ -232,13 +275,16 @@ class LogicalActionEngine:
             # Application events reach the interface in any mode: they never inject OS input.
             if evt.type in _APP_EVENTS:
                 self._queue_app_event(evt)
+                self._delivered(evt.type, "INTERFAZ")
                 continue
             if self.airswipe_active and evt.type in _AIRSWIPE_REDIRECTED:
                 self._queue_app_event(evt)
+                self._delivered(evt.type, "AIRSWIPE")
                 continue
 
             # When injection is blocked (OBSERVATION, emergency stop, pause, gaze hold, tracking lost), never inject real OS events
             if not self.can_inject:
+                self._delivered(evt.type, self._block_reason())
                 if evt.type in _FEEDBACK_EVENTS:
                     self.app_events.append({"event": evt.type, "injected": False, **evt.payload})
                 continue
@@ -257,6 +303,13 @@ class LogicalActionEngine:
                 self.adapter.key_combo(_KEY_EVENTS[evt.type])
             elif evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):
                 self._window_event(evt.type)
+            if evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):
+                # Se cuenta el código: WIN_DOWN (atajo enviado), RESTORED, o por qué no (NO_LAST_WINDOW, NOT_MINIMIZED…).
+                self._delivered(evt.type, f"VENTANA_{self.last_window_result}")
+            elif evt.type in (EVENT_THUMBS_UP, EVENT_THUMBS_DOWN):
+                self._delivered(evt.type, "SIN_ACCION")
+            else:
+                self._delivered(evt.type, "SO")
             if evt.type in _FEEDBACK_EVENTS:
                 feedback: dict[str, Any] = {"event": evt.type, "injected": True, **evt.payload}
                 if evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):

@@ -213,11 +213,15 @@ class EngineConfig:
     window_swipe_enabled: bool = False     # mano abierta rápida hacia abajo/arriba: minimizar/restaurar ventana (opt-in: QA 19-11)
     tab_gestures_enabled: bool = True      # abanico con la mano ladeada: pestaña siguiente (local)
     right_click_enabled: bool = True       # pinza pulgar-medio: clic derecho (local)
+    dictation_enabled: bool = True         # 🤙 sostenido: dictado de Windows, Win+H (local, 23-11-2026)
+    keyboard_gesture_enabled: bool = True  # ☝️ sostenido: abrir el teclado Air-Swipe (local, 23-11-2026)
+    alt_tab_enabled: bool = True           # doblar tres dedos con el meñique arriba y volver: Alt+Tab (local, 23-11-2026)
+    open_hand_scroll_enabled: bool = False # experimental: mano abierta quieta y luego subir/bajar = desplazar (local)
     pointer_acceleration: bool = True      # movimientos lentos más finos, rápidos completos (local, QA 19-11)
     precision_mode: bool = False   # Ganancia fina fija desde configuración (el gesto la alterna en tiempo de ejecución)
     camera_index: int = 0
     click_cooldown_ms: int = 320   # Prevent accidental repeated clicks
-    drag_hold_ms: int = 380        # Sustained pinch duration to enter drag
+    drag_hold_ms: int = 600        # Sustained pinch duration to enter drag (22-11-2026: 380 convertia en arrastre los clics de 0,3-0,5 s medidos en vivo)
     pause_hold_ms: int = 450       # Closed fist duration to toggle pause/resume
     tracking_loss_frames: int = 5  # Frames without hand before releasing held buttons
     # Acción configurada de cada gesto discreto (palma, barridos, pulgares, precisión).
@@ -291,6 +295,10 @@ class EngineConfig:
             window_swipe_enabled=_bool_field(data, ("windowSwipe",), False),
             tab_gestures_enabled=_bool_field(data, ("tabGestures",), True),
             right_click_enabled=_bool_field(data, ("rightClick",), True),
+            dictation_enabled=_bool_field(data, ("dictation",), True),
+            keyboard_gesture_enabled=_bool_field(data, ("keyboardGesture",), True),
+            alt_tab_enabled=_bool_field(data, ("altTab",), True),
+            open_hand_scroll_enabled=_bool_field(data, ("openHandScroll",), False),
             pointer_acceleration=_bool_field(data, ("pointerAcceleration",), True),
             precision_mode=_bool_field(data, ("precisionMode", "modo_precision"), False),
             camera_index=_int_field(data, ("cameraIndex",), 0, 0, 10),
@@ -325,6 +333,10 @@ class EngineConfig:
             "windowSwipe": self.window_swipe_enabled,
             "tabGestures": self.tab_gestures_enabled,
             "rightClick": self.right_click_enabled,
+            "dictation": self.dictation_enabled,
+            "keyboardGesture": self.keyboard_gesture_enabled,
+            "altTab": self.alt_tab_enabled,
+            "openHandScroll": self.open_hand_scroll_enabled,
             "pointerAcceleration": self.pointer_acceleration,
             "precisionMode": self.precision_mode,
             "cameraIndex": self.camera_index,

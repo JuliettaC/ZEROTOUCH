@@ -15,55 +15,59 @@ const invoke = (command, args) => {
   return window.__TAURI__.core.invoke(command, args)
 }
 
-const toAuthPayload = c => ({
+const toAuthPayload = (c) => ({
   nombre_usuario: String(c?.nombre_usuario ?? c?.username ?? '').trim(),
   contrasena: String(c?.contrasena ?? c?.password ?? ''),
 })
 
-const toEmail = c => String(c?.correo ?? c?.email ?? '').trim()
+const toEmail = (c) => String(c?.correo ?? c?.email ?? '').trim()
 
 export const api = {
   // Registro y vinculación envían nombre_usuario, correo y contrasena; el puente rechaza campos extra.
-  register: c => invoke('register', { c: { ...toAuthPayload(c), correo: toEmail(c) } }),
-  resendVerification: c => invoke('resend_verification', { e: { correo: toEmail(c) } }),
-  forgotPassword: c => invoke('forgot_password', { e: { correo: toEmail(c) } }),
-  linkEmail: c => invoke('link_email', { c: { ...toAuthPayload(c), correo: toEmail(c) } }),
-  login: c => invoke('login', { c: toAuthPayload(c) }),
+  register: (c) => invoke('register', { c: { ...toAuthPayload(c), correo: toEmail(c) } }),
+  resendVerification: (c) => invoke('resend_verification', { e: { correo: toEmail(c) } }),
+  forgotPassword: (c) => invoke('forgot_password', { e: { correo: toEmail(c) } }),
+  linkEmail: (c) => invoke('link_email', { c: { ...toAuthPayload(c), correo: toEmail(c) } }),
+  login: (c) => invoke('login', { c: toAuthPayload(c) }),
   account: () => invoke('account'),
   logout: () => invoke('logout'),
   backendInfo: () => invoke('backend_info'),
-  profiles: offset => invoke('profiles', { offset }),
+  profiles: (offset) => invoke('profiles', { offset }),
   // Creación idempotente: `idempotencyKey` (UUID v7, opcional) viaja como cabecera `Idempotency-Key`; repetirla con
   // el mismo cuerpo devuelve la respuesta original (con `repetida: true`) en lugar de crear otro recurso.
-  createProfile: (p, idempotencyKey) => invoke('create_profile', { p, idempotencyKey: idempotencyKey ?? null }),
+  createProfile: (p, idempotencyKey) =>
+    invoke('create_profile', { p, idempotencyKey: idempotencyKey ?? null }),
   updateProfile: (id, p) => invoke('update_profile', { id, p }),
   // Borrado condicional: `ifMatch` es el ETag que la interfaz conocía (src/sync/etag.js). Sin él el puente no envía nada.
   deleteProfile: (id, ifMatch) => invoke('delete_profile', { id, ifMatch }),
   contexts: (profileId, offset) => invoke('contexts', { profileId, offset }),
-  createContext: (profileId, c, idempotencyKey) => invoke('create_context', { profileId, c, idempotencyKey: idempotencyKey ?? null }),
+  createContext: (profileId, c, idempotencyKey) =>
+    invoke('create_context', { profileId, c, idempotencyKey: idempotencyKey ?? null }),
   updateContext: (id, c) => invoke('update_context', { id, c }),
   deleteContext: (id, ifMatch) => invoke('delete_context', { id, ifMatch }),
   // Asignaciones gesto → acción (exportación formato 1) y contrato de capacidades del backend.
-  modeGestures: id => invoke('mode_gestures', { id }),
+  modeGestures: (id) => invoke('mode_gestures', { id }),
   setModeGestures: (id, g) => invoke('set_mode_gestures', { id, g }),
   capabilities: () => invoke('capabilities'),
 
   // Motor gestual local (IPC con confirmación por comando)
-  engineStart: config => invoke('engine_start', { config }),
+  engineStart: (config) => invoke('engine_start', { config }),
   engineStop: () => invoke('engine_stop'),
   engineStatus: () => invoke('engine_status'),
-  engineUpdateConfig: config => invoke('engine_update_config', { config }),
-  engineSetMode: mode => invoke('engine_set_mode', { mode }),
-  engineSetPaused: paused => invoke('engine_set_paused', { paused }),
+  enginePreview: () => invoke('engine_preview'),
+  engineUpdateConfig: (config) => invoke('engine_update_config', { config }),
+  engineSetMode: (mode) => invoke('engine_set_mode', { mode }),
+  engineSetPaused: (paused) => invoke('engine_set_paused', { paused }),
   // Exportación de GET /api/v1/modos/:id/gestos (formato 1). Sin credenciales; el motor valida y puede rechazarla.
   engineLoadExport: (document, runtime) => invoke('engine_load_export', { document, runtime }),
   // Air-Swipe: modo teclado en el motor, escritura en la aplicación activa y ventana del teclado.
-  engineAirswipe: active => invoke('engine_airswipe', { active }),
-  engineTypeText: text => invoke('engine_type_text', { text }),
-  enginePressKey: key => invoke('engine_press_key', { key }),
+  engineAirswipe: (active) => invoke('engine_airswipe', { active }),
+  engineTypeText: (text) => invoke('engine_type_text', { text }),
+  enginePressKey: (key) => invoke('engine_press_key', { key }),
   engineGazeCalibrate: () => invoke('engine_gaze_calibrate'),
   // edge: "top" | "bottom" (mueve); size: "compact" | "large". Sin argumentos abre o muestra el teclado.
-  airswipeWindowOpen: (edge, size) => invoke('airswipe_window_open', { ...(edge ? { edge } : {}), ...(size ? { size } : {}) }),
+  airswipeWindowOpen: (edge, size) =>
+    invoke('airswipe_window_open', { ...(edge ? { edge } : {}), ...(size ? { size } : {}) }),
   airswipeWindowClose: () => invoke('airswipe_window_close'),
   airswipeWindowRect: () => invoke('airswipe_window_rect'),
   // Indicador flotante (HUD) con el estado del motor y su última acción.
@@ -72,7 +76,10 @@ export const api = {
   // Minimiza la ventana principal al empezar (permiso core:window:allow-minimize solo en la capacidad principal).
   minimizeMainWindow: async () => {
     const current = globalThis.window?.__TAURI__?.window?.getCurrentWindow?.()
-    if (!current) throw Object.assign(new Error('Solo en la aplicación de escritorio.'), { code: 'DESKTOP_REQUIRED' })
+    if (!current)
+      throw Object.assign(new Error('Solo en la aplicación de escritorio.'), {
+        code: 'DESKTOP_REQUIRED',
+      })
     return current.minimize()
   },
 }

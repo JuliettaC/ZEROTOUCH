@@ -7,5 +7,8 @@ export async function allPages(read, { pageSize = 100, maxPages = 10 } = {}) {
     rows.push(...data)
     if (data.length < pageSize) return rows
   }
-  throw { code: 'RESPONSE_LIMIT', message: 'La lista supera el límite esperado. Vuelve a cargar la aplicación.' }
+  throw {
+    code: 'RESPONSE_LIMIT',
+    message: 'La lista supera el límite esperado. Vuelve a cargar la aplicación.',
+  }
 }

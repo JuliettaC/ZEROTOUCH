@@ -7,7 +7,7 @@
     "allow-profiles", "allow-create-profile", "allow-update-profile", "allow-delete-profile",
     "allow-contexts", "allow-create-context", "allow-update-context", "allow-delete-context",
     "allow-mode-gestures", "allow-set-mode-gestures", "allow-capabilities",
-    "allow-engine-start", "allow-engine-stop", "allow-engine-status",
+    "allow-engine-start", "allow-engine-stop", "allow-engine-status", "allow-engine-preview",
     "allow-engine-update-config", "allow-engine-set-mode", "allow-engine-set-paused",
     "allow-engine-load-export", "allow-engine-airswipe", "allow-engine-type-text", "allow-engine-press-key", "allow-engine-gaze-calibrate",
     "allow-airswipe-window-open", "allow-airswipe-window-close", "allow-airswipe-window-rect",

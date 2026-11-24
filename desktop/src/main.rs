@@ -108,6 +108,15 @@ async fn engine_status(window: tauri::WebviewWindow, engine: tauri::State<'_, Sh
 }
 
 #[tauri::command]
+async fn engine_preview(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>) -> Result<Value, BridgeError> {
+    verify_origin(&window)?;
+    if window.label() != MAIN_WINDOW {
+        return Err(err("FORBIDDEN", "Solo la ventana principal puede ver la cámara."));
+    }
+    with_engine(engine.inner().clone(), |mgr| mgr.preview_frame()).await
+}
+
+#[tauri::command]
 async fn engine_update_config(window: tauri::WebviewWindow, engine: tauri::State<'_, SharedEngine>, config: Value) -> Result<EngineStatus, BridgeError> {
     verify_origin(&window)?;
     with_engine(engine.inner().clone(), move |mgr| mgr.update_config(config)).await
@@ -158,9 +167,10 @@ async fn engine_gaze_calibrate(window: tauri::WebviewWindow, engine: tauri::Stat
 /// Tamaño del teclado: «compact» (por defecto, deja ver la aplicación) o «large» (teclas más grandes para trazar).
 fn airswipe_size(work_w: f64, work_h: f64, scale: f64, large: bool) -> (f64, f64) {
     if large {
-        // ~55 % del ancho y como mucho ~36 % del alto (tamaño anterior al 20-11-2026).
-        let width = (work_w * 0.55).clamp(560.0 * scale, 920.0 * scale).min(work_w);
-        let height = (width * 0.34).clamp(200.0 * scale, 320.0 * scale).min(work_h * 0.36);
+        // ~62 % del ancho y como mucho ~46 % del alto (23-11-2026): lo usa el teclado por permanencia,
+        // que necesita teclas grandes (en 1920×1080 al 100 %, 1180×470: teclas de ~115×70 px).
+        let width = (work_w * 0.62).clamp(600.0 * scale, 1180.0 * scale).min(work_w);
+        let height = (width * 0.40).clamp(280.0 * scale, 470.0 * scale).min(work_h * 0.46);
         (width, height)
     } else {
         // ~40 % del ancho y como mucho ~26 % del alto: en 1920×1080, unos 768×256 px.
@@ -181,7 +191,7 @@ mod airswipe_size_tests {
         assert!(w <= 1920.0 * 0.40 + 0.5 && h <= 1040.0 * 0.26 + 0.5, "{w}×{h}");
         let (lw, lh) = airswipe_size(1920.0, 1040.0, 1.0, true);
         assert!(w < lw && h < lh, "el grande es mayor: {w}×{h} frente a {lw}×{lh}");
-        assert_eq!((lw.round(), lh.round()), (920.0, 313.0), "el grande conserva el tamaño anterior");
+        assert_eq!((lw.round(), lh.round()), (1180.0, 470.0), "el grande da teclas de permanencia de ~115×70 px");
     }
 
     #[test]
@@ -404,6 +414,7 @@ fn main() {
             engine_start,
             engine_stop,
             engine_status,
+            engine_preview,
             engine_update_config,
             engine_set_mode,
             engine_set_paused,

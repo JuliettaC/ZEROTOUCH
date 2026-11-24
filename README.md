@@ -121,3 +121,14 @@ GitHub Actions ejecuta las cinco primeras, además de lint y compilación, en ca
 - Hito 2: [informe](docs/hito2/informe.md), [datos y seguridad](docs/hito2/datos-seguridad.md), [API y arquitectura](docs/hito2/api-arquitectura.md), [motor local](docs/hito2/motor-local.md), [pruebas](docs/hito2/pruebas.md), [auditoría de seguridad](docs/hito2/auditoria-seguridad.md)
 
 Problemas frecuentes del backend: si la base ya existe al inicializar, usa la que hay y arranca el servidor. Si la ruta está dentro de OneDrive, usa AppData local. 403 al modificar: falta el CSRF de la sesión actual. 409 al editar: vuelve a leer la versión. 503: otro proceso tiene bloqueada la base. 429: espera el límite de autenticación.
+
+
+### Interfaz de escritorio
+
+En **Inicio**, enciende la cámara para encuadrar la mano. La vista muestra la imagen con puntos en Observación y el seguimiento del sensor durante el control. En **Gestos**, marca o desmarca la estrella junto a cada gesto para elegir los favoritos de Inicio. La selección se guarda en este equipo, incluso si queda vacía. Activar un gesto y añadirlo a favoritos son acciones independientes.
+
+**Ajustes** reúne mano y recorrido, perfiles, modos, cuenta y herramientas. Desde allí puedes repetir los dos pasos de configuración o abrir **Diagnósticos del motor** para consultar telemetría, grabar voluntariamente una prueba o generar un informe. La antigua dirección de la receta abre el catálogo de gestos.
+
+Las páginas están en `src/pages/`. Los componentes de navegación, catálogo, cuenta y vista previa se encuentran en `src/components/`. Inicio y Diagnósticos comparten `useCameraPreview`, que interrumpe las solicitudes de fotogramas al cerrar la vista. La normalización de datos locales vive en `preferenceState.js` y la reconciliación de perfiles y modos en `syncResources.js`.
+
+Ejecuta `npm run format:app` para aplicar Prettier al frontend de escritorio y `npm run format:check` para verificar formato y máximo de 500 líneas físicas. La comprobación también se ejecuta en CI.

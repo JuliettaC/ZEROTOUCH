@@ -10,6 +10,10 @@ export const GESTURE_CLIPS = {
   // drag: 'arrastrar.mp4',
   // rightClick: 'clic-derecho.mp4',
   // tabs: 'pestanas.mp4',
+  // dictation: 'dictado.mp4',
+  // keyboard: 'teclado.mp4',
+  // altTab: 'alt-tab.mp4',
+  // openHandScroll: 'desplazar-mano-abierta.mp4',
 }
 
-export const clipFor = id => GESTURE_CLIPS[id] ?? null
+export const clipFor = (id) => GESTURE_CLIPS[id] ?? null

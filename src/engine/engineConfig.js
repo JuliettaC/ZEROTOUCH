@@ -7,7 +7,12 @@ export const IPC_FORMAT_VERSION = 2
 
 export function buildEngineConfig(effective, assignments) {
   const toggles = togglesFrom(assignments)
-  const gestos = Object.fromEntries(GESTURE_CODES.map(code => [code, { accion: assignments[code].accion, habilitado: assignments[code].habilitado }]))
+  const gestos = Object.fromEntries(
+    GESTURE_CODES.map((code) => [
+      code,
+      { accion: assignments[code].accion, habilitado: assignments[code].habilitado },
+    ]),
+  )
   return {
     format_version: IPC_FORMAT_VERSION,
     preferredHand: effective.preferredHand,
@@ -23,6 +28,10 @@ export function buildEngineConfig(effective, assignments) {
     windowSwipe: effective.windowSwipe === true,
     tabGestures: effective.tabGestures !== false,
     rightClick: effective.rightClick !== false,
+    dictation: effective.dictation !== false,
+    keyboardGesture: effective.keyboardGesture !== false,
+    altTab: effective.altTab !== false,
+    openHandScroll: effective.openHandScroll === true,
     pointerAcceleration: effective.pointerAcceleration !== false,
     activeBox: effective.activeBox,
     gaze: {
@@ -48,6 +57,10 @@ export const configKey = stable
 
 function stable(value) {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
-  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`
+  if (value && typeof value === 'object')
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stable(value[key])}`)
+      .join(',')}}`
   return JSON.stringify(value)
 }

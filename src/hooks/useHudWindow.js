@@ -15,17 +15,24 @@ export function useHudWindow({ running, onNotice }) {
     if (!command) return
     appliedRef.current = want
     const call = command === 'open' ? api.hudWindowOpen : api.hudWindowClose
-    Promise.resolve().then(call).catch(error => {
-      appliedRef.current = null
-      if (command === 'open') onNotice?.(error?.message || 'No se pudo mostrar el indicador flotante.', 'error')
-    })
+    Promise.resolve()
+      .then(call)
+      .catch((error) => {
+        appliedRef.current = null
+        if (command === 'open')
+          onNotice?.(error?.message || 'No se pudo mostrar el indicador flotante.', 'error')
+      })
   }, [want, onNotice])
 
-  const toggle = useCallback(() => setEnabled(current => {
-    const next = !current
-    writeHudEnabled(storage(), next)
-    return next
-  }), [])
+  const toggle = useCallback(
+    () =>
+      setEnabled((current) => {
+        const next = !current
+        writeHudEnabled(storage(), next)
+        return next
+      }),
+    [],
+  )
 
   return { enabled, toggle }
 }

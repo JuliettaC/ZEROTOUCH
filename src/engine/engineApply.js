@@ -10,22 +10,51 @@
 import { NO_ACTION, TOGGLE_KEYS } from '../data/capabilities.js'
 import { configKey } from './engineConfig.js'
 
-const SCALARS = ['preferredHand', 'mirrorCamera', 'cameraIndex', 'movementArea', 'confidenceThreshold', 'sensitivity', 'stability', 'pinchTolerance', 'deskRest', 'windowGestures', 'windowSwipe', 'tabGestures', 'rightClick', 'pointerAcceleration']
+const SCALARS = [
+  'preferredHand',
+  'mirrorCamera',
+  'cameraIndex',
+  'movementArea',
+  'confidenceThreshold',
+  'sensitivity',
+  'stability',
+  'pinchTolerance',
+  'deskRest',
+  'windowGestures',
+  'windowSwipe',
+  'tabGestures',
+  'rightClick',
+  'dictation',
+  'keyboardGesture',
+  'altTab',
+  'openHandScroll',
+  'pointerAcceleration',
+]
 const GAZE_KEYS = ['enabled', 'yawTolerance', 'pitchTolerance', 'awayMs', 'backMs']
 
 function semantic(config) {
   const c = config && typeof config === 'object' ? config : {}
   const gaze = c.gaze && typeof c.gaze === 'object' ? c.gaze : {}
   const gestos = {}
-  for (const [code, item] of Object.entries(c.gestos && typeof c.gestos === 'object' ? c.gestos : {})) {
+  for (const [code, item] of Object.entries(
+    c.gestos && typeof c.gestos === 'object' ? c.gestos : {},
+  )) {
     // Un gesto inactivo no tiene acción efectiva, sea por habilitado=false o por sin_accion.
-    gestos[code] = item && item.habilitado === true && item.accion !== NO_ACTION ? item.accion : null
+    gestos[code] =
+      item && item.habilitado === true && item.accion !== NO_ACTION ? item.accion : null
   }
   return {
-    scalars: Object.fromEntries(SCALARS.map(key => [key, c[key] ?? null])),
-    toggles: Object.fromEntries(TOGGLE_KEYS.map(key => [key, c[key] === true])),
-    activeBox: Array.isArray(c.activeBox) ? c.activeBox.map(v => Math.round(v * 1000) / 1000) : null,
-    gaze: { ...Object.fromEntries(GAZE_KEYS.map(key => [key, gaze[key] ?? null])), calibration: gaze.calibration ? { yaw: gaze.calibration.yaw, pitch: gaze.calibration.pitch } : null },
+    scalars: Object.fromEntries(SCALARS.map((key) => [key, c[key] ?? null])),
+    toggles: Object.fromEntries(TOGGLE_KEYS.map((key) => [key, c[key] === true])),
+    activeBox: Array.isArray(c.activeBox)
+      ? c.activeBox.map((v) => Math.round(v * 1000) / 1000)
+      : null,
+    gaze: {
+      ...Object.fromEntries(GAZE_KEYS.map((key) => [key, gaze[key] ?? null])),
+      calibration: gaze.calibration
+        ? { yaw: gaze.calibration.yaw, pitch: gaze.calibration.pitch }
+        : null,
+    },
     gestos,
   }
 }
@@ -36,7 +65,14 @@ export function appliedMatches(desired, applied) {
   return configKey(semantic(desired)) === configKey(semantic(applied))
 }
 
-export const APPLY = Object.freeze({ NO_ENGINE: 'sin_motor', STARTING: 'iniciando', SENDING: 'enviando', APPLIED: 'aplicada', PENDING: 'pendiente', REJECTED: 'rechazada' })
+export const APPLY = Object.freeze({
+  NO_ENGINE: 'sin_motor',
+  STARTING: 'iniciando',
+  SENDING: 'enviando',
+  APPLIED: 'aplicada',
+  PENDING: 'pendiente',
+  REJECTED: 'rechazada',
+})
 
 /**
  * @param {object} p
@@ -49,9 +85,11 @@ export function applyState({ desired, engineStatus, rejection = null, sendingKey
   const key = configKey(desired)
   if (!engineStatus?.running) return { state: APPLY.NO_ENGINE, key }
   // El motor confirma su configuración inicial en READY; hasta entonces no se le envía nada.
-  if (!engineStatus.appliedConfig || typeof engineStatus.appliedConfig !== 'object') return { state: APPLY.STARTING, key }
+  if (!engineStatus.appliedConfig || typeof engineStatus.appliedConfig !== 'object')
+    return { state: APPLY.STARTING, key }
   if (appliedMatches(desired, engineStatus.appliedConfig)) return { state: APPLY.APPLIED, key }
-  if (rejection && rejection.key === key) return { state: APPLY.REJECTED, key, code: rejection.code, message: rejection.message }
+  if (rejection && rejection.key === key)
+    return { state: APPLY.REJECTED, key, code: rejection.code, message: rejection.message }
   if (sendingKey === key) return { state: APPLY.SENDING, key }
   return { state: APPLY.PENDING, key }
 }

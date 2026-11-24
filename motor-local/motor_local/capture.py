@@ -7,10 +7,21 @@ Never uploads or persists raw video frames.
 
 from __future__ import annotations
 
+import base64
 import time
 from typing import Any
 
 import cv2
+
+
+def preview_jpeg(rgb: Any) -> str:
+    """Codifica una vista previa en memoria, conservando la proporción del fotograma."""
+    height, width = rgb.shape[:2]
+    if width > 640:
+        rgb = cv2.resize(rgb, (640, max(1, round(height * 640 / width))), interpolation=cv2.INTER_AREA)
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    ok, encoded = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return base64.b64encode(encoded).decode("ascii") if ok else ""
 
 
 class CameraCapture:

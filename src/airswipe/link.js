@@ -12,11 +12,21 @@ export const STALE_AFTER_MS = 3500
 export const OPEN_GRACE_MS = 8000
 
 export function writeHeartbeat(storage, now = Date.now()) {
-  try { storage.setItem(HEARTBEAT_KEY, String(now)); return true } catch { return false }
+  try {
+    storage.setItem(HEARTBEAT_KEY, String(now))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function clearHeartbeat(storage) {
-  try { storage.removeItem(HEARTBEAT_KEY); return true } catch { return false }
+  try {
+    storage.removeItem(HEARTBEAT_KEY)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function heartbeatFresh(storage, now = Date.now(), staleAfter = STALE_AFTER_MS) {
@@ -34,13 +44,50 @@ export const KEYBOARD_SIZE_KEY = 'zerotouch:airswipe:size'
 export const KEYBOARD_SIZES = ['compact', 'large']
 
 export function readKeyboardSize(storage) {
-  try { return storage.getItem(KEYBOARD_SIZE_KEY) === 'large' ? 'large' : 'compact' } catch { return 'compact' }
+  try {
+    return storage.getItem(KEYBOARD_SIZE_KEY) === 'large' ? 'large' : 'compact'
+  } catch {
+    return 'compact'
+  }
 }
 
 export function writeKeyboardSize(storage, size) {
-  try { storage.setItem(KEYBOARD_SIZE_KEY, size === 'large' ? 'large' : 'compact'); return true } catch { return false }
+  try {
+    storage.setItem(KEYBOARD_SIZE_KEY, size === 'large' ? 'large' : 'compact')
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function otherKeyboardSize(size) {
   return size === 'large' ? 'compact' : 'large'
+}
+
+// Modo de escritura (preferencia del equipo, 23-11-2026): «dwell» (por defecto) = teclas grandes que se
+// escriben al mantener el cursor encima; «trace» = el trazo Air-Swipe de siempre. El modo por permanencia
+// necesita teclas grandes, así que siempre abre la ventana grande; el tamaño guardado solo vale para el trazo.
+export const KEYBOARD_MODE_KEY = 'zerotouch:airswipe:mode'
+export const KEYBOARD_MODES = ['dwell', 'trace']
+
+export function readKeyboardMode(storage) {
+  try {
+    return storage.getItem(KEYBOARD_MODE_KEY) === 'trace' ? 'trace' : 'dwell'
+  } catch {
+    return 'dwell'
+  }
+}
+
+export function writeKeyboardMode(storage, mode) {
+  try {
+    storage.setItem(KEYBOARD_MODE_KEY, mode === 'trace' ? 'trace' : 'dwell')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Tamaño de ventana con el que abrir el teclado según el modo guardado. */
+export function windowSizeFor(storage) {
+  return readKeyboardMode(storage) === 'dwell' ? 'large' : readKeyboardSize(storage)
 }

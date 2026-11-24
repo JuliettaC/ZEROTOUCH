@@ -1,7 +1,9 @@
 """Minimizar y restaurar ventanas de forma acotada (gestos de tres dedos).
 
 Reglas:
-- Solo se minimiza la ventana en primer plano en el momento del gesto.
+- Solo se minimiza la ventana en primer plano en el momento del gesto. Desde el 23-11-2026 (pedido de la persona
+  usuaria) se minimiza con Win+Abajo (`send_keys`): Windows decide el efecto (una ventana maximizada primero baja a
+  su tamaño normal) y el motor solo recuerda cuál era para poder traerla de vuelta.
 - Solo se restaura la última ventana que ESTE motor minimizó, y una única vez.
 - Una referencia guarda HWND, PID y hora de creación del proceso. Si cualquiera ya no
   coincide (ventana cerrada, identificador reutilizado o proceso distinto) no se restaura nada.
@@ -17,7 +19,7 @@ import ctypes
 import os
 import sys
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
 SW_MINIMIZE = 6
 SW_RESTORE = 9
@@ -50,6 +52,9 @@ class WindowActions:
     """Máquina mínima: una sola ventana recordada, consumida al restaurarse."""
 
     def __init__(self, controller: WindowController, own_pid: int | None = None) -> None:
+        # `own_pid` ya no se usa (se acepta por compatibilidad): hasta el 23-11-2026 no se minimizaba la ventana de
+        # ese proceso, pero era el del motor en Python, que no tiene ventanas. Ahora ZeroTouch también se puede bajar
+        # (pedido de la persona usuaria), como cualquier otra ventana activa.
         self.controller = controller
         self.own_pid = own_pid if own_pid is not None else os.getpid()
         self._last: WindowRef | None = None
@@ -58,14 +63,18 @@ class WindowActions:
     def last_minimized(self) -> WindowRef | None:
         return self._last
 
-    def minimize_target(self) -> WindowResult:
+    def minimize_target(self, send_keys: Callable[[], None] | None = None) -> WindowResult:
         ref = self.controller.foreground()
         if ref is None:
             return WindowResult(False, "NO_FOREGROUND")
-        if ref.pid == self.own_pid:
-            return WindowResult(False, "OWN_WINDOW")
         if self.controller.is_minimized(ref):
             return WindowResult(False, "ALREADY_MINIMIZED")
+        if send_keys is not None:
+            # Win+Abajo: el atajo de Windows. La pulsación es asíncrona, así que no se comprueba aquí el resultado;
+            # se recuerda la ventana y restore_last solo actúa si de verdad quedó minimizada.
+            send_keys()
+            self._last = ref
+            return WindowResult(True, "WIN_DOWN")
         if not self.controller.minimize(ref) or not self.controller.is_minimized(ref):
             return WindowResult(False, "MINIMIZE_FAILED")
         self._last = ref

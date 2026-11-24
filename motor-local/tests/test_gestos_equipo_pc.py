@@ -233,7 +233,10 @@ def test_puno_sigue_pausando() -> None:
 # ------------------------------------------------------------ contrato y configuración
 
 def test_teclas_del_equipo_estan_permitidas_y_separadas_del_catalogo() -> None:
-    assert caps.DEVICE_KEYS == {"pestana_siguiente": ("ctrl", "tab"), "pestana_anterior": ("ctrl", "shift", "tab")}
+    assert caps.DEVICE_KEYS == {
+        "pestana_siguiente": ("ctrl", "tab"), "pestana_anterior": ("ctrl", "shift", "tab"), "minimizar_ventana": ("win", "down"),
+        "dictado": ("win", "h"), "cambiar_ventana": ("alt", "tab"),
+    }
     for keys in caps.DEVICE_KEYS.values():
         assert keys in ALLOWED_KEY_COMBOS
     # Gestos locales: no entran al catálogo sincronizado ni a la base.
@@ -247,3 +250,187 @@ def test_configuracion_de_gestos_locales_ida_y_vuelta() -> None:
     custom = EngineConfig.from_dict({"tabGestures": False, "rightClick": False})
     assert custom.to_dict()["tabGestures"] is False and custom.to_dict()["rightClick"] is False
     assert EngineConfig.from_dict(custom.to_dict()) == custom
+
+
+def test_un_barrido_lateral_con_la_mano_ladeada_no_es_un_abanico() -> None:
+    """Medido en vivo (22-11-2026): al barrer de lado con la mano ladeada salían pestañas en vez de atrás/adelante."""
+    interp = armed()
+    frames = [(make_fan_hand(bend=b, cx=0.3 + 0.03 * i), i * FAN_MS) for i, b in enumerate(ONE_FAN)]
+    assert EVENT_NEXT_TAB not in types(run(interp, frames))
+
+
+def test_el_barrido_lateral_con_la_mano_ladeada_llega_a_atras_o_adelante() -> None:
+    from motor_local.interpreter import EVENT_BACK, EVENT_FORWARD
+
+    interp = armed(EngineConfig.from_dict({"swipeLeft": True, "swipeRight": True}))
+    frames = [(make_fan_hand(bend=0.0, cx=0.2 + 0.05 * i), i * FAN_MS) for i in range(14)]
+    seen = set(types(run(interp, frames)))
+    assert EVENT_FORWARD in seen or EVENT_BACK in seen, seen
+    assert EVENT_NEXT_TAB not in seen
+
+
+def test_el_abanico_no_dispara_tambien_el_golpe_de_muneca() -> None:
+    """Informe en vivo (22-11-2026): con los dos gestos activos, un abanico minimizaba o restauraba la ventana
+    además de pasar la pestaña (doblar la muñeca mueve las puntas como el golpe de muñeca)."""
+    from motor_local.interpreter import EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW
+
+    cfg = EngineConfig.from_dict({"windowSwipe": True, "tabGestures": True})
+    for bends in (ONE_FAN, [0, 0, 0, -60, -70, -40, -5, 0, 0, 0], ONE_FAN + ONE_FAN):
+        events = types(run(armed(cfg), fan(bends)))
+        assert EVENT_NEXT_TAB in events
+        assert EVENT_MINIMIZE_WINDOW not in events and EVENT_RESTORE_WINDOW not in events, bends
+
+
+def test_con_la_mano_ladeada_subir_trae_la_ventana_y_bajar_pasa_de_pestana() -> None:
+    """23-11-2026. Con la mano ladeada, bajar las puntas rápido es geométricamente un abanico (la longitud aparente del
+    dedo no los separa: varía 0,75-10× en los abanicos reales). Regla: ladeada y bajando = pestaña; subir y volver
+    sigue trayendo la ventana. Sin gestos de pestaña, la misma bajada minimiza (antes una guarda por inclinación lo
+    bloqueaba y dejó de bajar ventanas en vivo)."""
+    from motor_local.interpreter import EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW
+
+    def tilted(dy: float, tilt: float) -> HandLandmarks:
+        lms = list(make_fan_hand(tilt=tilt).landmarks)
+        for tip in (8, 12, 16, 20):
+            lms[tip] = Point3D(lms[tip].x, lms[tip].y + dy)
+        return HandLandmarks(landmarks=lms, handedness="Right", confidence=0.95)
+
+    for tilt in (60.0, 75.0):
+        seq = lambda dy: [tilted(0.0, tilt)] * 4 + [tilted(dy, tilt), tilted(0.0, tilt)] + [tilted(0.0, tilt)] * 4
+        frames = lambda dy: [(h, i * FAN_MS) for i, h in enumerate(seq(dy))]
+        tabs = EngineConfig.from_dict({"windowSwipe": True, "tabGestures": True, "drag": False})
+        no_tabs = EngineConfig.from_dict({"windowSwipe": True, "tabGestures": False, "drag": False})
+        down = types(run(armed(tabs), frames(0.07)))
+        # Nunca las dos cosas a la vez; muy ladeada (60°) gana la pestaña, casi vertical (75°) puede minimizar.
+        assert down.count(EVENT_NEXT_TAB) + down.count(EVENT_MINIMIZE_WINDOW) == 1, (tilt, down)
+        if tilt == 60.0:
+            assert EVENT_NEXT_TAB in down
+        up = types(run(armed(tabs), frames(-0.07)))
+        assert up.count(EVENT_RESTORE_WINDOW) == 1 and EVENT_NEXT_TAB not in up, (tilt, up)
+        assert types(run(armed(no_tabs), frames(0.07))).count(EVENT_MINIMIZE_WINDOW) == 1, tilt
+
+
+def test_un_abanico_rapido_pero_suave_tambien_pasa_pestana() -> None:
+    """Informe en vivo (23-11-2026): solo pasaba la pestaña «golpeando muy fuerte». Un abanico de ~25° por fotograma
+    a 15 fps (375 °/s) y el mismo abanico a 30 fps deben pasar una pestaña; con el umbral anterior (500) no pasaban."""
+    soft = [0, 0, 0, -25, -50, -60, -40, -15, 0, 0, 0]
+    assert types(run(armed(), fan(soft))).count(EVENT_NEXT_TAB) == 1
+    at_30 = [(make_fan_hand(bend=b), i * 1000.0 / 30) for i, b in enumerate([0] * 6 + [-12, -25, -37, -50, -58, -60, -50, -35, -20, -8] + [0] * 6)]
+    assert types(run(armed(), at_30)).count(EVENT_NEXT_TAB) == 1
+
+
+# ------------------------------------------------------------ dictado (🤙)
+
+def test_llamada_sostenida_abre_el_dictado_una_vez() -> None:
+    """23-11-2026 (demo): 🤙 sostenido medio segundo = Win+H. Una vez por postura; breve no cuenta."""
+    from motor_local.interpreter import EVENT_DICTATION
+
+    assert make_tab_pose().landmarks  # la antigua postura de pestañas es exactamente 🤙
+    events = types(run(armed(), hold(make_tab_pose, 1200.0)))
+    assert events.count(EVENT_DICTATION) == 1
+    assert EVENT_DICTATION not in types(run(armed(), hold(make_tab_pose, 300.0)))
+    # Soltar y volver a hacerla pasado el enfriamiento la cierra (Win+H otra vez).
+    frames = list(hold(make_tab_pose, 700.0)) + list(hold(make_open_palm, 300.0, start=700.0)) + list(hold(make_tab_pose, 700.0, start=2300.0))
+    assert types(run(armed(), frames)).count(EVENT_DICTATION) == 2
+
+
+def test_llamada_respeta_su_interruptor_y_no_mueve_el_cursor() -> None:
+    from motor_local.interpreter import EVENT_DICTATION
+
+    assert EVENT_DICTATION not in types(run(armed(EngineConfig.from_dict({"dictation": False})), hold(make_tab_pose, 1200.0)))
+    events = types(run(armed(), hold(make_tab_pose, 1200.0)))
+    assert EVENT_MOVE_CURSOR not in events
+    assert EngineConfig.from_dict({}).to_dict()["dictation"] is True
+
+
+def test_llamada_solo_pulsa_win_h_en_control() -> None:
+    from motor_local.interpreter import EVENT_DICTATION
+
+    adapter = MockOSAdapter()
+    engine = LogicalActionEngine(adapter, initial_mode=MODE_OBSERVATION)
+    engine.dispatch([LogicalEvent(EVENT_DICTATION)])
+    assert adapter.executed_actions == []
+    engine.set_mode(MODE_CONTROL)
+    engine.dispatch([LogicalEvent(EVENT_DICTATION)])
+    assert adapter.executed_actions == [("KEY_COMBO", {"keys": ["win", "h"]})]
+    assert ("win", "h") in ALLOWED_KEY_COMBOS
+
+
+# ------------------------------------------------------------ abrir el teclado (☝️)
+
+def test_indice_sostenido_y_quieto_pide_abrir_el_teclado() -> None:
+    """23-11-2026: abrir el teclado Air-Swipe con un gesto en vez de ir a la app. Un evento por postura."""
+    from motor_local.interpreter import EVENT_KEYBOARD
+    from tests.test_gestos_catalogo import make_pointing
+
+    assert types(run(armed(), hold(make_pointing, 1500.0))).count(EVENT_KEYBOARD) == 1
+    assert EVENT_KEYBOARD not in types(run(armed(), hold(make_pointing, 700.0)))
+    # Apuntar moviendo la mano (mover el cursor) no lo abre: la espera se reinicia.
+    moving = [(make_pointing(cx=0.3 + 0.01 * i), i * FRAME_MS) for i in range(60)]
+    assert EVENT_KEYBOARD not in types(run(armed(), moving))
+
+
+def test_indice_sostenido_no_actua_con_el_teclado_abierto_ni_apagado() -> None:
+    from motor_local.interpreter import EVENT_KEYBOARD
+    from tests.test_gestos_catalogo import make_pointing
+
+    interp = armed()
+    interp.set_airswipe(True)  # con el teclado abierto, apuntar es trazar
+    assert EVENT_KEYBOARD not in types(run(interp, hold(make_pointing, 1500.0)))
+    assert EVENT_KEYBOARD not in types(run(armed(EngineConfig.from_dict({"keyboardGesture": False})), hold(make_pointing, 1500.0)))
+    assert EVENT_KEYBOARD not in types(run(armed(EngineConfig.from_dict({"airswipe": False})), hold(make_pointing, 1500.0)))
+    assert EngineConfig.from_dict({}).to_dict()["keyboardGesture"] is True
+
+
+def test_abrir_teclado_va_a_la_interfaz_y_nunca_al_sistema() -> None:
+    from motor_local.interpreter import EVENT_KEYBOARD
+
+    for mode in (MODE_OBSERVATION, MODE_CONTROL):
+        adapter = MockOSAdapter()
+        engine = LogicalActionEngine(adapter, initial_mode=mode)
+        engine.dispatch([LogicalEvent(EVENT_KEYBOARD, {"gesto": "indice_sostenido"})])
+        assert adapter.executed_actions == []
+        assert engine.take_app_events() == [{"event": EVENT_KEYBOARD, "gesto": "indice_sostenido"}]
+
+
+# ------------------------------------------------------------ gestos del 23-11 (videos con la mano izquierda)
+
+def test_pulgar_arriba_suelto_confirma_y_no_rompe_el_golpe_de_muneca() -> None:
+    """Puño de lado con el pulgar fuera 0,5-0,7 palmas: la regla estricta no lo veía; la suelta sí (sostenido)."""
+    from motor_local.interpreter import EVENT_CONFIRM
+
+    def loose_thumb(cx: float = 0.5, cy: float = 0.5) -> HandLandmarks:
+        lms = list(make_closed_fist(cx, cy).landmarks)
+        lms[2] = Point3D(cx - 0.05, cy - 0.02)
+        lms[3] = Point3D(cx - 0.06, cy - 0.06)
+        lms[4] = Point3D(cx - 0.07, cy - 0.10)
+        return HandLandmarks(landmarks=lms, handedness="Right", confidence=0.95)
+
+    events = types(run(armed(EngineConfig.from_dict({"thumbsUp": True})), hold(loose_thumb, 900.0)))
+    assert events.count(EVENT_CONFIRM) == 1, events
+    assert EVENT_CONFIRM not in types(run(armed(EngineConfig.from_dict({"thumbsUp": True})), hold(loose_thumb, 300.0)))
+
+
+def test_abanico_hacia_el_menique_devuelve_la_pestana_y_su_vuelta_no_pasa() -> None:
+    """Abanico inverso rápido (> 900 °/s) = pestaña anterior; la vuelta de un abanico normal no cuenta."""
+    inverse = [0, 0, 0, 70, 80, 40, 5, 0, 0, 0]   # 70° en un fotograma a 15 fps ≈ 1050 °/s
+    events = types(run(armed(), fan(inverse)))
+    assert events.count(EVENT_PREV_TAB) == 1 and EVENT_NEXT_TAB not in events, events
+    normal = types(run(armed(), fan(ONE_FAN)))
+    assert normal.count(EVENT_NEXT_TAB) == 1 and EVENT_PREV_TAB not in normal, normal
+    # Un giro inverso lento (impulso antes de abanicar) no devuelve la pestaña.
+    assert EVENT_PREV_TAB not in types(run(armed(), fan([0, 0, 0, 30, 45, 30, 5, 0, 0, 0])))
+
+
+def test_desplazar_con_la_mano_abierta_agarrando_primero() -> None:
+    """Experimental (apagado por defecto): mano abierta quieta ~0,35 s agarra; subirla baja la página (táctil)."""
+    from motor_local.interpreter import EVENT_SCROLL
+
+    def frames(cfg):
+        still = [(make_open_palm(0.5, 0.6), i * FRAME_MS) for i in range(15)]
+        rise = [(make_open_palm(0.5, 0.6 - 0.02 * i), (15 + i) * FRAME_MS) for i in range(1, 15)]
+        return [e for e in run(armed(EngineConfig.from_dict(cfg)), still + rise) if e.type == EVENT_SCROLL]
+
+    on = frames({"openHandScroll": True})
+    assert on and sum(e.payload["dy"] for e in on) < 0, [e.payload for e in on]
+    assert frames({}) == [], "apagado por defecto: mover la mano abierta solo mueve el cursor"
+    assert EngineConfig.from_dict({}).to_dict()["openHandScroll"] is False

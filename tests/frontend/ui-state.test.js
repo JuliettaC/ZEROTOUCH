@@ -65,6 +65,8 @@ test('la lista de gestos nombra la acción asignada cuando el gesto admite varia
   for (const [name, gesture] of Object.entries(gestures)) {
     if (gesture.code) assert.ok(GESTURE_CODES.includes(gesture.code), `${name} apunta a un gesto del contrato`)
   }
+  const catalog = Object.values(gestures).map(gesture => gesture.code).filter(Boolean)
+  assert.deepEqual(catalog.sort(), [...GESTURE_CODES].sort(), 'cada asignación sigue accesible desde una ficha')
 })
 
 test('el estado del motor explica que el puntero necesita la mano abierta sostenida', () => {

@@ -10,7 +10,13 @@
 //   ventana ya no exista o falle su cierre.
 // Módulo puro: recibe el cliente de la API; no importa React ni Tauri.
 
-export const DISCARD_CODES = Object.freeze(['AIRSWIPE_INACTIVE', 'CONTROL_REQUIRED', 'INTERACTION_PAUSED', 'GAZE_HOLD', 'TRACKING_LOST'])
+export const DISCARD_CODES = Object.freeze([
+  'AIRSWIPE_INACTIVE',
+  'CONTROL_REQUIRED',
+  'INTERACTION_PAUSED',
+  'GAZE_HOLD',
+  'TRACKING_LOST',
+])
 
 export const REJECTION_MESSAGES = Object.freeze({
   AIRSWIPE_INACTIVE: 'El teclado no está activo en el motor.',
@@ -20,7 +26,7 @@ export const REJECTION_MESSAGES = Object.freeze({
   TRACKING_LOST: 'Se perdió la mano: muéstrala a la cámara.',
 })
 
-export const isSessionRejection = error => DISCARD_CODES.includes(error?.code)
+export const isSessionRejection = (error) => DISCARD_CODES.includes(error?.code)
 
 /**
  * Motivo por el que el motor rechazaría ahora una escritura, según la telemetría (solo orientativo:
@@ -43,7 +49,14 @@ async function send(call) {
     return { ok: true }
   } catch (error) {
     const discard = isSessionRejection(error)
-    return { ok: false, discard, code: error?.code ?? 'ERROR', message: discard ? REJECTION_MESSAGES[error.code] : (error?.message || 'No se pudo enviar al motor.') }
+    return {
+      ok: false,
+      discard,
+      code: error?.code ?? 'ERROR',
+      message: discard
+        ? REJECTION_MESSAGES[error.code]
+        : error?.message || 'No se pudo enviar al motor.',
+    }
   }
 }
 
@@ -60,14 +73,22 @@ export const sendKey = (api, key) => send(() => api.enginePressKey(key))
  * @returns {{clearPending:boolean, reengage:boolean}}
  */
 export function airswipeTransition(prev, next, { wantOpen, airswipeEnabled }) {
-  const p = prev || {}, n = next || {}
+  const p = prev || {},
+    n = next || {}
   const stoppedNow = !p.emergencyStopped && Boolean(n.emergencyStopped)
   const resumedFromStop = Boolean(p.emergencyStopped) && !n.emergencyStopped
   const engineStopped = Boolean(p.running) && !n.running
   const leftControl = p.mode === 'CONTROL' && n.mode !== 'CONTROL'
   const modeClosed = Boolean(p.airswipe) && !n.airswipe
   const clearPending = stoppedNow || resumedFromStop || engineStopped || leftControl || modeClosed
-  const reengage = Boolean(wantOpen && airswipeEnabled && resumedFromStop && n.running && n.mode === 'CONTROL' && !n.airswipe)
+  const reengage = Boolean(
+    wantOpen &&
+    airswipeEnabled &&
+    resumedFromStop &&
+    n.running &&
+    n.mode === 'CONTROL' &&
+    !n.airswipe,
+  )
   return { clearPending, reengage }
 }
 
@@ -76,12 +97,21 @@ export function airswipeTransition(prev, next, { wantOpen, airswipeEnabled }) {
  * sistema y se entregan como eventos de la aplicación. Si la interfaz ya no tiene el teclado abierto
  * (ventana cerrada, recarga, fallo), ese modo queda «huérfano» y hay que apagarlo.
  */
-export const isOrphanedAirswipe = (engineStatus, keyboardOpen) => Boolean(engineStatus?.running && engineStatus.airswipe && !keyboardOpen)
+export const isOrphanedAirswipe = (engineStatus, keyboardOpen) =>
+  Boolean(engineStatus?.running && engineStatus.airswipe && !keyboardOpen)
 
 /** Cierre completo y tolerante: apaga el modo en el motor y luego la ventana; intenta ambos siempre. */
 export async function closeAirswipe(api) {
   const result = { engine: true, window: true }
-  try { await api.engineAirswipe(false) } catch { result.engine = false }
-  try { await api.airswipeWindowClose() } catch { result.window = false }
+  try {
+    await api.engineAirswipe(false)
+  } catch {
+    result.engine = false
+  }
+  try {
+    await api.airswipeWindowClose()
+  } catch {
+    result.window = false
+  }
   return result
 }

@@ -60,6 +60,10 @@ EVENT_AIRSWIPE_TRACE = "AIRSWIPE_TRACE"    # trazo terminado sobre el teclado Ai
 EVENT_NEXT_TAB = "NEXT_TAB"            # abanico con la mano ladeada: pestaña siguiente (Ctrl+Tab)
 EVENT_PREV_TAB = "PREV_TAB"            # pestaña anterior (Ctrl+Shift+Tab): sin gesto desde el 21-11-2026 (se conserva la tecla)
 EVENT_RIGHT_CLICK = "RIGHT_CLICK"      # pinza pulgar-medio: clic derecho en la posición del puntero
+EVENT_KEYBOARD_CLOSE = "KEYBOARD_CLOSE"  # golpe de muñeca hacia abajo con el teclado abierto: bajarlo (interfaz; 23-11-2026)
+EVENT_KEYBOARD = "KEYBOARD"            # ☝️ sostenido y quieto: abrir el teclado Air-Swipe (lo hace la interfaz; 23-11-2026)
+EVENT_ALT_TAB = "ALT_TAB"              # doblar índice, medio y anular rápido con el meñique arriba: Alt+Tab (23-11-2026)
+EVENT_DICTATION = "DICTATION"          # 🤙 sostenido: dictado de Windows (Win+H), gesto local del equipo (23-11-2026)
 
 # Acción del catálogo -> tipo de evento lógico.
 ACTION_EVENTS: dict[str, str] = {
@@ -144,6 +148,24 @@ CLICK_REWIND_MS = 90.0         # el clic cae donde estaba el cursor justo antes 
 # Gestos discretos sostenidos: tiempo de confirmación, cooldown y rearme.
 THUMB_HOLD_MS = 500.0
 THUMB_COOLDOWN_MS = 800.0
+# 23-11-2026 (videos nuevos de la persona usuaria, mano izquierda): su pulgar arriba es un puño de lado, más suelto
+# que la regla estricta (puño cerrado, pulgar > 0,72 palmas). Regla suelta solo para el pulgar ARRIBA: ningún dedo
+# extendido, pulgar fuera > 0,5 y por encima de su nudillo > 0,44 palmas. Medido: confirmar 0,50-0,69 y 0,44-0,63;
+# el puño de pausa nunca sube el pulgar más de 0,43 (video nuevo) y en el viejo solo 1 fotograma suelto lo cumple.
+THUMB_UP_LOOSE_OUT = 0.5
+THUMB_UP_LOOSE_DY = 0.44
+# Dictado (23-11-2026, pedido para la demo): 🤙 = pulgar y meñique extendidos, índice, medio y anular plegados,
+# sostenido como el pulgar arriba. Win+H abre y cierra el dictado de Windows: el enfriamiento largo evita que una
+# postura dudosa lo abra y lo cierre seguido.
+CALL_HOLD_MS = 500.0
+# Abrir el teclado Air-Swipe (23-11-2026): ☝️ (solo el índice extendido), sostenido y con la mano casi quieta. Es la
+# postura del trazo, así que con el teclado abierto no cuenta. Al apuntar mientras se mueve el cursor la mano no
+# está quieta y el tiempo vuelve a empezar; el evento va a la interfaz, nunca al sistema operativo.
+KEYBOARD_HOLD_MS = 1000.0
+KEYBOARD_COOLDOWN_MS = 2000.0
+KEYBOARD_STILL_PALM = 0.2      # recorrido máximo de la palma (palmas) durante la espera
+CALL_COOLDOWN_MS = 1500.0
+CALL_THUMB_OUT = 0.6           # punta del pulgar lejos del nudillo del índice (palmas); con el pulgar recogido queda más cerca
 PRECISION_HOLD_MS = 400.0
 PRECISION_COOLDOWN_MS = 800.0
 PALM_HOLD_MS = 900.0           # palma abierta quieta este tiempo -> acción discreta (navegacion)
@@ -163,12 +185,26 @@ TRACE_MAX_POINTS = 600
 # rápido hacia el lado del pulgar. Una pestaña por abanico; el regreso (giro contrario) no cuenta. Videos: palmo
 # 45-71° en el abanico y 91-107° en los demás gestos; giro de ida -520 a -1835 °/s.
 TAB_FAN_TILT = 80.0            # grados; mano derecha (la izquierda, en espejo: más de 180 - TAB_FAN_TILT)
-TAB_FAN_MIN_SPEED = 500.0      # giro de los dedos (nudillo -> punta del medio), grados por segundo
-TAB_FAN_MAX_HAND_SPEED = 3.0   # el centro de la mano casi no se desplaza: tamaños de mano por segundo
+TAB_FAN_MIN_SPEED = 300.0      # giro de los dedos (nudillo -> punta del medio), grados por segundo. 23-11-2026: con
+                               # 500 solo pasaba un abanico «golpeado muy fuerte» (informe en vivo: 39 posturas, 16
+                               # pestañas). Videos: abanicos 250-670 °/s en su fotograma más rápido; el mayor giro
+                               # sin abanico con la mano ladeada, 214 °/s (mover cursor). Con 250 tampoco hay falsos.
+TAB_FAN_MIN_SPAN_MS = 60.0     # el giro se mide contra la muestra de hace al menos esto: a 15 fps es el fotograma
+                               # anterior (igual que antes); a 30-37 fps evita que el temblor de los puntos entre
+                               # fotogramas muy juntos cuente como giro rápido.
+TAB_FAN_MAX_HAND_SPEED = 2.0   # el centro de la mano casi no se desplaza: tamaños de mano por segundo. 22-11-2026: con 3,0 un barrido lateral (>= SWIPE_MIN_SPEED) con la mano ladeada pasaba por abanico y robaba el atrás/adelante; los videos reales de abanico siguen dando 3/3 hasta 2,0
 TAB_FAN_REARM_SPEED = 250.0    # el giro debe calmarse por debajo de esto antes del siguiente abanico. Defensa
                                # redundante: dentro del giro posible de los dedos (~100°) un giro rápido no dura más
                                # que TAB_FAN_COOLDOWN_MS ni a 15 ni a 30 fps, así que hoy lo decide el enfriamiento.
 TAB_FAN_COOLDOWN_MS = 350.0
+# Pestaña anterior (23-11-2026, video «devolver pestaña»): el abanico hacia el lado contrario (hacia el meñique),
+# empezando desde la mano calmada. La vuelta de un abanico normal no cuenta: ese giro llega con el abanico
+# desarmado (lo desarma el propio abanico) y al revés. En el video la mano se desplaza más que en el abanico normal.
+TAB_PREV_MAX_HAND_SPEED = 2.0
+TAB_PREV_MIN_SPEED = 900.0      # más que el abanico: antes de abanicar, la mano toma impulso hacia el otro lado
+                               # (en los videos viejos de «pasar pestaña» ese impulso daba «devolver» con 300-600)
+TAB_FAN_REARM_MS = 60.0        # el giro debe seguir calmado al menos esto: en el extremo de un giro contrario los
+                               # dedos se frenan un instante y, con TAB_FAN_MIN_SPEED = 300, su vuelta pasaba por abanico.
 # Golpe de muñeca para ventanas (21-11-2026, videos reales; con el interruptor windowSwipe). Las CUATRO puntas se
 # mueven a la vez respecto de sus nudillos (el scroll solo mueve índice y medio) y vuelven enseguida: bajar y volver
 # = minimizar; subir y volver = restaurar. Abrir la mano y sostenerla (mostrar escritorio) no vuelve a tiempo, y
@@ -179,6 +215,35 @@ FLICK_MAX_HAND_SPEED = 4.0     # el centro de la mano casi quieto (no es un barr
 FLICK_COOLDOWN_MS = 600.0
 FLICK_OPPOSITE_MS = 1500.0     # tras minimizar no se restaura (ni al revés) antes de esto: el rebote no es otro golpe
 FLICK_MAX_GAP_MS = 200.0
+# 22-11-2026 (informe en vivo): el abanico dobla la muñeca y sus puntas se mueven igual que en el golpe de muñeca,
+# así que un abanico también minimizaba o restauraba. Con los gestos de pestaña activos, el golpe no cuenta durante
+# este tiempo después de un abanico que pasó de pestaña (su vuelta llega antes de FLICK_RETURN_MS). 23-11-2026: una
+# primera versión bloqueaba el golpe con la mano solo ladeada y dejó de bajar ventanas; no se hace.
+FLICK_AFTER_FAN_MS = FLICK_RETURN_MS
+# Traer la ventana de vuelta «levantando la mano» (23-11-2026, video «regresar ventana»): la mano queda colgando (palmo
+# muñeca->nudillo del medio apuntando hacia abajo) y después sube abierta y vertical. Medido: colgando -28 a -58° durante
+# 10 fotogramas, luego vertical. Mientras dura (y un poco después) el golpe de muñeca no cuenta: cerrar la mano al
+# bajarla lo imitaba y minimizaba (3 veces en el video).
+HANG_PALM_DIR = -20.0          # grados: palmo por debajo de esto = mano colgando
+HANG_MIN_MS = 150.0            # colgando al menos esto
+RAISE_PALM_DIR = 60.0          # y después vertical (palmo por encima de esto) con la mano abierta
+RAISE_WINDOW_MS = 1200.0       # antes de esto desde que dejó de colgar
+HANG_FLICK_GUARD_MS = 700.0    # golpe de muñeca ignorado hasta esto después de colgar
+# Alt+Tab (23-11-2026, video «alt tab»): desde la mano abierta, índice, medio y anular bajan rápido (cada uno >
+# FLICK_MIN_SPEED respecto de su nudillo) con el meñique casi quieto, y vuelven a subir antes de ALT_TAB_RETURN_MS.
+# Medido: alt tab vuelve en 237-339 ms; la llamada del dictado (misma bajada) se sostiene 675-911 ms; el caso más
+# cercano en otros videos, 465 ms.
+ALT_TAB_RETURN_MS = 400.0
+ALT_TAB_PINKY_RATIO = 0.5      # el meñique se mueve menos que la mitad que el más lento de los tres
+ALT_TAB_COOLDOWN_MS = 600.0
+# Desplazar con la mano abierta (23-11-2026, experimental, interruptor openHandScroll APAGADO por defecto). En los
+# videos nuevos la persona desplaza con la palma abierta: la deja quieta (~0,7 s) y luego sube o baja toda la mano.
+# Subir/bajar la mano abierta es también mover el cursor, así que se usa esa quietud previa: mano abierta quieta
+# OPEN_SCROLL_GRAB_MS «agarra» la página; desde ahí el movimiento vertical desplaza (como dos dedos) y el cursor no
+# se mueve, hasta cambiar de postura. Coste: tras dejar la mano abierta quieta, moverla desplaza en vez de mover.
+OPEN_SCROLL_GRAB_MS = 350.0     # video: la mano queda quieta ~0,4-0,5 s antes de moverse
+OPEN_SCROLL_STILL_PALM = 0.15
+OPEN_SCROLL_DROPOUT_MS = 300.0  # la mano flexiona un instante los dedos sin dejar de «agarrar»
 TAB_FAN_MAX_GAP_MS = 200.0     # dos muestras más separadas que esto no se comparan (mano perdida)
 
 # Clic derecho (gesto local del equipo): punta del pulgar con punta del medio, índice extendido.
@@ -477,6 +542,9 @@ class GestureInterpreter:
         self._thumb_up = _HoldGesture(THUMB_HOLD_MS, THUMB_COOLDOWN_MS)
         self._thumb_down = _HoldGesture(THUMB_HOLD_MS, THUMB_COOLDOWN_MS)
         self._precision_hold = _HoldGesture(PRECISION_HOLD_MS, PRECISION_COOLDOWN_MS)
+        self._call_hold = _HoldGesture(CALL_HOLD_MS, CALL_COOLDOWN_MS)
+        self._keyboard_hold = _HoldGesture(KEYBOARD_HOLD_MS, KEYBOARD_COOLDOWN_MS, still_palm=KEYBOARD_STILL_PALM)
+        self._keyboard_posing = False
         self._palm_hold = _HoldGesture(PALM_HOLD_MS, PALM_COOLDOWN_MS, still_palm=PALM_STILL_PALM)
         self._discrete_locked_pos: tuple[float, float] | None = None
         self._trace_frames: int = 0
@@ -490,14 +558,26 @@ class GestureInterpreter:
         self._accel_prev: tuple[float, float, float] | None = None     # posición absoluta filtrada anterior (x, y, t)
         self._accel_out: tuple[float, float] | None = None              # posición acelerada (la que sigue el cursor)
         self._cursor_settled: bool = False
-        self._fan_prev: tuple[float, float, float, float] | None = None  # (ms, dirección de los dedos, cx, cy)
+        self._fan_hist: list[tuple[float, float, float, float]] = []  # (ms, dirección de los dedos, cx, cy), últimos ~250 ms
         self._fan_armed: bool = True
+        self._fan_calm_since: float | None = None
+        # Diagnóstico de la pinza (ver process_frame): motivo -> fotogramas. Solo conteos.
+        self.pinch_diag: dict[str, int] = {}
+        self._pinch_reason: str | None = None
         self._fan_last_ms: float = -1e9
         self._flick_prev: tuple[float, tuple[float, ...], float, float] | None = None  # (ms, puntas, cx, cy)
         self._flick_dir: int = 0          # +1 bajada en curso, -1 subida en curso, 0 nada
         self._flick_ms: float = -1e9
         self._flick_fired_ms: float = -1e9
         self._flick_kind: str = ""
+        self._hang_start_ms: float | None = None
+        self._alt_prev: tuple[float, tuple[float, ...]] | None = None
+        self._alt_down_ms: float | None = None
+        self._alt_fired_ms: float = -1e9
+        self._grab_hold = _HoldGesture(OPEN_SCROLL_GRAB_MS, 0.0, still_palm=OPEN_SCROLL_STILL_PALM)
+        self._grab_active = False
+        self._grab_lost_ms: float | None = None
+        self._hang_last_ms: float | None = None
         self._rpinch_count: int = 0
         self._rpinch_start_ms: float | None = None
         self._rpinch_active: bool = False
@@ -572,6 +652,8 @@ class GestureInterpreter:
         self._pinch_locked_pos = None
 
     def _reset_scroll(self) -> None:
+        self._grab_active = False
+        self._grab_lost_ms = None
         self._scroll_frames = 0
         self._scroll_gap = 0
         self._scroll_start_ms = None
@@ -633,7 +715,7 @@ class GestureInterpreter:
         for hold in (self._thumb_up, self._thumb_down, self._precision_hold, self._palm_hold):
             hold.cancel()
         self._discrete_locked_pos = None
-        self._fan_prev = None
+        self._fan_hist = []
         self._clear_right_pinch()
 
     # ------------------------------------------------------------ acciones discretas
@@ -726,27 +808,106 @@ class GestureInterpreter:
             self._flick_ms = now_ms
         return []
 
+    def _alt_tab_step(self, lms: list[Point3D], blocked: bool, now_ms: float) -> list[LogicalEvent]:
+        """Alt+Tab (ver ALT_TAB_*): bajada rápida de índice, medio y anular con el meñique quieto, y vuelta enseguida."""
+        size = max(_dist2d(lms[0], lms[5]), _dist2d(lms[0], lms[17]), _dist2d(lms[5], lms[17])) or 1e-6
+        tips = tuple((lms[t].y - lms[m].y) / size for t, m in ((8, 5), (12, 9), (16, 13), (20, 17)))
+        prev, self._alt_prev = self._alt_prev, (now_ms, tips)
+        if self._alt_down_ms is not None and (now_ms - self._alt_down_ms) > ALT_TAB_RETURN_MS:
+            self._alt_down_ms = None
+        if blocked or prev is None or not (0.0 < now_ms - prev[0] <= FLICK_MAX_GAP_MS):
+            if blocked:
+                self._alt_down_ms = None
+            return []
+        dt = (now_ms - prev[0]) / 1000.0
+        v = [(a - b) / dt for a, b in zip(tips, prev[1])]   # positivo = la punta baja
+        slow = min(v[:3])
+        if slow > FLICK_MIN_SPEED and abs(v[3]) < ALT_TAB_PINKY_RATIO * slow:
+            if self._alt_down_ms is None:
+                self._alt_down_ms = now_ms
+            return []
+        up = min(-x for x in v[:3])
+        if (self._alt_down_ms is not None and up > FLICK_MIN_SPEED and abs(v[3]) < ALT_TAB_PINKY_RATIO * up
+                and (now_ms - self._alt_fired_ms) >= ALT_TAB_COOLDOWN_MS):
+            self._alt_down_ms = None
+            self._alt_fired_ms = now_ms
+            return [LogicalEvent(EVENT_ALT_TAB, {"gesto": "tres_dedos_y_volver"})]
+        return []
+
+    def _raise_step(self, lms: list[Point3D], open_hand: bool, now_ms: float) -> list[LogicalEvent]:
+        """Mano colgando y luego levantada abierta y vertical: traer de vuelta la última ventana (ver HANG_*)."""
+        palm_dir = math.degrees(math.atan2(-(lms[9].y - lms[0].y), lms[9].x - lms[0].x))
+        if palm_dir < HANG_PALM_DIR:
+            if self._hang_start_ms is None:
+                self._hang_start_ms = now_ms
+            self._hang_last_ms = now_ms
+            return []
+        if self._hang_start_ms is None or self._hang_last_ms is None:
+            return []
+        if (self._hang_last_ms - self._hang_start_ms) < HANG_MIN_MS:
+            # Colgó solo un instante (p. ej. al relajar el puño de pausa): debe colgar de forma continua.
+            self._hang_start_ms = None
+            return []
+        if now_ms - self._hang_last_ms > RAISE_WINDOW_MS:
+            self._hang_start_ms = None
+            return []
+        if (open_hand and palm_dir > RAISE_PALM_DIR and (self._hang_last_ms - self._hang_start_ms) >= HANG_MIN_MS
+                and (now_ms - self._flick_fired_ms) >= FLICK_COOLDOWN_MS):
+            self._hang_start_ms = None
+            self._flick_fired_ms = now_ms
+            self._flick_kind = EVENT_RESTORE_WINDOW
+            self._flick_dir = 0
+            return [LogicalEvent(EVENT_RESTORE_WINDOW, {"gesto": "levantar_mano"})]
+        return []
+
+    @staticmethod
+    def _fan_tilted(lms: list[Point3D], handedness: str) -> bool:
+        """Mano ladeada como en el abanico: palmo (muñeca -> nudillo del medio) por debajo de TAB_FAN_TILT."""
+        palm_dir = math.degrees(math.atan2(-(lms[9].y - lms[0].y), lms[9].x - lms[0].x))
+        return palm_dir < TAB_FAN_TILT if handedness != "Left" else palm_dir > 180.0 - TAB_FAN_TILT
+
     def _fan_step(self, lms: list[Point3D], handedness: str, open_hand: bool, now_ms: float) -> tuple[bool, list[LogicalEvent]]:
         """Abanico de pestaña (ver TAB_FAN_*). Devuelve (postura en curso, eventos): mientras la mano abierta y ladeada
         está casi quieta, el cursor no se mueve, para que el abanico no lo arrastre."""
         size = max(_dist2d(lms[0], lms[5]), _dist2d(lms[0], lms[17]), _dist2d(lms[5], lms[17])) or 1e-6
         finger_dir = math.degrees(math.atan2(-(lms[12].y - lms[9].y), lms[12].x - lms[9].x))
-        palm_dir = math.degrees(math.atan2(-(lms[9].y - lms[0].y), lms[9].x - lms[0].x))
         cx = (lms[0].x + lms[5].x + lms[17].x) / 3.0
         cy = (lms[0].y + lms[5].y + lms[17].y) / 3.0
-        prev, self._fan_prev = self._fan_prev, (now_ms, finger_dir, cx, cy)
+        # Muestras recientes: se compara con la más nueva que tenga al menos TAB_FAN_MIN_SPAN_MS de antigüedad.
+        hist = [s for s in self._fan_hist if 0.0 < now_ms - s[0] <= TAB_FAN_MAX_GAP_MS + TAB_FAN_MIN_SPAN_MS]
+        self._fan_hist = hist + [(now_ms, finger_dir, cx, cy)]
+        if hist and now_ms - hist[-1][0] > TAB_FAN_MAX_GAP_MS:
+            hist = []   # hueco: mano perdida entre medias
+        older = [s for s in hist if now_ms - s[0] >= TAB_FAN_MIN_SPAN_MS]
+        prev = older[-1] if older else None
         right = handedness != "Left"
-        tilted = palm_dir < TAB_FAN_TILT if right else palm_dir > 180.0 - TAB_FAN_TILT
-        if not (open_hand and tilted) or prev is None or not (0.0 < now_ms - prev[0] <= TAB_FAN_MAX_GAP_MS):
+        tilted = self._fan_tilted(lms, handedness)
+        if not (open_hand and tilted) or prev is None:
             if not (open_hand and tilted):
                 self._fan_armed = True
             return False, []
         dt = (now_ms - prev[0]) / 1000.0
         turn = ((finger_dir - prev[1] + 180.0) % 360.0 - 180.0) / dt   # grados por segundo; negativo = horario
-        still = math.hypot(cx - prev[2], cy - prev[3]) / size / dt < TAB_FAN_MAX_HAND_SPEED
-        if abs(turn) < TAB_FAN_REARM_SPEED:
-            self._fan_armed = True
+        hand_speed = math.hypot(cx - prev[2], cy - prev[3]) / size / dt
+        still = hand_speed < TAB_FAN_MAX_HAND_SPEED
         toward_thumb = -turn if right else turn
+        # Pestaña anterior: giro rápido hacia el meñique con el abanico armado (antes de desarmarlo abajo).
+        if (self._fan_armed and toward_thumb <= -TAB_PREV_MIN_SPEED and hand_speed < TAB_PREV_MAX_HAND_SPEED
+                and (now_ms - self._fan_last_ms) >= TAB_FAN_COOLDOWN_MS):
+            self._fan_armed = False
+            self._fan_calm_since = None
+            self._fan_last_ms = now_ms
+            return True, [LogicalEvent(EVENT_PREV_TAB, {"giro_grados_s": round(turn), "gesto": "abanico_inverso"})]
+        if abs(turn) < TAB_FAN_REARM_SPEED:
+            if self._fan_calm_since is None:
+                self._fan_calm_since = now_ms
+            if now_ms - self._fan_calm_since >= TAB_FAN_REARM_MS:
+                self._fan_armed = True
+        else:
+            self._fan_calm_since = None
+            if toward_thumb <= -TAB_FAN_MIN_SPEED:
+                # Giro rápido hacia el otro lado: su vuelta (hacia el pulgar) no es un abanico; hay que calmarse antes.
+                self._fan_armed = False
         if (still and self._fan_armed and toward_thumb >= TAB_FAN_MIN_SPEED
                 and (now_ms - self._fan_last_ms) >= TAB_FAN_COOLDOWN_MS):
             self._fan_armed = False
@@ -1029,6 +1190,17 @@ class GestureInterpreter:
     # ---------------------------------------------------------- main frame
 
     def process_frame(self, hand: HandLandmarks | None, now_ms: float) -> list[LogicalEvent]:
+        """Procesa un fotograma. Además cuenta, en `pinch_diag`, por qué no hubo clic en cada fotograma con el
+        pulgar y el índice juntos (bajo el umbral de entrada): diagnóstico del informe de prueba, solo conteos."""
+        self._pinch_reason = None
+        events = self._process_frame(hand, now_ms)
+        tel = self.telemetry
+        if hand is not None and tel.hand_detected and tel.pinch_ratio <= self.config.pinch_enter_ratio:
+            reason = self._pinch_reason or f"OTRO_GESTO_{tel.gesture}"
+            self.pinch_diag[reason] = self.pinch_diag.get(reason, 0) + 1
+        return events
+
+    def _process_frame(self, hand: HandLandmarks | None, now_ms: float) -> list[LogicalEvent]:
         events: list[LogicalEvent] = []
         now_sec = now_ms / 1000.0
 
@@ -1109,6 +1281,11 @@ class GestureInterpreter:
         thumb_out_dist = _dist2d(thumb_tip, index_mcp) / scale
         dy_thumb = (thumb_mcp.y - thumb_tip.y) / scale   # positivo = punta por encima de la articulación (arriba)
         thumb_extended = _is_fist_pose(lms, scale) and thumb_out_dist > 0.72 and abs(dy_thumb) > 0.42
+        # Regla suelta (ver THUMB_UP_LOOSE_*): solo suma tiempo sostenido al pulgar arriba; NO corta el fotograma,
+        # porque el centro de un golpe de muñeca (dedos doblados hacia la cámara) se le parece durante un instante.
+        loose_thumb_up = (not thumb_extended) and (not (index_ext or middle_ext or ring_ext or pinky_ext)) and (
+            thumb_out_dist > THUMB_UP_LOOSE_OUT and dy_thumb > THUMB_UP_LOOSE_DY
+        )
         thumbs_up_pose = thumb_extended and dy_thumb > 0
         thumbs_down_pose = thumb_extended and dy_thumb < 0
         if is_fist or thumb_extended:
@@ -1151,7 +1328,8 @@ class GestureInterpreter:
 
         self._fist_start_ms = None
         self._fist_toggled_in_hold = False
-        self._thumb_up.step(False, now_ms)
+        if self._thumb_up.step(loose_thumb_up, now_ms) and self.config.thumbs_up_enabled:
+            events.extend(self._discrete_action("pulgar_arriba", now_ms))
         self._thumb_down.step(False, now_ms)
 
         if self.paused:
@@ -1189,9 +1367,32 @@ class GestureInterpreter:
         palm_cy = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25
 
         # 4·0. Golpe de muñeca para ventanas (con windowSwipe): observa el movimiento sin cortar los demás gestos.
-        if self.config.window_swipe_enabled:
+        #      Con el teclado Air-Swipe abierto (y keyboardGesture), el golpe hacia abajo BAJA EL TECLADO en vez de la
+        #      ventana (23-11-2026); hacia arriba no hace nada. No cuenta trazando ni con la postura del trazo (solo
+        #      el índice extendido): el golpe mueve las cuatro puntas. (En la bajada los dedos se doblan, así que no
+        #      se puede exigir la mano abierta en cada fotograma.)
+        keyboard_close = self.airswipe_active and self.config.keyboard_gesture_enabled
+        hang_recent = False
+        if self.config.window_swipe_enabled and not self.airswipe_active:
+            events.extend(self._raise_step(lms, sum((index_ext, middle_ext, ring_ext, pinky_ext)) >= 3, now_ms))
+            hang_recent = self._hang_last_ms is not None and (now_ms - self._hang_last_ms) < HANG_FLICK_GUARD_MS
+        if self.config.alt_tab_enabled:
+            fist_recent_alt = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
+            events.extend(self._alt_tab_step(lms, self.airswipe_active or self._dragging or pinch_is_active or fist_recent_alt, now_ms))
+        if self.config.window_swipe_enabled or keyboard_close:
             fist_recent = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
-            events.extend(self._flick_step(lms, self._dragging or pinch_is_active or fist_recent or self.airswipe_active, now_ms))
+            # Solo tras un abanico que SÍ pasó de pestaña: la vuelta de ese abanico no es un golpe de muñeca.
+            fan_recent = self.config.tab_gestures_enabled and (now_ms - self._fan_last_ms) < FLICK_AFTER_FAN_MS
+            if self.airswipe_active:
+                blocked = (not keyboard_close) or self._tracing or (index_ext and middle_folded and ring_folded)
+            else:
+                blocked = False
+            blocked = blocked or self._dragging or pinch_is_active or fist_recent or fan_recent or hang_recent
+            for flick in self._flick_step(lms, blocked, now_ms):
+                if not self.airswipe_active:
+                    events.append(flick)
+                elif flick.type == EVENT_MINIMIZE_WINDOW:
+                    events.append(LogicalEvent(EVENT_KEYBOARD_CLOSE, {"gesto": "golpe_muneca"}))
 
         # 4·0a. Pestaña siguiente (gesto local): abanico con la mano abierta y ladeada (ver TAB_FAN_*). Sustituye
         #       al gesto de pulgar y meñique (21-11-2026). Mientras la mano ladeada está quieta, el cursor no se mueve.
@@ -1223,6 +1424,20 @@ class GestureInterpreter:
         elif self._rpinch_count or self._rpinch_active:
             self._clear_right_pinch()
 
+        # 4·0c. Dictado (gesto local): 🤙 sostenido -> Win+H. Excluyente con la precisión (índice extendido) y con
+        #       el pulgar arriba (allí el meñique está plegado). Mientras dura, el cursor no se mueve.
+        call_pose = (
+            self.config.dictation_enabled and pinky_ext and (not index_ext) and (not middle_ext) and (not ring_ext)
+            and middle_folded and ring_folded and pinch_open and (not self._dragging) and (not pinch_is_active)
+            and (not self.airswipe_active) and _dist2d(lms[4], lms[5]) / scale > CALL_THUMB_OUT
+        )
+        if self._call_hold.step(call_pose, now_ms):
+            events.append(LogicalEvent(EVENT_DICTATION, {"gesto": "llamada"}))
+        if call_pose:
+            self._reset_scroll()
+            self.telemetry = self._telemetry(hand, "DICTADO", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
+            return events
+
         # 4a. Modo precisión (índice y meñique extendidos): postura sostenida, una acción por postura.
         #     Mientras dura, el cursor queda quieto para no desviar la selección.
         precision_pose = (
@@ -1252,6 +1467,35 @@ class GestureInterpreter:
             if three_pose:
                 self.telemetry = self._telemetry(hand, "TRES_DEDOS", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
                 return events
+
+        # 4c. Desplazar con la mano abierta (experimental, ver OPEN_SCROLL_*): agarrar quieta y luego subir/bajar.
+        if self.config.open_hand_scroll_enabled and not self._dragging and not pinch_is_active and not self.airswipe_active:
+            if self._grab_active:
+                if open_pose:
+                    self._grab_lost_ms = None
+                    # Sentido de pantalla táctil (video «desliza hacia abajo»: la mano SUBE y la página baja).
+                    steps = -self._scroll_step(palm_cx, palm_cy, scale, now_ms)
+                    if steps != 0:
+                        events.append(LogicalEvent(EVENT_SCROLL, {"dy": steps, "gesto": "mano_abierta"}))
+                    self.telemetry = self._telemetry(hand, "SCROLL_MANO", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
+                    return events
+                if self._grab_lost_ms is None:
+                    self._grab_lost_ms = now_ms
+                if now_ms - self._grab_lost_ms <= OPEN_SCROLL_DROPOUT_MS and not fist_now:
+                    self.telemetry = self._telemetry(hand, "SCROLL_MANO", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
+                    return events
+                self._grab_active = False
+                self._reset_scroll()
+            elif self._grab_hold.step(open_pose, now_ms, palm_cx, palm_cy, scale):
+                self._reset_scroll()
+                self._grab_active = True
+                self._scroll_anchor = (palm_cx, palm_cy)
+                self._scroll_last_ms = now_ms
+                self.telemetry = self._telemetry(hand, "SCROLL_MANO", pinch_px, pinch_ratio, raw_ax, raw_ay, compact_lms)
+                return events
+        elif self._grab_active:
+            self._grab_active = False
+            self._reset_scroll()
 
         # 5. Dos dedos (scroll): postura confirmada + movimiento vertical fuera de la zona muerta.
         pose = (
@@ -1298,6 +1542,18 @@ class GestureInterpreter:
         )
         events.extend(self._trace_step(pointing, now_ms))
 
+        # 5a·1. Abrir el teclado (☝️ sostenido y quieto, teclado cerrado). El cursor sigue al índice: si se mueve,
+        #       la espera se reinicia (KEYBOARD_STILL_PALM), así que apuntar para mover el cursor no lo abre.
+        keyboard_pose = (
+            self.config.keyboard_gesture_enabled and self.config.airswipe_enabled and (not self.airswipe_active)
+            and index_ext and (not middle_ext) and (not ring_ext) and (not pinky_ext)
+            and middle_folded and ring_folded and pinky_folded and pinch_open
+            and (not self._dragging) and (not pinch_is_active)
+        )
+        self._keyboard_posing = keyboard_pose
+        if self._keyboard_hold.step(keyboard_pose, now_ms, palm_cx, palm_cy, scale):
+            events.append(LogicalEvent(EVENT_KEYBOARD, {"gesto": "indice_sostenido"}))
+
         # 5b. Barrido horizontal con palma abierta: una acción por barrido. El puntero sigue activo.
         swipe_flags = self.config.swipe_left_enabled or self.config.swipe_right_enabled or self.config.window_swipe_enabled
         swipe_pose = swipe_flags and open_pose and (not self._dragging) and (not pinch_is_active)
@@ -1317,7 +1573,7 @@ class GestureInterpreter:
         filtered_x, filtered_y = self._accelerate(filtered_x, filtered_y, now_ms)
         filtered_x, filtered_y = max(0.0, min(1.0, filtered_x)), max(0.0, min(1.0, filtered_y))
 
-        active_gesture = "TRACE" if self._tracing else "POINTER"
+        active_gesture = "TRACE" if self._tracing else ("TECLADO" if self._keyboard_posing else "POINTER")
         enter_ratio = self.config.pinch_enter_ratio
         exit_ratio = self.config.pinch_exit_ratio
         # Solo la relación con el tamaño de la palma: el umbral absoluto (pensado para una palma de 0,15)
@@ -1331,6 +1587,19 @@ class GestureInterpreter:
         # parecidas a una pinza, y cerrarlo ya descarta la pinza sin clic (_release_pointer_state).
         index_curled = fist_now or (self._fist_seen_ms is not None and (now_ms - self._fist_seen_ms) < FIST_PINCH_GUARD_MS)
         is_entering_pinch = pinch_ratio <= enter_ratio and not index_curled and _index_pinch_shape(lms, scale)
+        if pinch_ratio <= enter_ratio:
+            if not self.config.pinch_enabled:
+                self._pinch_reason = "PINZA_DESACTIVADA"
+            elif self._tracing:
+                self._pinch_reason = "TRAZO_AIRSWIPE"
+            elif self._pinching or is_entering_pinch:
+                self._pinch_reason = "PINZA"
+            elif index_curled:
+                self._pinch_reason = "PUNO_RECIENTE"
+            elif _dist2d(lms[8], lms[12]) / scale < PINCH_INDEX_SEPARATION:
+                self._pinch_reason = "INDICE_JUNTO_AL_MEDIO"
+            else:
+                self._pinch_reason = "INDICE_RECTO"
         is_exiting_pinch = pinch_ratio >= exit_ratio
 
         if self.config.pinch_enabled and not self._tracing:

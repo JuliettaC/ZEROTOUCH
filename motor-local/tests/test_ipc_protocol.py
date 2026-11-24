@@ -10,9 +10,13 @@ import io
 import json
 import sys
 
+import base64
+import cv2
+import numpy as np
 import pytest
 
 from motor_local import main as engine_main
+from motor_local.detector import HandLandmarks, Point3D
 from motor_local.os_adapter import MockOSAdapter
 
 
@@ -116,6 +120,55 @@ def _run(monkeypatch, capsys, commands: list[dict], *, capture_open: bool = True
 
 def _acks(messages: list[dict]) -> dict:
     return {m["id"]: m for m in messages if m.get("type") == "ACK"}
+
+
+def test_preview_uses_the_tracked_frame_and_stays_out_of_telemetry(monkeypatch, capsys):
+    commands = [
+        {"cmd": "PREVIEW_FRAME", "id": 1},
+        {"cmd": "SET_MODE", "mode": "CONTROL", "id": 2},
+        {"cmd": "PREVIEW_FRAME", "id": 3},
+        {"cmd": "SET_PAUSED", "paused": True, "id": 4},
+        {"cmd": "PREVIEW_FRAME", "id": 5},
+        {"cmd": "EMERGENCY_STOP", "id": 6},
+        {"cmd": "PREVIEW_FRAME", "id": 7},
+        {"cmd": "STOP", "id": 8},
+    ]
+    rgb = np.zeros((360, 640, 3), dtype=np.uint8)
+    rgb[:, :, 0] = 220
+    rgb[:32, -32:] = [0, 220, 0]
+    rgb[-32:, :32] = [0, 0, 220]
+    points = [Point3D(0.4 + i * 0.01, 0.5) for i in range(21)]
+    pending = []
+
+    class PreviewCapture(FakeCapture):
+        def read_rgb_frame(self):
+            for command in commands:
+                pending[0].put(command)
+            return True, rgb
+
+    class PreviewDetector(FakeDetector):
+        def detect(self, frame, **kwargs):
+            assert frame is rgb
+            return HandLandmarks(points, "Right", 0.99)
+
+    monkeypatch.setattr(engine_main, "CameraCapture", PreviewCapture)
+    monkeypatch.setattr(engine_main, "HandDetector", PreviewDetector)
+    monkeypatch.setattr(engine_main, "stdin_reader", lambda queue, stop: pending.append(queue))
+
+    assert engine_main.run_engine(use_mock_os=True) == 0
+    messages = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    acks = _acks(messages)
+    frame = acks[1]["preview"]
+    assert frame["landmarks"] == [[round(point.x, 4), point.y] for point in points]
+    jpg = np.frombuffer(base64.b64decode(frame["jpeg"]), dtype=np.uint8)
+    bgr = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
+    assert bgr.shape == rgb.shape
+    assert bgr[0, 0, 2] > 200 and bgr[0, 0, 0] < 10
+    assert bgr[0, -1, 1] > 200 and bgr[-1, 0, 0] > 200
+    assert acks[2]["ok"] and acks[3]["preview"]["jpeg"] == frame["jpeg"]
+    assert acks[4]["ok"] and acks[5]["preview"]["jpeg"] == frame["jpeg"]
+    assert acks[6]["ok"] and acks[7]["code"] == "PREVIEW_MODE"
+    assert all("preview" not in message for message in messages if message["type"] != "ACK")
 
 
 def test_every_command_gets_an_ack_and_stop_is_last(monkeypatch, capsys) -> None:

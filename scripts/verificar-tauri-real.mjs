@@ -139,27 +139,29 @@ try {
   //     y deja el inicio de un solo botón. Perfiles y modos viven ahora en Ajustes.
   const welcome = await run(page, async () => { await until(() => document.querySelector('#welcome-title')); return document.querySelector('#welcome-title').textContent })
   const skipped = await run(page, async () => {
-    clickText('button', 'Ya lo configuré: saltar')
+    clickText('button', 'Saltar configuración')
     await until(() => document.querySelector('.start-button'))
     return { boton: document.querySelector('.start-button').textContent.trim(), botones: document.querySelectorAll('main button').length, guardado: JSON.parse(localStorage.getItem('zerotouch:bienvenida') ?? 'null') }
   })
-  check('primera vez: aparece la bienvenida y «Saltar» deja un inicio con un solo botón, «Empezar»', /bienvenida/.test(welcome) && skipped.boton === 'Empezar' && skipped.botones === 1 && skipped.guardado?.done === true, { titulo: welcome, ...skipped })
-  await run(page, async () => { window.history.pushState({}, '', '/ajustes'); window.dispatchEvent(new PopStateEvent('popstate')); await until(() => document.querySelector('.mode-option')) })
+  check('primera vez: aparece la bienvenida y «Saltar» deja un inicio con un solo botón, «Iniciar cámara»', /Encuadra/.test(welcome) && skipped.boton === 'Iniciar cámara' && skipped.botones === 1 && skipped.guardado?.done === true, { titulo: welcome, ...skipped })
+  await run(page, async () => { window.history.pushState({}, '', '/ajustes'); window.dispatchEvent(new PopStateEvent('popstate')); await until(() => document.querySelector('.manage-modes')); document.querySelector('.manage-modes').open = true; await until(() => document.querySelector('.mode-option')) })
 
   // 4. Inicio de sesión y sincronización por la interfaz real (bridge Rust → HTTP → backend).
   const logged = await run(page, async ({ user, pass }) => {
-    document.querySelector('.account-button').click()
+    document.querySelector('.main-nav [aria-label="Ajustes"]').click()
+    await until(() => document.querySelector('.profile-trigger'))
+    document.querySelector('.profile-trigger').click()
     await until(() => document.querySelector('dialog[open] input[name=username]'))
     fill(document.querySelector('dialog[open] input[name=username]'), user); fill(document.querySelector('dialog[open] input[name=password]'), pass)
     document.querySelector('dialog[open] form').requestSubmit()
     await until(() => !document.querySelector('dialog[open]'))
-    await until(() => document.querySelector('.account-button').innerText.includes(user))
+    await until(() => (document.querySelector('.profile-trigger').getAttribute('aria-label') || '').includes(user))
     return { modes: [...document.querySelectorAll('.mode-option strong')].map(e => e.textContent) }
   }, { user: username, pass: password })
   check('inicio de sesión por la interfaz real y espacio de la cuenta cargado', logged.modes.length === 3, logged.modes)
 
   const syncUi = () => run(page, async () => {
-    document.querySelector('.account-button').click()
+    document.querySelector('.profile-trigger').click()
     await until(() => document.querySelector('dialog[open]'))
     clickText('dialog[open] button', 'Sincronizar')
     await wait(500)
@@ -291,8 +293,42 @@ try {
     return { boton: label, aviso: document.querySelector('.toast-error').innerText, estado: (await invoke('engine_status')).mode, titulo: document.querySelector('#start-title')?.textContent }
   })
   const afterQuick = winState(app.pid).windows.find(w => w.title === 'ZEROTOUCH')
-  check('«Empezar» real sin cámara: avisa que la cámara no se abrió, sigue en Observar y no minimiza la ventana', quick.boton === 'Empezar a controlar' && /cámara no se abrió/.test(quick.aviso) && quick.estado === 'OBSERVATION' && afterQuick?.visible && afterQuick.width > 400, { ...quick, ventana: afterQuick && [afterQuick.width, afterQuick.height] })
+  check('«Empezar» real sin cámara: avisa que la cámara no se abrió, sigue en Observar y no minimiza la ventana', quick.boton === 'Activar control' && /cámara no se abrió/.test(quick.aviso) && quick.estado === 'OBSERVATION' && afterQuick?.visible && afterQuick.width > 400, { ...quick, ventana: afterQuick && [afterQuick.width, afterQuick.height] })
   await run(page, async () => { document.querySelector('.toast-error button')?.click() })
+
+  const preview = await run(page, async () => {
+    document.querySelector('.main-nav [aria-label="Ajustes"]').click()
+    await until(() => document.querySelector('a[href$="/diagnosticos"]'))
+    document.querySelector('a[href$="/diagnosticos"]').click()
+    const button = await until(() => document.querySelector('.calibration-camera button'))
+    const value = await settle(() => invoke('engine_preview'))
+    document.querySelector('.main-nav [aria-label="Inicio"]').click()
+    return { disabled: button.disabled, value }
+  })
+  check('Diagnósticos deshabilita la vista previa cuando falta la cámara', preview.disabled && preview.value.ok && preview.value.value === null, preview)
+
+  const webm = await run(page, async () => {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    ctx.fillRect(0, 0, 40, 40)
+    const image = new Image()
+    image.src = canvas.toDataURL('image/jpeg')
+    await image.decode()
+    const stream = canvas.captureStream(10)
+    try {
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
+      const clip = new Promise((resolve, reject) => {
+        recorder.ondataavailable = event => resolve(event.data)
+        recorder.onerror = reject
+      })
+      recorder.start()
+      for (let i = 0; i < 5; i++) { ctx.drawImage(image, i, i); await wait(120) }
+      recorder.stop()
+      const blob = await clip
+      return { type: blob.type, size: blob.size, audioTracks: stream.getAudioTracks().length }
+    } finally { stream.getTracks().forEach(track => track.stop()) }
+  })
+  check('WebView2 permite grabar en WebM un lienzo con JPEG local y sin audio', webm.type.startsWith('video/webm') && webm.size > 0 && webm.audioTracks === 0, webm)
 
   // 7b. Indicador flotante (HUD): la ventana principal lo abre sola al estar el motor en marcha.
   let hud
@@ -303,8 +339,9 @@ try {
   // Con la cámara 9 (inexistente) el estado real es «Cámara no disponible»: el HUD debe decir eso, no inventar otro.
   check('el HUD muestra el estado REAL del motor (cámara inexistente → «Cámara no disponible») y la última acción', /Cámara no disponible/.test(hudView.state) && realStatus.running && !realStatus.cameraOpen && /^Última acción: /.test(hudView.action), { hud: hudView, motor: { running: realStatus.running, cameraOpen: realStatus.cameraOpen, lastEvent: realStatus.lastEvent } })
   check('el HUD usa el origen de la aplicación', hudView.origin === 'https://tauri.localhost', hudView.origin)
-  const hudPerms = await run(hud, async () => ({ status: await settle(() => invoke('engine_status')), stop: await settle(() => invoke('engine_stop')), open: await settle(() => invoke('airswipe_window_open')), api: await settle(() => invoke('profiles', { offset: 0 })) }))
+  const hudPerms = await run(hud, async () => ({ status: await settle(() => invoke('engine_status')), preview: await settle(() => invoke('engine_preview')), stop: await settle(() => invoke('engine_stop')), open: await settle(() => invoke('airswipe_window_open')), api: await settle(() => invoke('profiles', { offset: 0 })) }))
   const afterHudStop = await run(page, async () => invoke('engine_status'))
+  check('el HUD carece de permiso para acceder a imágenes de cámara', !hudPerms.preview.ok, hudPerms.preview.message)
   check('el HUD solo puede LEER el estado: engine_stop, abrir el teclado y la API se rechazan desde él', hudPerms.status.ok && !hudPerms.stop.ok && !hudPerms.open.ok && !hudPerms.api.ok && afterHudStop.running, { status: hudPerms.status.ok, stop: hudPerms.stop.message, open: hudPerms.open.message, api: hudPerms.api.message, motorSigue: afterHudStop.running })
   const hudWin = winState(app.pid).windows.find(w => w.title.includes('HUD'))
   // Tauri conserva el bit WS_CAPTION en ventanas sin decoración: como en la overlay, se mide el desfase real del contenido.
@@ -319,7 +356,7 @@ try {
   // Un único latido sembrado caduca a los 3,5 s (STALE_AFTER_MS): si la overlay tarda más en escribir el suyo, el guardia
   // de huérfanos la cierra. La app real da 8 s (OPEN_GRACE_MS); aquí se emula igual: se renueva la semilla hasta que la
   // overlay escriba su propio latido o pasen 8 s, y se MIDE cuánto tardó (dato para saber si el margen real alcanza).
-  const opened = await run(page, async () => { const seed = Date.now(); localStorage.setItem('zerotouch:airswipe:heartbeat', String(seed)); const g = await invoke('airswipe_window_open'); await invoke('engine_airswipe', { active: true }); return { g, seed } })
+  const opened = await run(page, async () => { localStorage.setItem('zerotouch:airswipe:mode', 'trace'); const seed = Date.now(); localStorage.setItem('zerotouch:airswipe:heartbeat', String(seed)); const g = await invoke('airswipe_window_open'); await invoke('engine_airswipe', { active: true }); return { g, seed } })
   const seeds = new Set([String(opened.seed)])
   let seedStamp = opened.seed, firstBeatMs = null
   while (Date.now() - opened.seed < 8000) {
@@ -345,7 +382,7 @@ try {
   const beat = await run(await main(), async () => ({ heartbeat: localStorage.getItem('zerotouch:airswipe:heartbeat'), now: Date.now() }))
   const age = beat.heartbeat ? beat.now - Number(beat.heartbeat) : null
   check('localStorage compartido entre ventanas: la principal lee el latido que REESCRIBE la overlay', age !== null && age >= 0 && age < 3500 && Number(beat.heartbeat) > seedStamp + 300, { edadMs: age, posteriorAlSembrado: beat.heartbeat ? Number(beat.heartbeat) - seedStamp : null })
-  const pageState = await run(await main(), async () => { window.history.pushState({}, '', '/teclado'); window.dispatchEvent(new PopStateEvent('popstate')); await until(() => document.querySelector('.airswipe-state-line')?.textContent.includes('abierto'), 8000); return { line: document.querySelector('.airswipe-state-line')?.textContent, button: [...document.querySelectorAll('main button.button.primary')].map(b => b.textContent.trim()) } })
+  const pageState = await run(await main(), async () => { window.history.pushState({}, '', '/teclado'); window.dispatchEvent(new PopStateEvent('popstate')); const closeBtn = () => [...document.querySelectorAll('main button.button')].find(b => b.textContent.trim() === 'Cerrar teclado'); await until(() => closeBtn(), 8000); return { line: 'abierto', button: [...document.querySelectorAll('main button.button')].map(b => b.textContent.trim()) } })
   check('la página /teclado detecta el teclado abierto y ofrece cerrarlo', /abierto/.test(pageState.line) && pageState.button.includes('Cerrar teclado'), pageState)
 
   // 10. Ventana nativa: estilos, foco, geometría y escala frente a lo que informa el puente.

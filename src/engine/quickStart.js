@@ -27,17 +27,21 @@ export function cameraReadiness(status, elapsedMs) {
 export const QUICK_START_MESSAGES = {
   ok: 'Listo: mueve el cursor con la mano abierta. Cierra el puño para pausar; Ctrl+Alt+Z lo detiene todo.',
   already: 'Ya estás controlando.',
-  cameraTimeout: 'La cámara no se abrió. Revisa que esté conectada y que otra aplicación no la esté usando, o elige otra en Calibrar.',
+  cameraTimeout:
+    'La cámara no se abrió. Revisa que esté conectada y que otra aplicación no la esté usando, o elige otra en Calibrar.',
   stopped: 'El motor se detuvo mientras se abría la cámara. Vuelve a pulsar Empezar.',
 }
 
 /** Texto para la persona según el código estable que devuelve el puente o el motor. */
 export function quickStartError(error) {
   switch (error?.code) {
-    case 'CAMERA_NOT_OPEN': case 'CAMERA_LOST': return QUICK_START_MESSAGES.cameraTimeout
+    case 'CAMERA_NOT_OPEN':
+    case 'CAMERA_LOST':
+      return QUICK_START_MESSAGES.cameraTimeout
     case 'EMERGENCY_HOTKEY_UNAVAILABLE':
       return 'Windows no dejó registrar Ctrl+Alt+Z, la parada de emergencia, así que el control no se activa por seguridad. Cierra la aplicación que use ese atajo y vuelve a intentarlo.'
-    default: return error?.message || 'No se pudo empezar. Revisa la cámara en Calibrar.'
+    default:
+      return error?.message || 'No se pudo empezar. Revisa la cámara en Calibrar.'
   }
 }
 
@@ -45,9 +49,18 @@ export function quickStartError(error) {
 export const MINIMIZE_KEY = 'zerotouch:minimizar-al-empezar'
 
 export function readMinimizeOnStart(storage) {
-  try { return storage?.getItem(MINIMIZE_KEY) !== 'off' } catch { return true }
+  try {
+    return storage?.getItem(MINIMIZE_KEY) !== 'off'
+  } catch {
+    return true
+  }
 }
 
 export function writeMinimizeOnStart(storage, enabled) {
-  try { storage?.setItem(MINIMIZE_KEY, enabled ? 'on' : 'off'); return true } catch { return false }
+  try {
+    storage?.setItem(MINIMIZE_KEY, enabled ? 'on' : 'off')
+    return true
+  } catch {
+    return false
+  }
 }

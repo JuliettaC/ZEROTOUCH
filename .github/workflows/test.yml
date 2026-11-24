@@ -39,6 +39,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - run: npm run format:check
       - name: Pruebas de módulos puros
         run: node --test "tests/frontend/*.test.js"
       - name: Compilar la aplicación de escritorio y el prototipo

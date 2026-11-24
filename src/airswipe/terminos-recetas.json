@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "fuente": "Lista propia de ZeroTouch (23-11-2026): términos frecuentes al buscar recetas, para escribir menos letras con el teclado por permanencia.",
+    "licencia": "Palabras sueltas del español sin obra protegible; sin restricciones."
+  },
+  "inicio": ["receta de", "cómo hacer", "pollo", "pasta"],
+  "siguientes": ["de", "con", "fácil", "casera"],
+  "terminos": [
+    "receta de", "receta", "recetas", "cómo hacer", "casera", "casero", "fácil", "rápida", "rápido",
+    "con", "de", "sin", "al horno", "horno", "vegetariana", "vegana", "sin gluten", "saludable", "airfryer",
+    "pollo", "pasta", "panqueques", "pan", "pastel", "pastel de choclo", "papas", "papas fritas", "pescado",
+    "porotos", "pizza", "postre", "puré", "queque", "queso", "kuchen", "lasaña", "lentejas", "leche asada",
+    "limón", "arroz", "arroz con leche", "atún", "budín", "brownie", "carne", "cazuela", "cebolla",
+    "charquicán", "chocolate", "churrasco", "empanadas", "ensalada", "espaguetis", "flan", "frutilla",
+    "galletas", "garbanzos", "humitas", "huevos", "manzana", "mermelada", "salmón", "salsa", "sopa",
+    "sopaipillas", "tallarines", "tomate", "torta", "tortilla", "verduras", "zapallo", "mote con huesillo"
+  ]
+}

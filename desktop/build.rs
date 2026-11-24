@@ -1,4 +1,5 @@
 fn main() {
+    println!("cargo:rerun-if-changed=icons/icon.ico");
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "register",
@@ -23,6 +24,7 @@ fn main() {
             "engine_start",
             "engine_stop",
             "engine_status",
+            "engine_preview",
             "engine_update_config",
             "engine_set_mode",
             "engine_set_paused",

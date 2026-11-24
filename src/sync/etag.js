@@ -5,7 +5,9 @@
 // El servidor lo recalcula dentro de la transacción que borra: si algo cambió en otro equipo (el perfil,
 // un modo, sus asignaciones, o si se añadió o quitó un modo), responde 412 y no borra nada.
 async function encode(text) {
-  const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
+  const digest = new Uint8Array(
+    await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)),
+  )
   let binary = ''
   for (const byte of digest) binary += String.fromCharCode(byte)
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').slice(0, 32)
@@ -15,6 +17,9 @@ export const modeEtag = async (id, version) => `"${await encode(`modo:${id}|v${v
 
 /** @param {{id:string, version:number}[]} modes modos del perfil conocidos (con versión); el orden no importa */
 export async function profileEtag(id, version, modes) {
-  const children = modes.map(mode => `${mode.id}:${mode.version}`).sort().join(';')
+  const children = modes
+    .map((mode) => `${mode.id}:${mode.version}`)
+    .sort()
+    .join(';')
   return `"${await encode(`perfil:${id}|v${version}|${children}`)}"`
 }

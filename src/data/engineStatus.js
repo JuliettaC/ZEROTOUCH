@@ -11,6 +11,9 @@ export const GESTURE_LABELS = {
   FIST_HOLD: 'Puño…',
   TRES_DEDOS: 'Tres dedos',
   PESTANAS: 'Abanico',
+  DICTADO: 'Llamada (dictado)',
+  TECLADO: 'Índice (abrir teclado)',
+  SCROLL_MANO: 'Mano abierta (desplazar)',
   PINZA_MEDIO: 'Pinza con el medio',
   RIGHT_CLICK: 'Clic derecho',
   PULGAR: 'Pulgar',
@@ -26,6 +29,9 @@ export const GESTURE_MATCH = {
   scroll: ['SCROLL'],
   threeFingers: ['TRES_DEDOS'],
   tabs: ['PESTANAS'],
+  dictation: ['DICTADO'],
+  keyboard: ['TECLADO'],
+  openHandScroll: ['SCROLL_MANO'],
   rightClick: ['PINZA_MEDIO', 'RIGHT_CLICK'],
 }
 
@@ -65,13 +71,21 @@ export const DEFAULT_ENGINE_STATUS = Object.freeze({
   latencyMs: 0,
   totalClicks: 0,
   totalScrolls: 0,
+  eventCounts: {},
+  deliveryCounts: {},
+  pinchDiag: {},
   appliedConfig: null,
   eventSeq: 0,
   recentEvents: [],
   message: 'Motor gestual detenido.',
 })
 
-const HANDEDNESS = { RIGHT: 'derecha', LEFT: 'izquierda', DERECHA: 'derecha', IZQUIERDA: 'izquierda' }
+const HANDEDNESS = {
+  RIGHT: 'derecha',
+  LEFT: 'izquierda',
+  DERECHA: 'derecha',
+  IZQUIERDA: 'izquierda',
+}
 
 export function getEngineState(status) {
   const running = Boolean(status?.running)
@@ -79,16 +93,65 @@ export function getEngineState(status) {
   const handDetected = Boolean(cameraOpen && status?.handDetected)
   const base = { running, cameraOpen, handDetected, control: false }
 
-  if (status?.emergencyStopped) return { ...base, key: 'error', tone: 'error', label: 'Parada de emergencia', hint: 'El control se detuvo. Apaga y vuelve a activar la cámara.' }
-  if (!running) return { ...base, key: 'off', tone: 'off', label: 'Cámara apagada', hint: 'Actívala para empezar.' }
-  if (!cameraOpen) return { ...base, key: 'nocam', tone: 'error', label: 'Cámara no disponible', hint: 'Ciérrala en otras apps o elige otra cámara en Calibrar.' }
-  if (status.paused) return { ...base, key: 'paused', tone: 'paused', label: 'En pausa', hint: 'Cierra el puño o pulsa Reanudar.' }
+  if (status?.emergencyStopped)
+    return {
+      ...base,
+      key: 'error',
+      tone: 'error',
+      label: 'Parada de emergencia',
+      hint: 'El control se detuvo. Apaga y vuelve a activar la cámara.',
+    }
+  if (!running)
+    return {
+      ...base,
+      key: 'off',
+      tone: 'off',
+      label: 'Cámara apagada',
+      hint: 'Actívala para empezar.',
+    }
+  if (!cameraOpen)
+    return {
+      ...base,
+      key: 'nocam',
+      tone: 'error',
+      label: 'Cámara no disponible',
+      hint: 'Ciérrala en otras apps o elige otra cámara en Calibrar.',
+    }
+  if (status.paused)
+    return {
+      ...base,
+      key: 'paused',
+      tone: 'paused',
+      label: 'En pausa',
+      hint: 'Cierra el puño o pulsa Reanudar.',
+    }
   if (status.mode === 'CONTROL') {
     // Con el puntero habilitado, el cursor no se mueve hasta que la mano abierta sostenida lo arma.
-    if (status.pointerArmed === false) return { ...base, control: true, key: 'control', tone: 'control', label: 'Control activo', hint: 'Mantén la mano abierta un momento para activar el puntero.' }
-    return { ...base, control: true, key: 'control', tone: 'control', label: 'Controlando el cursor', hint: 'Tu mano mueve el cursor de Windows.' }
+    if (status.pointerArmed === false)
+      return {
+        ...base,
+        control: true,
+        key: 'control',
+        tone: 'control',
+        label: 'Control activo',
+        hint: 'Mantén la mano abierta un momento para activar el puntero.',
+      }
+    return {
+      ...base,
+      control: true,
+      key: 'control',
+      tone: 'control',
+      label: 'Controlando el cursor',
+      hint: 'Tu mano mueve el cursor de Windows.',
+    }
   }
-  return { ...base, key: 'observe', tone: 'observe', label: 'Observando', hint: 'Prueba sin mover el cursor.' }
+  return {
+    ...base,
+    key: 'observe',
+    tone: 'observe',
+    label: 'Observando',
+    hint: 'Prueba sin mover el cursor.',
+  }
 }
 
 export function describeHand(status) {
@@ -100,5 +163,10 @@ export function describeHand(status) {
 }
 
 export function isGestureLive(id, status) {
-  return Boolean(status?.running && status?.cameraOpen && status?.handDetected && GESTURE_MATCH[id]?.includes(status.gesture))
+  return Boolean(
+    status?.running &&
+    status?.cameraOpen &&
+    status?.handDetected &&
+    GESTURE_MATCH[id]?.includes(status.gesture),
+  )
 }

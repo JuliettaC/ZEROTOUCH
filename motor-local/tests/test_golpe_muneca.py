@@ -89,3 +89,65 @@ def test_abrir_el_puno_no_restaura() -> None:
     events = run(interp, [make_closed_fist(0.5, 0.5)] * 3)
     events += run(interp, [flick_hand(-0.07), flick_hand(0.0)] + REST, start=3 * FRAME_MS)
     assert not WINDOW_EVENTS & set(events)
+
+
+def test_con_el_teclado_abierto_el_golpe_hacia_abajo_baja_el_teclado() -> None:
+    """23-11-2026: otro gesto para bajar el teclado Air-Swipe. Con el teclado abierto, el golpe hacia abajo emite
+    KEYBOARD_CLOSE (no minimiza ninguna ventana) y el de subir no hace nada; también con windowSwipe apagado."""
+    from motor_local.interpreter import EVENT_KEYBOARD_CLOSE
+
+    for extra in ({}, {"windowSwipe": False}):
+        interp = armed(config(**extra))
+        interp.set_airswipe(True)
+        down = run(interp, DOWN_AND_BACK)
+        assert down.count(EVENT_KEYBOARD_CLOSE) == 1 and not WINDOW_EVENTS & set(down), (extra, down)
+        interp = armed(config(**extra))
+        interp.set_airswipe(True)
+        up = run(interp, UP_AND_BACK)
+        assert EVENT_KEYBOARD_CLOSE not in up and not WINDOW_EVENTS & set(up), (extra, up)
+    # Sin el teclado abierto sigue minimizando la ventana.
+    assert run(armed(config()), DOWN_AND_BACK).count(EVENT_MINIMIZE_WINDOW) == 1
+
+
+def test_bajar_el_teclado_respeta_su_interruptor_y_exige_la_mano_abierta() -> None:
+    from motor_local.interpreter import EVENT_KEYBOARD_CLOSE
+
+    interp = armed(config(keyboardGesture=False))
+    interp.set_airswipe(True)
+    assert EVENT_KEYBOARD_CLOSE not in run(interp, DOWN_AND_BACK)
+    # Solo el índice se mueve rápido (como al trazar): no baja el teclado.
+    only_index = [flick_hand(0.0, fingers=(8,))] * 4 + [flick_hand(0.07, fingers=(8,)), flick_hand(0.0, fingers=(8,))] + [flick_hand(0.0, fingers=(8,))] * 4
+    interp = armed(config())
+    interp.set_airswipe(True)
+    assert EVENT_KEYBOARD_CLOSE not in run(interp, only_index)
+
+
+def test_colgar_la_mano_y_levantarla_trae_la_ventana_sin_minimizar() -> None:
+    """23-11-2026 (video «regresar ventana»): mano colgando de forma continua y luego arriba = traer de vuelta."""
+    from tests.test_gestos_equipo_pc import make_fan_hand
+
+    up = [make_fan_hand(tilt=90.0)] * 4
+    hanging = [make_fan_hand(tilt=-60.0)] * 6          # 6 fotogramas a 15 fps = 400 ms colgando
+    events = run(armed(config()), up + hanging + [make_fan_hand(tilt=90.0)] * 6)
+    assert events.count(EVENT_RESTORE_WINDOW) == 1 and EVENT_MINIMIZE_WINDOW not in events, events
+    # Colgar a ratos (como al relajar el puño de pausa) no cuenta.
+    flicker = up + [make_fan_hand(tilt=-60.0), make_fan_hand(tilt=90.0)] * 3 + up
+    assert EVENT_RESTORE_WINDOW not in run(armed(config()), flicker)
+    # Sin el interruptor de ventanas no hace nada.
+    assert EVENT_RESTORE_WINDOW not in run(armed(config(windowSwipe=False)), up + hanging + up)
+
+
+def test_alt_tab_tres_dedos_rapidos_con_el_menique_arriba() -> None:
+    """23-11-2026 (video «alt tab»): índice, medio y anular bajan y vuelven en < 400 ms con el meñique quieto."""
+    from motor_local.interpreter import EVENT_ALT_TAB
+
+    three = (8, 12, 16)
+    quick = [flick_hand(0.0, fingers=three)] * 4 + [flick_hand(0.07, fingers=three), flick_hand(0.0, fingers=three)] + [flick_hand(0.0, fingers=three)] * 4
+    events = run(armed(config(windowSwipe=False)), quick)
+    assert events.count(EVENT_ALT_TAB) == 1, events
+    # Sostener los tres dedos doblados (como al hacer la llamada del dictado) no es Alt+Tab.
+    slow = [flick_hand(0.0, fingers=three)] * 4 + [flick_hand(0.07, fingers=three)] * 8 + [flick_hand(0.0, fingers=three)] * 4
+    assert EVENT_ALT_TAB not in run(armed(config(windowSwipe=False)), slow)
+    # Con los cuatro dedos es el golpe de muñeca, no Alt+Tab.
+    assert EVENT_ALT_TAB not in run(armed(config()), DOWN_AND_BACK)
+    assert EVENT_ALT_TAB not in run(armed(config(windowSwipe=False, altTab=False)), quick)

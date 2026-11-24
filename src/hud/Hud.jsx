@@ -32,7 +32,10 @@ export default function Hud() {
     }
     poll()
     const timer = window.setInterval(poll, POLL_MS)
-    return () => { cancelled = true; window.clearInterval(timer) }
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [])
   useEffect(() => {
     if (!flash) return
@@ -41,11 +44,17 @@ export default function Hud() {
   }, [flash])
 
   const hud = describeHud(status, { bridgeDown })
-  return <div className={`hud tone-${hud.tone} ${flash ? 'flash' : ''}`} role="status" aria-live="polite">
-    <span className="hud-dot" aria-hidden="true" />
-    <div className="hud-text">
-      <strong className="hud-state">{hud.state}</strong>
-      {hud.action && <span className="hud-action">{hud.action}</span>}
+  return (
+    <div
+      className={`hud tone-${hud.tone} ${flash ? 'flash' : ''}`}
+      role="status"
+      aria-live="polite"
+    >
+      <span className="hud-dot" aria-hidden="true" />
+      <div className="hud-text">
+        <strong className="hud-state">{hud.state}</strong>
+        {hud.action && <span className="hud-action">{hud.action}</span>}
+      </div>
     </div>
-  </div>
+  )
 }

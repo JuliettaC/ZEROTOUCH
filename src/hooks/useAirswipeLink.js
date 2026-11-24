@@ -6,7 +6,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { closeAirswipe } from '../airswipe/session'
-import { HEARTBEAT_EVERY_MS, OPEN_GRACE_MS, clearHeartbeat, heartbeatFresh, readKeyboardSize } from '../airswipe/link'
+import {
+  HEARTBEAT_EVERY_MS,
+  OPEN_GRACE_MS,
+  clearHeartbeat,
+  heartbeatFresh,
+  readKeyboardMode,
+  windowSizeFor,
+} from '../airswipe/link'
 
 const storage = () => globalThis.localStorage
 
@@ -16,19 +23,29 @@ export function useAirswipeLink({ onNotice }) {
   const graceUntilRef = useRef(0)
 
   useEffect(() => {
-    const timer = window.setInterval(() => setOpen(heartbeatFresh(storage(), Date.now())), HEARTBEAT_EVERY_MS / 2)
+    const timer = window.setInterval(
+      () => setOpen(heartbeatFresh(storage(), Date.now())),
+      HEARTBEAT_EVERY_MS / 2,
+    )
     return () => window.clearInterval(timer)
   }, [])
 
-  const isKeyboardOpen = useCallback(() => heartbeatFresh(storage(), Date.now()) || Date.now() < graceUntilRef.current, [])
+  const isKeyboardOpen = useCallback(
+    () => heartbeatFresh(storage(), Date.now()) || Date.now() < graceUntilRef.current,
+    [],
+  )
 
   const openKeyboard = useCallback(async () => {
     setBusy(true)
     graceUntilRef.current = Date.now() + OPEN_GRACE_MS
     try {
-      await api.airswipeWindowOpen(undefined, readKeyboardSize(storage()))
+      await api.airswipeWindowOpen(undefined, windowSizeFor(storage()))
       await api.engineAirswipe(true)
-      onNotice('Teclado Air-Swipe abierto. Haz clic con la pinza donde quieras escribir y traza la palabra con el índice.')
+      onNotice(
+        readKeyboardMode(storage()) === 'dwell'
+          ? 'Teclado abierto. Haz clic con la pinza en el campo donde quieras escribir y deja el cursor quieto sobre cada letra.'
+          : 'Teclado Air-Swipe abierto. Haz clic con la pinza donde quieras escribir y traza la palabra con el índice.',
+      )
     } catch (error) {
       // Si el motor lo rechaza (trazo deshabilitado, motor parado…) no queda ni la ventana ni el modo.
       graceUntilRef.current = 0
@@ -43,7 +60,12 @@ export function useAirswipeLink({ onNotice }) {
     setBusy(true)
     graceUntilRef.current = 0
     clearHeartbeat(storage())
-    try { await closeAirswipe(api) } finally { setBusy(false); setOpen(false) }
+    try {
+      await closeAirswipe(api)
+    } finally {
+      setBusy(false)
+      setOpen(false)
+    }
   }, [])
 
   return { open, busy, isKeyboardOpen, openKeyboard, closeKeyboard }

@@ -5,11 +5,20 @@ export const HUD_STORAGE_KEY = 'zerotouch:hud'
 
 /** Lee la preferencia; ante un almacenamiento bloqueado o un valor extraño, activado. */
 export function readHudEnabled(storage) {
-  try { return storage?.getItem(HUD_STORAGE_KEY) !== 'off' } catch { return true }
+  try {
+    return storage?.getItem(HUD_STORAGE_KEY) !== 'off'
+  } catch {
+    return true
+  }
 }
 
 export function writeHudEnabled(storage, enabled) {
-  try { storage?.setItem(HUD_STORAGE_KEY, enabled ? 'on' : 'off'); return true } catch { return false }
+  try {
+    storage?.setItem(HUD_STORAGE_KEY, enabled ? 'on' : 'off')
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** El HUD se muestra solo con el motor en marcha y la preferencia activada. */

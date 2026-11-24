@@ -7,7 +7,7 @@ Protocolo JSON-lines: comandos por stdin, respuestas por stdout.
   configuración realmente aplicada (`config`) para que la interfaz la compare con la deseada.
 - Comandos: SET_MODE, SET_PAUSED, SET_CONFIG (formato IPC), LOAD_EXPORT (exportación de la API),
   AIRSWIPE (abrir/cerrar teclado), TYPE_TEXT y PRESS_KEY (escritura Air-Swipe), GAZE_CALIBRATE,
-  EMERGENCY_STOP, STOP.
+  PREVIEW_FRAME (fotograma local de la cámara activa), EMERGENCY_STOP, STOP.
 - Mensajes de salida: READY, TELEMETRY (~16 Hz), MODE_CHANGED, EVENT (acciones de aplicación:
   TIMER, PRECISION, NAVIGATION, AIRSWIPE_TRACE, CONFIRM/CANCEL/BACK/FORWARD con el teclado
   abierto, GAZE_CALIBRATED), ERROR, STOPPED.
@@ -31,7 +31,7 @@ from typing import Any
 
 from .action_engine import MODE_CONTROL, MODE_OBSERVATION, LogicalActionEngine
 from .api_export import load_api_export
-from .capture import CameraCapture
+from .capture import CameraCapture, preview_jpeg
 from .config import ConfigError, EngineConfig, GazeConfig
 from .detector import HandDetector
 from .gaze import FaceOrientationDetector, GazeGate
@@ -115,6 +115,7 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
     last_telemetry_emit = 0.0
     frame_counter = 0
     event_seq = 0
+    rgb = None
 
     def dispatch(events: list[Any]) -> list[str]:
         return action_engine.dispatch(events) if action_engine is not None else []
@@ -143,7 +144,8 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
 
     def apply_config(new_config: EngineConfig) -> list[str]:
         """Libera lo que estuviera retenido, aplica la configuración y reabre cámara si cambió."""
-        nonlocal config
+        nonlocal config, rgb
+        rgb = None
         events = interpreter.update_config(new_config)
         dispatched = dispatch(events)
         config = new_config
@@ -203,6 +205,9 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
             "latencyMs": latency_ms,
             "totalClicks": action_engine.total_clicks,
             "totalScrolls": action_engine.total_scrolls,
+            "eventCounts": dict(action_engine.event_counts),
+            "pinchDiag": dict(interpreter.pinch_diag),
+            "deliveryCounts": {event: dict(outcomes) for event, outcomes in action_engine.delivery_counts.items()},
             "windowResult": action_engine.last_window_result,
         }
 
@@ -219,6 +224,29 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
 
         if cmd == "__INVALID_JSON__":
             emit_ack(cmd_id, "INVALID", False, "IPC_INVALID_JSON", "Línea de comando no es JSON objeto.")
+            return True
+
+        if cmd == "PREVIEW_FRAME":
+            if action_engine.emergency_stopped:
+                emit_ack(cmd_id, cmd, False, "PREVIEW_MODE", "Vista de cámara detenida por emergencia.")
+                return True
+            if not capture.is_open or rgb is None:
+                emit_ack(cmd_id, cmd, True, preview=None)
+                return True
+            try:
+                jpeg = preview_jpeg(rgb)
+            except Exception:
+                jpeg = ""
+            if not jpeg:
+                emit_ack(cmd_id, cmd, False, "PREVIEW_FRAME", "No se pudo preparar la imagen de cámara.")
+                return True
+            tel = interpreter.telemetry
+            emit_ack(cmd_id, cmd, True, preview={
+                "jpeg": jpeg,
+                "landmarks": tel.landmarks_2d if tel.hand_detected else [],
+                "gesture": tel.gesture,
+                "pinchRatio": tel.pinch_ratio if tel.hand_detected else None,
+            })
             return True
 
         if cmd == "EMERGENCY_STOP":
@@ -421,6 +449,7 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
             now_ms = t0 * 1000.0
             frame_counter += 1
 
+            rgb = None
             if capture.is_open and detector is not None:
                 ok, rgb = capture.read_rgb_frame()
                 if ok and rgb is not None:

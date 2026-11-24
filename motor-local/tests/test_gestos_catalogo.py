@@ -215,7 +215,8 @@ def test_media_and_window_feedback_reports_whether_it_reached_the_system() -> No
     engine.dispatch([LogicalEvent(EVENT_MEDIA_PLAY_PAUSE, {}), LogicalEvent(EVENT_MINIMIZE_WINDOW, {"dy_palm": 1.5})])
     app = engine.take_app_events()
     assert app[0] == {"event": EVENT_MEDIA_PLAY_PAUSE, "injected": True}
-    assert app[1]["event"] == EVENT_MINIMIZE_WINDOW and app[1]["result"] == "MINIMIZED"
+    assert app[1]["event"] == EVENT_MINIMIZE_WINDOW and app[1]["result"] == "WIN_DOWN"
+    assert ("KEY_COMBO", {"keys": ["win", "down"]}) in adapter.executed_actions
 
 
 # ------------------------------------------------------------ precisión y palma
@@ -462,3 +463,61 @@ def test_ipc_defaults_match_the_interface_defaults_in_the_contract() -> None:
     for toggle, value in TOGGLE_DEFAULTS.items():
         assert cfg.to_dict()[toggle] is value, toggle
     assert cfg.swipe_left_enabled is False and cfg.thumbs_up_enabled is False
+
+
+def test_dispatch_cuenta_cada_evento_disparado_sin_contar_el_movimiento() -> None:
+    from motor_local.action_engine import LogicalActionEngine
+    from motor_local.interpreter import EVENT_MOVE_CURSOR, EVENT_RIGHT_CLICK, LogicalEvent
+    from motor_local.os_adapter import MockOSAdapter
+
+    engine = LogicalActionEngine(MockOSAdapter())
+    engine.dispatch([LogicalEvent(EVENT_RIGHT_CLICK), LogicalEvent(EVENT_MOVE_CURSOR), LogicalEvent(EVENT_RIGHT_CLICK)])
+    assert engine.event_counts == {EVENT_RIGHT_CLICK: 2}
+
+
+def test_dispatch_cuenta_el_destino_de_cada_evento_y_por_que_se_bloquea() -> None:
+    """«Reconoce el gesto pero no actúa en Control» (22-11-2026): el informe debe decir adónde fue cada evento."""
+    from motor_local.action_engine import MODE_CONTROL, LogicalActionEngine
+    from motor_local.interpreter import (
+        EVENT_LEFT_CLICK, EVENT_MINIMIZE_WINDOW, EVENT_MOVE_CURSOR, EVENT_NEXT_TAB, EVENT_PRECISION, LogicalEvent,
+    )
+    from motor_local.os_adapter import MockOSAdapter
+    from motor_local.window_control import MockWindowController, WindowActions
+
+    adapter = MockOSAdapter()
+    engine = LogicalActionEngine(adapter, window_actions=WindowActions(MockWindowController()))
+    engine.dispatch([LogicalEvent(EVENT_LEFT_CLICK), LogicalEvent(EVENT_PRECISION)])          # Observar
+    engine.set_mode(MODE_CONTROL)
+    engine.dispatch([LogicalEvent(EVENT_LEFT_CLICK), LogicalEvent(EVENT_NEXT_TAB), LogicalEvent(EVENT_MOVE_CURSOR)])
+    engine.dispatch([LogicalEvent(EVENT_MINIMIZE_WINDOW)])
+    engine.set_external_hold(True)
+    engine.dispatch([LogicalEvent(EVENT_LEFT_CLICK)])
+    engine.set_external_hold(False)
+    engine.paused = True
+    engine.dispatch([LogicalEvent(EVENT_LEFT_CLICK)])
+
+    assert engine.delivery_counts[EVENT_LEFT_CLICK] == {
+        "BLOQUEADO_OBSERVAR": 1, "SO": 1, "BLOQUEADO_MIRADA": 1, "BLOQUEADO_PAUSA": 1,
+    }
+    assert engine.delivery_counts[EVENT_NEXT_TAB] == {"SO": 1}
+    assert engine.delivery_counts[EVENT_PRECISION] == {"INTERFAZ": 1}
+    assert set(engine.delivery_counts[EVENT_MINIMIZE_WINDOW]) == {f"VENTANA_{engine.last_window_result}"}
+    assert EVENT_MOVE_CURSOR not in engine.delivery_counts
+    # Lo contado como «SO» es exactamente lo que recibió el adaptador.
+    assert [a for a, _ in adapter.executed_actions if a != "MOVE_CURSOR"] == ["LEFT_CLICK", "KEY_COMBO"]
+
+
+def test_pinza_de_medio_segundo_es_clic_y_no_arrastre_con_la_configuracion_por_defecto() -> None:
+    """Medido en vivo (22-11-2026): las pinzas de la persona duran 0,31-0,49 s y con 380 ms se volvían arrastre."""
+    from motor_local.interpreter import EVENT_LEFT_CLICK, EVENT_START_DRAG
+
+    interp = armed(EngineConfig())
+    seen: list[str] = []
+    t = 0.0
+    for pinch, duration in ((0.14, 200.0), (0.02, 500.0), (0.14, 200.0)):
+        end = t + duration
+        while t < end:
+            seen.extend(e.type for e in interp.process_frame(make_open_palm(0.5, 0.5, pinch_dist=pinch, scale=0.55), now_ms=t))
+            t += 66.0
+    assert EVENT_LEFT_CLICK in seen
+    assert EVENT_START_DRAG not in seen

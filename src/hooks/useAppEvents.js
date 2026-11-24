@@ -3,11 +3,19 @@
 // este hook solo los conecta con la telemetría, un reloj y el aviso sonoro.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createEventCursor, describeEvent, takeNewEvents } from '../engine/appEvents'
-import { addMinute, cancelTimer, pauseTimer, resumeTimer, startTimer, tickTimers, timerFromGesture } from '../data/timers'
+import {
+  addMinute,
+  cancelTimer,
+  pauseTimer,
+  resumeTimer,
+  startTimer,
+  tickTimers,
+  timerFromGesture,
+} from '../data/timers'
 
 const TICK_MS = 500
 const TIMER_GESTURE_TEXT = {
-  started: minutes => `⏱ Temporizador de ${minutes} min iniciado. El mismo gesto lo pausa.`,
+  started: (minutes) => `⏱ Temporizador de ${minutes} min iniciado. El mismo gesto lo pausa.`,
   paused: () => '⏸ Temporizador en pausa. Repite el gesto para reanudarlo.',
   resumed: () => '⏱ Temporizador reanudado.',
   full: () => 'Ya hay 4 temporizadores en marcha.',
@@ -20,7 +28,8 @@ function beep() {
     const ctx = new Context()
     const now = ctx.currentTime
     for (let i = 0; i < 3; i++) {
-      const osc = ctx.createOscillator(), gain = ctx.createGain()
+      const osc = ctx.createOscillator(),
+        gain = ctx.createGain()
       osc.frequency.value = 880
       gain.gain.setValueAtTime(0.0001, now + i * 0.35)
       gain.gain.exponentialRampToValueAtTime(0.25, now + i * 0.35 + 0.02)
@@ -30,14 +39,24 @@ function beep() {
       osc.stop(now + i * 0.35 + 0.26)
     }
     window.setTimeout(() => ctx.close().catch(() => {}), 1500)
-  } catch { /* sin audio: el aviso visual basta */ }
+  } catch {
+    /* sin audio: el aviso visual basta */
+  }
 }
 
-export function useAppEvents({ engineStatus, timerMinutes = 5, onNotice }) {
+// `onKeyboardRequest`: el gesto ☝️ sostenido pide abrir el teclado Air-Swipe (lo abre quien conoce la ventana).
+// `onKeyboardClose`: el golpe de muñeca hacia abajo con el teclado abierto pide bajarlo.
+export function useAppEvents({
+  engineStatus,
+  timerMinutes = 5,
+  onNotice,
+  onKeyboardRequest,
+  onKeyboardClose,
+}) {
   const [timers, setTimersState] = useState([])
   const timersRef = useRef(timers)
   // Una sola fuente de verdad sin efectos dentro de los actualizadores de estado (StrictMode los repite).
-  const setTimers = useCallback(change => {
+  const setTimers = useCallback((change) => {
     const next = typeof change === 'function' ? change(timersRef.current) : change
     timersRef.current = next
     setTimersState(next)
@@ -45,17 +64,42 @@ export function useAppEvents({ engineStatus, timerMinutes = 5, onNotice }) {
   const [now, setNow] = useState(() => Date.now())
   const cursorRef = useRef(null)
   const minutesRef = useRef(timerMinutes)
-  useEffect(() => { minutesRef.current = timerMinutes }, [timerMinutes])
+  useEffect(() => {
+    minutesRef.current = timerMinutes
+  }, [timerMinutes])
+  const keyboardRef = useRef(onKeyboardRequest)
+  useEffect(() => {
+    keyboardRef.current = onKeyboardRequest
+  }, [onKeyboardRequest])
+  const keyboardCloseRef = useRef(onKeyboardClose)
+  useEffect(() => {
+    keyboardCloseRef.current = onKeyboardClose
+  }, [onKeyboardClose])
 
   // Eventos nuevos de la telemetría: cada uno se aplica una sola vez.
   useEffect(() => {
-    if (cursorRef.current === null) { cursorRef.current = createEventCursor(engineStatus); return }
+    if (cursorRef.current === null) {
+      cursorRef.current = createEventCursor(engineStatus)
+      return
+    }
     const { cursor, events } = takeNewEvents(cursorRef.current, engineStatus)
     cursorRef.current = cursor
     for (const event of events) {
+      if (event.event === 'KEYBOARD') {
+        keyboardRef.current?.()
+        continue
+      }
+      if (event.event === 'KEYBOARD_CLOSE') {
+        keyboardCloseRef.current?.()
+        continue
+      }
       if (event.event === 'TIMER') {
         const at = Date.now()
-        const result = timerFromGesture(timersRef.current, { minutes: minutesRef.current, now: at, id: `g${event.seq}` })
+        const result = timerFromGesture(timersRef.current, {
+          minutes: minutesRef.current,
+          now: at,
+          id: `g${event.seq}`,
+        })
         setNow(at)
         setTimers(result.timers)
         onNotice(TIMER_GESTURE_TEXT[result.action](minutesRef.current))
@@ -67,7 +111,7 @@ export function useAppEvents({ engineStatus, timerMinutes = 5, onNotice }) {
   }, [engineStatus, onNotice, setTimers])
 
   // Reloj: solo mientras haya algún temporizador corriendo.
-  const running = timers.some(timer => !timer.done && timer.pausedLeft === null)
+  const running = timers.some((timer) => !timer.done && timer.pausedLeft === null)
   useEffect(() => {
     if (!running) return undefined
     const id = window.setInterval(() => {
@@ -75,22 +119,45 @@ export function useAppEvents({ engineStatus, timerMinutes = 5, onNotice }) {
       setNow(at)
       const { timers: next, finished } = tickTimers(timersRef.current, at)
       setTimers(next)
-      if (finished.length) { beep(); onNotice('⏰ ¡Tiempo! Un temporizador llegó a cero.') }
+      if (finished.length) {
+        beep()
+        onNotice('⏰ ¡Tiempo! Un temporizador llegó a cero.')
+      }
     }, TICK_MS)
     return () => window.clearInterval(id)
   }, [running, onNotice, setTimers])
 
-  const start = useCallback(minutes => {
-    const at = Date.now()
-    setNow(at)
-    const result = startTimer(timersRef.current, { minutes, now: at })
-    if (!result.added) onNotice('Ya hay 4 temporizadores en marcha.', 'error')
-    setTimers(result.timers)
-  }, [onNotice, setTimers])
-  const pause = useCallback(id => setTimers(current => pauseTimer(current, id, Date.now())), [setTimers])
-  const resume = useCallback(id => { const at = Date.now(); setNow(at); setTimers(current => resumeTimer(current, id, at)) }, [setTimers])
-  const plusMinute = useCallback(id => { const at = Date.now(); setNow(at); setTimers(current => addMinute(current, id, at)) }, [setTimers])
-  const cancel = useCallback(id => setTimers(current => cancelTimer(current, id)), [setTimers])
+  const start = useCallback(
+    (minutes) => {
+      const at = Date.now()
+      setNow(at)
+      const result = startTimer(timersRef.current, { minutes, now: at })
+      if (!result.added) onNotice('Ya hay 4 temporizadores en marcha.', 'error')
+      setTimers(result.timers)
+    },
+    [onNotice, setTimers],
+  )
+  const pause = useCallback(
+    (id) => setTimers((current) => pauseTimer(current, id, Date.now())),
+    [setTimers],
+  )
+  const resume = useCallback(
+    (id) => {
+      const at = Date.now()
+      setNow(at)
+      setTimers((current) => resumeTimer(current, id, at))
+    },
+    [setTimers],
+  )
+  const plusMinute = useCallback(
+    (id) => {
+      const at = Date.now()
+      setNow(at)
+      setTimers((current) => addMinute(current, id, at))
+    },
+    [setTimers],
+  )
+  const cancel = useCallback((id) => setTimers((current) => cancelTimer(current, id)), [setTimers])
 
   return { timers, now, start, pause, resume, plusMinute, cancel }
 }

@@ -88,3 +88,19 @@ def test_angulo_de_la_articulacion() -> None:
     assert round(_pip_angle(Point3D(0, 0), Point3D(0, 1), Point3D(0, 2))) == 180
     assert round(_pip_angle(Point3D(0, 0), Point3D(0, 1), Point3D(1, 1))) == 90
     assert _pip_angle(Point3D(0, 0), Point3D(0, 0), Point3D(1, 1)) == 180.0  # puntos repetidos: sin dividir por cero
+
+
+def test_el_diagnostico_de_la_pinza_dice_por_que_hubo_o_no_clic() -> None:
+    """23-11-2026: en vivo «no detecta el clic izquierdo» y el video sí. El informe cuenta, por fotograma con el pulgar
+    en el índice, si la pinza se aceptó o por qué se descartó."""
+    interp = armed(EngineConfig.from_dict({"drag": False}))
+    _feed(interp, [hanging_pinch(0.12)] * 3 + [hanging_pinch(0.015)] * 3 + [hanging_pinch(0.12)] * 4)
+    assert interp.pinch_diag == {"PINZA": 3}
+
+    interp = armed(EngineConfig.from_dict({"drag": False}))
+    _feed(interp, [two_fingers_with_thumb(0.12)] * 2 + [two_fingers_with_thumb(0.02)] * 5)
+    assert set(interp.pinch_diag) <= {"INDICE_JUNTO_AL_MEDIO", "OTRO_GESTO_SCROLL"} and interp.pinch_diag
+    # Con la mano abierta lejos del índice no se cuenta nada.
+    interp = armed(EngineConfig.from_dict({"drag": False}))
+    _feed(interp, [hanging_pinch(0.12)] * 6)
+    assert interp.pinch_diag == {}

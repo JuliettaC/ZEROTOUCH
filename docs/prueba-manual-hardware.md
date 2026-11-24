@@ -35,6 +35,14 @@ Primero lee la sección 0.2 (seguridad). Después, con el **Bloc de notas** abie
 
 Si algo falla, anota también lo que muestran **Calibrar › Datos técnicos** (FPS, confianza, distancia de pinza, gesto) en ese momento: con eso se ajustan los umbrales.
 
+### Grabar una prueba para revisar el reconocimiento
+
+En la aplicación de escritorio, activa la cámara en modo **Observar**. En **Calibrar › Grabar prueba de gestos** (arriba verás los FPS de la cámara), pulsa **Mostrar cámara** y encuadra tu mano en la vista pequeña. Comprueba que los puntos siguen los dedos y desaparecen si retiras la mano.
+
+Pulsa **Grabar clip** y haz cinco micro-pinzas, tres puños y tres desplazamientos con dos dedos. Mueve la mano con naturalidad entre intentos. La grabación muestra los puntos, el gesto detectado y la separación de la pinza en unidades del tamaño de la palma. Pulsa **Detener grabación** o espera el límite de 120 segundos. Usa **Descargar clip** si quieres quedarte con el WebM, o **Descartar clip**. Cerrar Calibrar descarta el clip que queda en memoria.
+
+La vista usa la misma cámara y los mismos fotogramas que el motor. El clip contiene la imagen de la cámara, sin micrófono. ZeroTouch solo lo conserva en memoria y la descarga es manual.
+
 ## 0. Antes de empezar
 
 ### 0.1 Qué ya está verificado (no hace falta repetirlo)

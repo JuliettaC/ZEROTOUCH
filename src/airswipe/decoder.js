@@ -4,7 +4,7 @@
 import { KEY_CENTERS, baseLetter } from './layout.js'
 
 export const SAMPLES = 24
-const START_RADIUS = 1.6   // anchos de tecla alrededor del inicio y del final del trazo
+const START_RADIUS = 1.6 // anchos de tecla alrededor del inicio y del final del trazo
 const END_RADIUS = 1.6
 const SHAPE_WEIGHT = 1.4
 const LOCATION_WEIGHT = 1.0
@@ -15,12 +15,18 @@ const MAX_CANDIDATES_SCANNED = 20000
 
 /** Une el léxico base con la lista complementaria (propia) sin duplicar palabras: gana el mayor peso. */
 export function withExtras(base, extra) {
-  const words = [...(base.palabras || [])], weights = [...(base.pesos || [])]
+  const words = [...(base.palabras || [])],
+    weights = [...(base.pesos || [])]
   const position = new Map(words.map((word, i) => [word, i]))
   ;(extra?.palabras || []).forEach((word, i) => {
     const weight = extra.pesos?.[i] ?? 1
-    if (position.has(word)) weights[position.get(word)] = Math.max(weights[position.get(word)] ?? 1, weight)
-    else { position.set(word, words.length); words.push(word); weights.push(weight) }
+    if (position.has(word))
+      weights[position.get(word)] = Math.max(weights[position.get(word)] ?? 1, weight)
+    else {
+      position.set(word, words.length)
+      words.push(word)
+      weights.push(weight)
+    }
   })
   return { palabras: words, pesos: weights }
 }
@@ -35,7 +41,12 @@ export function buildIndex(lexicon) {
     if (!path) return
     const first = baseLetter(word[0])
     if (!index.has(first)) index.set(first, [])
-    index.get(first).push({ word, weight: (weights[i] ?? 1) / 255, path, last: baseLetter(word[word.length - 1]) })
+    index.get(first).push({
+      word,
+      weight: (weights[i] ?? 1) / 255,
+      path,
+      last: baseLetter(word[word.length - 1]),
+    })
   })
   // Cada grupo se ordena por frecuencia: si algún día se alcanza el tope de candidatos, lo que se deja
   // fuera es lo menos frecuente, no lo último que se añadió al léxico.
@@ -59,7 +70,8 @@ export function idealPath(word) {
 
 export function pathLength(points) {
   let total = 0
-  for (let i = 1; i < points.length; i += 1) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+  for (let i = 1; i < points.length; i += 1)
+    total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
   return total
 }
 
@@ -71,7 +83,8 @@ export function resample(points, n = SAMPLES) {
   if (total === 0) return Array.from({ length: n }, () => ({ ...points[0] }))
   const step = total / (n - 1)
   const out = [{ ...points[0] }]
-  let accumulated = 0, i = 1
+  let accumulated = 0,
+    i = 1
   let current = { ...points[0] }
   while (out.length < n && i < points.length) {
     const next = points[i]
@@ -97,7 +110,7 @@ function normalizeShape(points) {
   let scale = 0
   for (const p of points) scale = Math.max(scale, Math.hypot(p.x - cx, p.y - cy))
   scale = scale || 1
-  return points.map(p => ({ x: (p.x - cx) / scale, y: (p.y - cy) / scale }))
+  return points.map((p) => ({ x: (p.x - cx) / scale, y: (p.y - cy) / scale }))
 }
 
 function meanDistance(a, b) {
@@ -114,7 +127,8 @@ export function decode(trace, index, { max = 5 } = {}) {
   if (!trace || trace.length < 2) return []
   const sampled = resample(trace, SAMPLES)
   const shape = normalizeShape(sampled)
-  const start = trace[0], end = trace[trace.length - 1]
+  const start = trace[0],
+    end = trace[trace.length - 1]
   const traceLength = pathLength(trace)
   const candidates = []
   let scanned = 0
@@ -128,8 +142,12 @@ export function decode(trace, index, { max = 5 } = {}) {
       if (scanned > MAX_CANDIDATES_SCANNED) break
       const ideal = resample(entry.path, SAMPLES)
       const location = meanDistance(sampled, ideal)
-      const shapeDistance = entry.path.length > 1 ? meanDistance(shape, normalizeShape(ideal)) : Math.min(1, traceLength / 2)
-      const score = LOCATION_WEIGHT * location + SHAPE_WEIGHT * shapeDistance - FREQUENCY_WEIGHT * entry.weight
+      const shapeDistance =
+        entry.path.length > 1
+          ? meanDistance(shape, normalizeShape(ideal))
+          : Math.min(1, traceLength / 2)
+      const score =
+        LOCATION_WEIGHT * location + SHAPE_WEIGHT * shapeDistance - FREQUENCY_WEIGHT * entry.weight
       candidates.push({ word: entry.word, score })
     }
   }
@@ -142,6 +160,9 @@ export function traceToKeyUnits(points, { screen, rect, geometry }) {
   return points.map(([nx, ny]) => {
     const px = screen.left + nx * screen.width - rect.x
     const py = screen.top + ny * screen.height - rect.y
-    return { x: (px - geometry.originX) / geometry.cell, y: (py - geometry.originY) / geometry.cell }
+    return {
+      x: (px - geometry.originX) / geometry.cell,
+      y: (py - geometry.originY) / geometry.cell,
+    }
   })
 }

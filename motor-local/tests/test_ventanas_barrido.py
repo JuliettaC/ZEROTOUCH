@@ -68,11 +68,13 @@ def test_minimize_targets_only_the_foreground_window_once() -> None:
     assert [entry for entry in controller.log if entry[0] == "MINIMIZE"] == [("MINIMIZE", target.hwnd)]
 
 
-def test_own_window_is_never_minimized() -> None:
-    controller, actions, target, _ = _window_setup()
-    controller.foreground_ref = WindowRef(hwnd=10, pid=999, started=1)
-    assert actions.minimize_target().code == "OWN_WINDOW"
-    assert controller.log == []
+def test_zerotouch_tambien_se_puede_minimizar() -> None:
+    """23-11-2026: antes la ventana del proceso propio nunca se minimizaba; ahora ZeroTouch se baja como cualquier otra."""
+    controller, actions, _, _ = _window_setup()
+    own = WindowRef(hwnd=10, pid=999, started=1)
+    controller.foreground_ref = own
+    assert actions.minimize_target().code == "MINIMIZED"
+    assert own in controller.minimized and actions.last_minimized == own
 
 
 def test_restore_returns_last_minimized_window_and_is_consumed() -> None:
@@ -182,17 +184,24 @@ def test_window_events_reach_the_window_controller_only_in_control() -> None:
 
     observation.dispatch([LogicalEvent(EVENT_MINIMIZE_WINDOW)])
     assert controller.log == []
-    control = LogicalActionEngine(MockOSAdapter(), MODE_CONTROL, window_actions=actions)
+    adapter = MockOSAdapter()
+    control = LogicalActionEngine(adapter, MODE_CONTROL, window_actions=actions)
     control.dispatch([LogicalEvent(EVENT_MINIMIZE_WINDOW)])
-    assert target in controller.minimized
-    assert control.last_window_result == "MINIMIZED"
+    # 23-11-2026: se minimiza con Win+Abajo (lo hace Windows) y se recuerda la ventana para traerla de vuelta.
+    assert ("KEY_COMBO", {"keys": ["win", "down"]}) in adapter.executed_actions
+    assert actions.last_minimized == target and controller.log == []
+    assert control.last_window_result == "WIN_DOWN"
 
 
 def test_window_events_report_unavailable_without_controller() -> None:
     from motor_local.interpreter import LogicalEvent
 
-    engine = LogicalActionEngine(MockOSAdapter(), MODE_CONTROL, window_actions=None)
+    adapter = MockOSAdapter()
+    engine = LogicalActionEngine(adapter, MODE_CONTROL, window_actions=None)
     engine.dispatch([LogicalEvent(EVENT_MINIMIZE_WINDOW)])
+    # Sin control Win32 el atajo sigue funcionando; traer la ventana de vuelta no.
+    assert engine.last_window_result == "WIN_DOWN" and ("KEY_COMBO", {"keys": ["win", "down"]}) in adapter.executed_actions
+    engine.dispatch([LogicalEvent(EVENT_RESTORE_WINDOW)])
     assert engine.last_window_result == "UNAVAILABLE"
 
 
@@ -336,13 +345,47 @@ def test_short_fast_flick_does_not_minimize() -> None:
 
 def test_vertical_swipe_goes_through_window_actions_in_control_only() -> None:
     controller, actions, target, _ = _window_setup()
-    engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_OBSERVATION, window_actions=actions)
+    adapter = MockOSAdapter()
+    engine = LogicalActionEngine(adapter, initial_mode=MODE_OBSERVATION, window_actions=actions)
     interp = armed(_vertical_config())
     for hand, t in _vertical_frames(0.30, 0.05, 9):
         engine.dispatch(interp.process_frame(hand, now_ms=t))
-    assert target not in controller.minimized, "en observación no se toca ninguna ventana"
-    engine2 = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL, window_actions=actions)
+    assert ("KEY_COMBO", {"keys": ["win", "down"]}) not in adapter.executed_actions and actions.last_minimized is None, "en observación no se toca ninguna ventana"
+    adapter2 = MockOSAdapter()
+    engine2 = LogicalActionEngine(adapter2, initial_mode=MODE_CONTROL, window_actions=actions)
     interp2 = armed(_vertical_config())
     for hand, t in _vertical_frames(0.30, 0.05, 9):
         engine2.dispatch(interp2.process_frame(hand, now_ms=t))
-    assert target in controller.minimized
+    assert ("KEY_COMBO", {"keys": ["win", "down"]}) in adapter2.executed_actions and actions.last_minimized == target
+
+
+def test_bajar_con_win_abajo_y_traer_de_vuelta_la_misma_ventana() -> None:
+    """23-11-2026 (pedido de la persona usuaria): minimizar = Win+Abajo. El motor recuerda la ventana activa y
+    «traer de vuelta» la restaura solo si de verdad quedó minimizada. ZeroTouch también se baja."""
+    from motor_local.interpreter import LogicalEvent
+
+    controller, actions, target, _ = _window_setup()
+    adapter = MockOSAdapter()
+    engine = LogicalActionEngine(adapter, MODE_CONTROL, window_actions=actions)
+    engine.dispatch([LogicalEvent(EVENT_MINIMIZE_WINDOW)])
+    assert adapter.executed_actions == [("KEY_COMBO", {"keys": ["win", "down"]})]
+    controller.minimized.add(target)  # lo que hace Windows al recibir Win+Abajo
+    engine.dispatch([LogicalEvent(EVENT_RESTORE_WINDOW)])
+    assert engine.last_window_result == "RESTORED" and target not in controller.minimized
+
+    # Si Win+Abajo no llegó a minimizarla (p. ej. estaba maximizada y solo bajó de tamaño), no se toca nada.
+    controller, actions, target, _ = _window_setup()
+    engine = LogicalActionEngine(MockOSAdapter(), MODE_CONTROL, window_actions=actions)
+    engine.dispatch([LogicalEvent(EVENT_MINIMIZE_WINDOW)])
+    engine.dispatch([LogicalEvent(EVENT_RESTORE_WINDOW)])
+    assert engine.last_window_result == "NOT_MINIMIZED" and controller.log == []
+
+    # La ventana activa es ZeroTouch: también se baja con Win+Abajo y se puede traer de vuelta.
+    controller, actions, _, _ = _window_setup()
+    own = WindowRef(hwnd=10, pid=999, started=1)
+    controller.foreground_ref = own
+    adapter = MockOSAdapter()
+    engine = LogicalActionEngine(adapter, MODE_CONTROL, window_actions=actions)
+    engine.dispatch([LogicalEvent(EVENT_MINIMIZE_WINDOW)])
+    assert engine.last_window_result == "WIN_DOWN" and adapter.executed_actions == [("KEY_COMBO", {"keys": ["win", "down"]})]
+    assert actions.last_minimized == own
