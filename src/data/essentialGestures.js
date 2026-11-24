@@ -10,7 +10,14 @@
 //  - palma sostenida: «navegación» falsa en 3 de 14 videos; barridos: indistinguibles de mover rápido;
 //  - clic derecho, pulgares y precisión: posturas cercanas a la pinza o al puño.
 // Es un ajuste explícito (un botón) y reversible desde la misma lista de gestos; no cambia el motor.
-export const ESSENTIAL_ON = Object.freeze(['pointer', 'pinch', 'scroll', 'fistPause', 'airswipe', 'keyboardGesture'])
+export const ESSENTIAL_ON = Object.freeze([
+  'pointer',
+  'pinch',
+  'scroll',
+  'fistPause',
+  'airswipe',
+  'keyboardGesture',
+])
 
 export const ESSENTIAL_OFF = Object.freeze([
   'drag',

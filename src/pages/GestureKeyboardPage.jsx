@@ -21,7 +21,10 @@ export default function GestureKeyboardPage({
     <main id="main" tabIndex={-1} className="page airswipe-page">
       <h1 className="page-title">Teclado Air-Swipe</h1>
       <section className="panel airswipe-start">
-        <p>Teclas grandes: deja el cursor quieto sobre cada letra (se llena de verde y se escribe). El botón «Trazo» del teclado vuelve a la escritura trazando palabras.</p>
+        <p>
+          Teclas grandes: deja el cursor quieto sobre cada letra (se llena de verde y se escribe).
+          El botón «Trazo» del teclado vuelve a la escritura trazando palabras.
+        </p>
         {keyboard.open ? (
           <button
             className="button secondary"

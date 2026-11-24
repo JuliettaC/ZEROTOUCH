@@ -23,7 +23,8 @@ export const currentWord = (text) => {
  */
 export function planKey(text, key) {
   if (key.kind === 'letter') {
-    if (text.length >= MAX_BUFFER) return { effects: [], text, notice: 'Texto demasiado largo: busca o limpia.' }
+    if (text.length >= MAX_BUFFER)
+      return { effects: [], text, notice: 'Texto demasiado largo: busca o limpia.' }
     return { effects: [{ type: 'text', text: key.value }], text: text + key.value }
   }
   if (key.kind === 'suggestion') return planSuggestion(text, key.value)
@@ -38,11 +39,13 @@ export function planKey(text, key) {
     case 'word': {
       const kept = text.replace(/\S*\s*$/, '')
       const n = text.length - kept.length
-      if (n === 0) return { effects: [], text, notice: 'No hay ninguna palabra escrita aquí para borrar.' }
+      if (n === 0)
+        return { effects: [], text, notice: 'No hay ninguna palabra escrita aquí para borrar.' }
       return { effects: backspaces(n), text: kept }
     }
     case 'clear':
-      if (text === '') return { effects: [], text, notice: 'No hay nada escrito aquí para limpiar.' }
+      if (text === '')
+        return { effects: [], text, notice: 'No hay nada escrito aquí para limpiar.' }
       return { effects: backspaces(text.length), text: '' }
     case 'enter':
       return { effects: [{ type: 'key', key: 'enter' }], text: '', searched: text.trim() }
@@ -63,17 +66,14 @@ export function planSuggestion(text, term) {
   const remove = word.length - common
   const insert = `${term.slice(common)} `
   const next = `${text.slice(0, text.length - word.length)}${term} `
-  if (next.length > MAX_BUFFER) return { effects: [], text, notice: 'Texto demasiado largo: busca o limpia.' }
+  if (next.length > MAX_BUFFER)
+    return { effects: [], text, notice: 'Texto demasiado largo: busca o limpia.' }
   return { effects: [...backspaces(remove), { type: 'text', text: insert }], text: next }
 }
 
 // ── Sugerencias ───────────────────────────────────────────────────────────────────────────────────
 /** Minúsculas y sin tildes ni diéresis para comparar prefijos («cancion» encuentra «canción»). */
-export const fold = (s) =>
-  String(s)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+export const fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 /**
  * Prepara el sugeridor: términos de recetas (primero, en su orden) y el léxico general por peso.

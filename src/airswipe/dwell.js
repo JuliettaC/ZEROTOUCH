@@ -44,7 +44,15 @@ export function dwellLayout(width, height, { suggestions = MAX_SUGGESTIONS } = {
   // Sugerencias: una fila de `suggestions` huecos iguales (los vacíos no se dibujan ni cuentan).
   const sugW = innerW / suggestions
   for (let i = 0; i < suggestions; i += 1)
-    keys.push({ id: `s${i}`, kind: 'suggestion', index: i, x: pad + i * sugW, y: top, w: sugW, h: rowH })
+    keys.push({
+      id: `s${i}`,
+      kind: 'suggestion',
+      index: i,
+      x: pad + i * sugW,
+      y: top,
+      w: sugW,
+      h: rowH,
+    })
   // Letras: 10 columnas; la fila corta se centra.
   const cellW = innerW / 10
   ROWS.forEach((row, r) => {
@@ -65,7 +73,16 @@ export function dwellLayout(width, height, { suggestions = MAX_SUGGESTIONS } = {
   let x = pad
   for (const action of ACTIONS) {
     const w = (innerW * action.span) / totalSpan
-    keys.push({ id: `a:${action.id}`, kind: 'action', value: action.id, label: action.label, x, y: top + 4 * rowH, w, h: rowH })
+    keys.push({
+      id: `a:${action.id}`,
+      kind: 'action',
+      value: action.id,
+      label: action.label,
+      x,
+      y: top + 4 * rowH,
+      w,
+      h: rowH,
+    })
     x += w
   }
   return { width, height, pad, textH, rowH, keys }
@@ -74,7 +91,10 @@ export function dwellLayout(width, height, { suggestions = MAX_SUGGESTIONS } = {
 const inside = (key, point, margin) => {
   const m = Math.min(key.w, key.h) * margin
   return (
-    point.x >= key.x - m && point.x <= key.x + key.w + m && point.y >= key.y - m && point.y <= key.y + key.h + m
+    point.x >= key.x - m &&
+    point.x <= key.x + key.w + m &&
+    point.y >= key.y - m &&
+    point.y <= key.y + key.h + m
   )
 }
 
@@ -107,11 +127,22 @@ export function stepDwell(state, keyId, now, needMs) {
   if (keyId === null) {
     if (state.key === null) return { state, fire: null, progress: 0 }
     // Hueco breve (mano perdida un fotograma): se conserva la tecla sin avanzar.
-    if (state.lostAt === null) return { state: { ...state, lostAt: now }, fire: null, progress: progressOf(state, state.lostAt, needMs) }
-    if (now - state.lostAt <= GRACE_MS) return { state, fire: null, progress: progressOf(state, state.lostAt, needMs) }
+    if (state.lostAt === null)
+      return {
+        state: { ...state, lostAt: now },
+        fire: null,
+        progress: progressOf(state, state.lostAt, needMs),
+      }
+    if (now - state.lostAt <= GRACE_MS)
+      return { state, fire: null, progress: progressOf(state, state.lostAt, needMs) }
     return { state: createDwell(), fire: null, progress: 0 }
   }
-  if (keyId !== state.key) return { state: { key: keyId, since: now, fired: false, lostAt: null }, fire: null, progress: 0 }
+  if (keyId !== state.key)
+    return {
+      state: { key: keyId, since: now, fired: false, lostAt: null },
+      fire: null,
+      progress: 0,
+    }
   // De vuelta tras un hueco: el tiempo sin cursor no cuenta.
   const since = state.lostAt === null ? state.since : state.since + (now - state.lostAt)
   const current = { ...state, since, lostAt: null }
