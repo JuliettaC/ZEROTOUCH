@@ -1,7 +1,0 @@
-plugins { id 'com.android.application' version '8.13.0' apply false }
-
-// Optional short build path for Windows/OneDrive; the source tree remains in this repository.
-subprojects {
-    if (providers.gradleProperty('ztBuildRoot').isPresent())
-        layout.buildDirectory = file("${providers.gradleProperty('ztBuildRoot').get()}/${project.name}")
-}

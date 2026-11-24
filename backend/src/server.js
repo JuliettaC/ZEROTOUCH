@@ -14,18 +14,15 @@ async function listen(app, port, host) {
 export async function startServer(config = loadConfig()) {
   const db = openDatabase(config.databasePath);
   let server;
-  let lanServer = null;
   try {
     const app = createApp({ db, config });
     server = await listen(app, config.port, config.host);
-    // Segundo punto de escucha opcional en la red local (LAN_HOST), mismo puerto y misma app.
-    if (config.lanHost) lanServer = await listen(app, server.address().port, config.lanHost);
   } catch (error) { server?.close(); db.close(); throw error; }
   let closing;
-  return { server, lanServer, close() {
-    // Cierra los dos puntos de escucha y solo después la base, para que ninguna solicitud
-    // en curso por la red local llegue a una conexión SQLite ya cerrada.
-    closing ??= Promise.allSettled([closeServer(server), closeServer(lanServer)]).then(results => {
+  return { server, close() {
+    // Cierra el punto de escucha y solo después la base, para que ninguna solicitud en curso
+    // llegue a una conexión SQLite ya cerrada.
+    closing ??= Promise.allSettled([closeServer(server)]).then(results => {
       if (db.open) db.close();
       const failed = results.find(result => result.status === 'rejected');
       if (failed) throw failed.reason;
@@ -48,7 +45,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     const runtime = await startServer();
     console.log(`ZeroTouch API lista en puerto ${runtime.server.address().port}`);
-    if (runtime.lanServer) console.log(`Red local activa: http://${runtime.lanServer.address().address}:${runtime.lanServer.address().port}`);
     if (process.send) process.send({ type: 'ready', port: runtime.server.address().port });
     const close = async () => {
       try { await runtime.close(); } catch { process.exitCode = 1; }
