@@ -219,10 +219,10 @@ try {
   const jointCounts = {
     versiones: jointDb.prepare('SELECT DISTINCT version FROM modos_uso').all().map(r => r.version),
     asignaciones: jointDb.prepare('SELECT count(*) n FROM asignaciones_gestos').get().n,
-    modosCompletos: jointDb.prepare('SELECT count(*) n FROM (SELECT modo_id FROM asignaciones_gestos GROUP BY modo_id HAVING count(*) = 13)').get().n,
+    modosCompletos: jointDb.prepare('SELECT count(*) n FROM (SELECT modo_id FROM asignaciones_gestos GROUP BY modo_id HAVING count(*) = 8)').get().n,
   }
   jointDb.close()
-  check('mutación conjunta por la interfaz real: 3 modos con sus 13 asignaciones cada uno y todos en la versión 1 (ningún PUT aparte)', jointCounts.versiones.length === 1 && jointCounts.versiones[0] === 1 && jointCounts.asignaciones === 39 && jointCounts.modosCompletos === 3, jointCounts)
+  check('mutación conjunta por la interfaz real: 3 modos con sus 8 asignaciones cada uno y todos en la versión 1 (ningún PUT aparte)', jointCounts.versiones.length === 1 && jointCounts.versiones[0] === 1 && jointCounts.asignaciones === 24 && jointCounts.modosCompletos === 3, jointCounts)
   const target = modes[0]
   const jointBridge = await run(page, async ({ id, version }) => ({
     anuncio: (await invoke('capabilities')).data.servidor.modo_con_asignaciones,
@@ -295,40 +295,6 @@ try {
   const afterQuick = winState(app.pid).windows.find(w => w.title === 'ZEROTOUCH')
   check('«Empezar» real sin cámara: avisa que la cámara no se abrió, sigue en Observar y no minimiza la ventana', quick.boton === 'Activar control' && /cámara no se abrió/.test(quick.aviso) && quick.estado === 'OBSERVATION' && afterQuick?.visible && afterQuick.width > 400, { ...quick, ventana: afterQuick && [afterQuick.width, afterQuick.height] })
   await run(page, async () => { document.querySelector('.toast-error button')?.click() })
-
-  const preview = await run(page, async () => {
-    document.querySelector('.main-nav [aria-label="Ajustes"]').click()
-    await until(() => document.querySelector('a[href$="/diagnosticos"]'))
-    document.querySelector('a[href$="/diagnosticos"]').click()
-    const button = await until(() => document.querySelector('.calibration-camera button'))
-    const value = await settle(() => invoke('engine_preview'))
-    document.querySelector('.main-nav [aria-label="Inicio"]').click()
-    return { disabled: button.disabled, value }
-  })
-  check('Diagnósticos deshabilita la vista previa cuando falta la cámara', preview.disabled && preview.value.ok && preview.value.value === null, preview)
-
-  const webm = await run(page, async () => {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    ctx.fillRect(0, 0, 40, 40)
-    const image = new Image()
-    image.src = canvas.toDataURL('image/jpeg')
-    await image.decode()
-    const stream = canvas.captureStream(10)
-    try {
-      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
-      const clip = new Promise((resolve, reject) => {
-        recorder.ondataavailable = event => resolve(event.data)
-        recorder.onerror = reject
-      })
-      recorder.start()
-      for (let i = 0; i < 5; i++) { ctx.drawImage(image, i, i); await wait(120) }
-      recorder.stop()
-      const blob = await clip
-      return { type: blob.type, size: blob.size, audioTracks: stream.getAudioTracks().length }
-    } finally { stream.getTracks().forEach(track => track.stop()) }
-  })
-  check('WebView2 permite grabar en WebM un lienzo con JPEG local y sin audio', webm.type.startsWith('video/webm') && webm.size > 0 && webm.audioTracks === 0, webm)
 
   // 7b. Indicador flotante (HUD): la ventana principal lo abre sola al estar el motor en marcha.
   let hud

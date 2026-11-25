@@ -5,10 +5,11 @@
 -- IDs: el backend genera UUID (crypto.randomUUID()), no se generan aquí.
 -- Fechas: ISO 8601 UTC; el backend actualiza actualizado_en y version.
 -- Inicialización exclusiva: no ejecutar sobre una base existente. Application ID ZT02.
--- Versión de esquema 3 (user_version = 3): v2 (correo verificable y tokens de cuenta) + idempotencia de POST.
--- Una base v1 o v2 existente se actualiza solo con db/migraciones/001_v1_a_v2.sql y 002_v2_a_v3.sql mediante
--- `npm run db:migrate --prefix backend`, que crea un respaldo antes de modificarla. El backend sigue
--- aceptando bases v2 (sin idempotencia) hasta que se migren.
+-- Versión de esquema 4 (user_version = 4): v2 (correo verificable y tokens de cuenta) + v3 (idempotencia de POST)
+-- + v4 (catálogo sin los gestos retirados el 24-11-2026: barridos, pulgares y modo precisión).
+-- Una base v1, v2 o v3 existente se actualiza solo con db/migraciones/001_v1_a_v2.sql, 002_v2_a_v3.sql y
+-- 003_v3_a_v4.sql mediante `npm run db:migrate --prefix backend`, que crea un respaldo antes de modificarla.
+-- El backend sigue aceptando bases v2 y v3 hasta que se migren (ignora los gestos retirados que aún tengan).
 -- Nombres: NFC en servicios; NOCASE solo ignora mayúsculas ASCII. No promete equivalencia Unicode completa.
 -- La cámara, el reconocimiento gestual y las acciones sobre el SO se ejecutan localmente:
 -- ¡NO se guardan videos, imágenes, coordenadas de manos ni textos escritos con Air-Swipe!
@@ -165,12 +166,7 @@ INSERT INTO gestos (codigo, nombre, accion_predeterminada) VALUES
     ('liberacion_pinza', 'Liberación de pinza', 'soltar'),
     ('palma_abierta', 'Palma abierta', 'navegacion'),
     ('puno_cerrado', 'Puño cerrado', 'pausar'),
-    ('deslizamiento_izquierda', 'Deslizamiento hacia la izquierda', 'atras'),
-    ('deslizamiento_derecha', 'Deslizamiento hacia la derecha', 'adelante'),
     ('dos_dedos', 'Dos dedos', 'desplazar'),
-    ('pulgar_arriba', 'Pulgar arriba', 'confirmar'),
-    ('pulgar_abajo', 'Pulgar abajo', 'cancelar'),
-    ('modo_precision', 'Modo precisión', 'precision'),
     ('trazo_airswipe', 'Trazo en teclado Air-Swipe', 'escritura_airswipe');
 
 -- Sincronización prevista: leer y escribir los perfiles, modos y asignaciones mediante
@@ -197,5 +193,5 @@ CREATE TABLE idempotencia (
 ) STRICT;
 CREATE INDEX idx_idempotencia_creado ON idempotencia(creado_en);
 
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 COMMIT;

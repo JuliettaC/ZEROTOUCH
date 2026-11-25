@@ -9,29 +9,19 @@ export const GESTURE_LABELS = {
   SCROLL: 'Dos dedos',
   PAUSE: 'Puño',
   FIST_HOLD: 'Puño…',
-  TRES_DEDOS: 'Tres dedos',
-  PESTANAS: 'Abanico',
-  DICTADO: 'Llamada (dictado)',
-  TECLADO: 'Índice (abrir teclado)',
-  SCROLL_MANO: 'Mano abierta (desplazar)',
   PINZA_MEDIO: 'Pinza con el medio',
   RIGHT_CLICK: 'Clic derecho',
   PULGAR: 'Pulgar',
   EMERGENCY_STOP: 'Parada de emergencia',
 }
 
-// Gestos de la interfaz → códigos que reporta el motor. Los barridos no envían telemetría propia.
+// Gestos de la interfaz → códigos que reporta el motor.
 export const GESTURE_MATCH = {
   pointer: ['POINTER'],
   click: ['PINCH', 'CLICK'],
   drag: ['DRAG'],
   pause: ['PAUSE', 'FIST_HOLD'],
   scroll: ['SCROLL'],
-  threeFingers: ['TRES_DEDOS'],
-  tabs: ['PESTANAS'],
-  dictation: ['DICTADO'],
-  keyboard: ['TECLADO'],
-  openHandScroll: ['SCROLL_MANO'],
   rightClick: ['PINZA_MEDIO', 'RIGHT_CLICK'],
 }
 
@@ -58,7 +48,6 @@ export const DEFAULT_ENGINE_STATUS = Object.freeze({
   airswipe: false,
   tracing: false,
   gaze: {},
-  windowResult: '',
   pinchDistancePx: 0,
   pinchRatio: 0,
   cursorX: 0.5,
@@ -115,7 +104,7 @@ export function getEngineState(status) {
       key: 'nocam',
       tone: 'error',
       label: 'Cámara no disponible',
-      hint: 'Ciérrala en otras apps o elige otra cámara en Calibrar.',
+      hint: 'Ciérrala en otras apps o elige otra cámara en Ajustes.',
     }
   if (status.paused)
     return {

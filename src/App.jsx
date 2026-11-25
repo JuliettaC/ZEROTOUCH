@@ -6,7 +6,6 @@ import { OptionalAccountDialog } from './components/AccountDialog'
 import DashboardPage from './pages/DashboardPage'
 import CalibrationPage from './pages/CalibrationPage'
 import GestureKeyboardPage from './pages/GestureKeyboardPage'
-import DiagnosticsPage from './pages/DiagnosticsPage'
 import { readFavorites, saveFavorites, toggleFavorite } from './data/favorites'
 import WelcomePage from './pages/WelcomePage'
 import SettingsPage from './pages/SettingsPage'
@@ -79,9 +78,9 @@ export default function App() {
   const hud = useHudWindow({ running: Boolean(engineStatus.running), onNotice: setNotice })
   const acct = useAccount({ workspace, onNotice: setNotice })
   const { account } = acct
-  // Temporizadores y avisos de los eventos del motor (multimedia, ventanas, precisión).
-  // ☝️ sostenido: abre el teclado Air-Swipe como su botón (si ya está abierto o abriéndose, no hace nada).
-  // Golpe de muñeca hacia abajo con el teclado abierto: lo baja como su ✕.
+  // Temporizadores y avisos de los eventos del motor (multimedia, Alt + Tab, pestaña nueva, precisión).
+  // Foco en un campo de texto (motor): abre el teclado Air-Swipe como su botón (si ya está abierto o abriéndose, no
+  // hace nada). Al salir del campo lo baja como su ✕.
   const { isKeyboardOpen, busy: keyboardBusy, openKeyboard, closeKeyboard } = keyboard
   const requestKeyboard = useCallback(() => {
     if (!keyboardBusy && !isKeyboardOpen()) openKeyboard()
@@ -346,7 +345,6 @@ export default function App() {
         <CalibrationPage
           favorites={favorites}
           onFavorite={changeFavorite}
-          navigate={navigate}
           {...engineProps}
           settings={settings}
           assignments={assignments}
@@ -370,7 +368,6 @@ export default function App() {
           onEnableTrace={() => assign('trazo_airswipe', { toggle: true })}
         />
       )}
-      {path === '/diagnosticos' && <DiagnosticsPage {...engineProps} navigate={navigate} />}
       {!Object.keys(PAGE_TITLES).includes(path) && (
         <main id="main" tabIndex={-1} className="page unavailable">
           <h1>Página no encontrada</h1>

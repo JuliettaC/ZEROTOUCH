@@ -1,4 +1,7 @@
 import { createAssignmentWriter } from './asignacionesWriter.js';
+import { GESTOS } from '../domain/capacidades.js';
+// Solo los gestos del contrato: una base v2/v3 aún sin migrar conserva filas de gestos retirados (v4) que no se muestran.
+const vigentes = `g.codigo IN (${GESTOS.map(() => '?').join(',')})`;
 // All dynamic SQL identifiers below are internal constants, never request keys.
 export function createCatalogosRepository(db) {
   const writer = createAssignmentWriter(db);
@@ -8,13 +11,13 @@ export function createCatalogosRepository(db) {
         COALESCE(a.habilitado,1) AS habilitado,a.version AS asignacion_version
       FROM modos_uso m JOIN perfiles p ON p.id=m.perfil_id CROSS JOIN gestos g
       LEFT JOIN asignaciones_gestos a ON a.modo_id=m.id AND a.gesto_codigo=g.codigo
-      WHERE m.id=? AND p.usuario_id=? ORDER BY g.codigo`);
+      WHERE m.id=? AND p.usuario_id=? AND ${vigentes} ORDER BY g.codigo`);
   const bump = db.prepare(`UPDATE modos_uso SET version=version+1,actualizado_en=? WHERE ${owner} AND version=? RETURNING version`);
   const exists = db.prepare(`SELECT version FROM modos_uso WHERE ${owner}`);
   return {
-    gestures: () => db.prepare('SELECT codigo,nombre,accion_predeterminada FROM gestos ORDER BY codigo').all(),
+    gestures: () => db.prepare(`SELECT codigo,nombre,accion_predeterminada FROM gestos g WHERE ${vigentes} ORDER BY codigo`).all(...GESTOS),
     actions: () => db.prepare('SELECT codigo,nombre FROM acciones ORDER BY codigo').all(),
-    effective: (modoId, usuarioId) => effective.all(modoId, usuarioId).map(row => ({ ...row, habilitado: Boolean(row.habilitado) })),
+    effective: (modoId, usuarioId) => effective.all(modoId, usuarioId, ...GESTOS).map(row => ({ ...row, habilitado: Boolean(row.habilitado) })),
     snapshot: operation => db.transaction(operation).deferred(),
     /**
      * Replaces (or, with `replaceAll=false`, upserts) the assignments of one mode in a single

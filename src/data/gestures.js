@@ -6,6 +6,9 @@ import { NO_ACTION, actionName, allowedActions, capabilities } from './capabilit
 // toggle: clave de configuración que el motor usa para habilitar el gesto.
 // setting: ajuste fino asociado (debe existir en settingLabels).
 // live: false si el motor no envía telemetría de ese gesto; su vista previa no puede confirmarse.
+// hidden: true si existe en el contrato pero no se lista en la interfaz.
+// 24-11-2026: se retiraron los gestos experimentales y los que no se usaban (barridos, pulgares, precisión,
+// ventanas, pestañas, dictado, ☝️ sostenido y desplazar con la mano abierta).
 export const gestures = {
   pointer: {
     order: 1,
@@ -37,7 +40,7 @@ export const gestures = {
     common: true,
     title: 'Dos dedos',
     action: 'Desplazar',
-    instruction: 'Extiende índice y medio, y sube o baja la mano.',
+    instruction: 'Dos dedos juntos hacia arriba: sube. Hacia abajo: baja.',
     emoji: '✌️',
     icon: 'mobileHand',
     setting: 'stability',
@@ -49,7 +52,7 @@ export const gestures = {
     common: true,
     title: 'Puño',
     action: 'Pausar o reanudar',
-    instruction: 'Cierra el puño y mantenlo un momento.',
+    instruction: 'Cierra el puño un momento.',
     emoji: '✊',
     icon: 'fist',
     setting: 'confidenceThreshold',
@@ -61,72 +64,18 @@ export const gestures = {
     common: true,
     title: 'Pinza sostenida',
     action: 'Arrastrar',
-    instruction: 'Mantén la pinza un momento y mueve la mano; suelta para terminar.',
+    instruction: 'Mantén la pinza un segundo y mueve la mano.',
     emoji: '🤏',
     icon: 'pinch',
     setting: 'pinchTolerance',
     toggle: 'drag',
-  },
-  swipeLeft: {
-    order: 7,
-    code: 'deslizamiento_izquierda',
-    common: false,
-    live: false,
-    title: 'Barrido a la izquierda',
-    action: 'Atrás',
-    instruction:
-      'Experimental (apagado por defecto): palma abierta, mueve la mano rápido hacia la izquierda. Puede confundirse con mover el cursor.',
-    emoji: '👈',
-    icon: 'mobileHand',
-    setting: 'sensitivity',
-    toggle: 'swipeLeft',
-  },
-  swipeRight: {
-    order: 8,
-    code: 'deslizamiento_derecha',
-    common: false,
-    live: false,
-    title: 'Barrido a la derecha',
-    action: 'Adelante',
-    instruction:
-      'Experimental (apagado por defecto): palma abierta, mueve la mano rápido hacia la derecha. Puede confundirse con mover el cursor.',
-    emoji: '👉',
-    icon: 'mobileHand',
-    setting: 'sensitivity',
-    toggle: 'swipeRight',
-  },
-  windowSwipe: {
-    order: 6,
-    common: false,
-    live: false,
-    title: 'Mano abajo / arriba',
-    action: 'Bajar o traer la ventana',
-    instruction:
-      'Con la mano vertical (dedos hacia arriba) y sin mover el brazo, dobla la muñeca rápido hacia abajo y vuelve: ZeroTouch pulsa Win + flecha abajo (si la ventana está maximizada, la primera vez baja de tamaño y la segunda se minimiza). Para traerla de vuelta, deja la mano colgando (dedos hacia abajo) un momento y súbela abierta y vertical. Con la mano ladeada, bajar los dedos pasa de pestaña.',
-    emoji: '🖐️',
-    icon: 'mobileHand',
-    setting: 'sensitivity',
-    toggle: 'windowSwipe',
-  },
-  tabs: {
-    order: 10,
-    common: true,
-    title: 'Sacudida lateral',
-    action: 'Pestaña siguiente / anterior',
-    instruction:
-      'Mano abierta: llévala rápido hacia un lado y vuélvela enseguida a donde estaba, como un vaivén. Hacia la derecha pasa a la pestaña siguiente; hacia la izquierda, a la anterior. Para otra pestaña, deja la mano quieta un momento y repite. (También vale el abanico de antes: mano ladeada y muñeca rápida hacia el pulgar.)',
-    emoji: '👋',
-    icon: 'hand',
-    setting: 'confidenceThreshold',
-    toggle: 'tabGestures',
   },
   rightClick: {
     order: 11,
     common: true,
     title: 'Pinza con el medio',
     action: 'Clic derecho',
-    instruction:
-      'Con el índice extendido, junta un instante las puntas del pulgar y del dedo medio.',
+    instruction: 'Junta un instante pulgar y dedo medio.',
     emoji: '🫰',
     icon: 'pinch',
     setting: 'pinchTolerance',
@@ -137,8 +86,7 @@ export const gestures = {
     common: true,
     title: 'Tres dedos abajo',
     action: 'Cambiar de ventana (Alt + Tab)',
-    instruction:
-      'Desde la mano abierta, dobla rápido índice, medio y anular dejando arriba el meñique. Rápido (sube antes de medio segundo): vuelve a la ventana anterior. Mantenidos abajo con el pulgar pegado a la mano: Windows muestra todas las ventanas y cada segundo pasa a la siguiente; sube los dedos para abrir la elegida. Con el pulgar afuera es la llamada del dictado.',
+    instruction: 'Baja rápido tres dedos. Mantenlos abajo para elegir ventana.',
     emoji: '🤟',
     icon: 'hand',
     setting: 'confidenceThreshold',
@@ -149,61 +97,11 @@ export const gestures = {
     common: true,
     title: 'V sostenida',
     action: 'Pestaña nueva (Ctrl + T)',
-    instruction:
-      'Haz la V: índice y medio estirados y bien separados, anular y meñique doblados. Mantenla quieta casi un segundo y se abre una pestaña nueva con el cursor en la barra de direcciones. Con los dedos juntos y moviéndolos es desplazar, no pestaña nueva.',
+    instruction: 'Haz la V con los dedos separados, quieta.',
     emoji: '✌️',
     icon: 'hand',
     setting: 'confidenceThreshold',
     toggle: 'newTab',
-  },
-  openHandScroll: {
-    order: 15,
-    common: false,
-    live: false,
-    title: 'Mano abierta: agarrar y deslizar',
-    action: 'Desplazar (experimental)',
-    instruction:
-      'Experimental, apagado por defecto: deja la mano abierta quieta un instante (la página queda «agarrada») y súbela o bájala; como en una pantalla táctil, subirla baja la página. Mientras está agarrada el cursor no se mueve; cierra o cambia la mano para soltar. Inconveniente: cada vez que dejes la mano abierta quieta, el siguiente movimiento desplaza en vez de mover el cursor.',
-    emoji: '🖐️',
-    icon: 'mobileHand',
-    setting: 'stability',
-    toggle: 'openHandScroll',
-  },
-  keyboard: {
-    order: 13,
-    common: true,
-    title: 'Índice sostenido',
-    action: 'Abrir el teclado',
-    instruction:
-      'Apunta solo con el índice (los demás dedos plegados) y deja la mano quieta un segundo: se abre el teclado Air-Swipe. Si mueves la mano mientras apuntas (mover el cursor) no se abre. Para bajarlo, con la mano abierta y vertical dobla la muñeca rápido hacia abajo y vuelve (el mismo gesto que baja una ventana), o haz una pinza en su botón ✕.',
-    emoji: '☝️',
-    icon: 'hand',
-    setting: 'confidenceThreshold',
-    toggle: 'keyboardGesture',
-  },
-  dictation: {
-    order: 12,
-    common: true,
-    title: 'Llamada',
-    action: 'Dictado por voz',
-    instruction:
-      'Pulgar y meñique extendidos (🤙), los demás dedos plegados, medio segundo: abre el dictado de Windows (Win + H); di el texto y vuelve a hacerla para cerrarlo. Necesita micrófono y el idioma español instalado en Windows.',
-    emoji: '🤙',
-    icon: 'hand',
-    setting: 'confidenceThreshold',
-    toggle: 'dictation',
-  },
-  threeFingers: {
-    order: 9,
-    common: false,
-    title: 'Tres dedos',
-    action: 'Minimizar o restaurar ventana',
-    instruction:
-      'Índice, medio y anular extendidos: baja la mano (más de media palma) para pulsar Win + flecha abajo en la ventana activa; súbela para restaurar la última.',
-    emoji: '🖐️',
-    icon: 'mobileHand',
-    setting: 'stability',
-    toggle: 'windowGestures',
   },
 }
 
@@ -241,36 +139,22 @@ export const settingLabels = {
   },
 }
 
-// Cómo se hace cada gesto del contrato (editor «Qué hace cada gesto»). Frases cortas y concretas.
+// Cómo se hace cada gesto del contrato. Una frase corta: la imagen explica el resto (24-11-2026).
 export const GESTURE_HELP = {
-  mano_abierta_sostenida:
-    'Abre la mano frente a la cámara y mantenla un instante; después la mano mueve el cursor.',
-  micro_pinza: 'Junta un instante las puntas del índice y el pulgar, y sepáralas.',
-  pinza_sostenida:
-    'Mantén la pinza cerrada un momento y mueve la mano; abre los dedos para soltar.',
-  liberacion_pinza: 'Abrir los dedos tras una pinza sostenida termina el arrastre.',
-  dos_dedos: 'Extiende índice y medio (los demás plegados) y sube o baja la mano.',
-  puno_cerrado: 'Cierra el puño y mantenlo quieto medio segundo. Repite para reanudar.',
-  palma_abierta: 'Palma abierta y quieta durante casi un segundo.',
-  deslizamiento_izquierda:
-    'Experimental, apagado por defecto: palma abierta, muévela rápido hacia la izquierda, de una vez. Puede confundirse con mover el cursor.',
-  deslizamiento_derecha:
-    'Experimental, apagado por defecto: palma abierta, muévela rápido hacia la derecha, de una vez. Puede confundirse con mover el cursor.',
-  pulgar_arriba:
-    'Puño (también de lado y algo suelto) con el pulgar hacia arriba durante medio segundo.',
-  pulgar_abajo: 'Puño con el pulgar hacia abajo durante medio segundo.',
-  modo_precision: 'Índice y meñique extendidos (medio y anular plegados) un instante.',
-  trazo_airswipe:
-    'Con el teclado abierto, apunta con el índice y recorre las letras de la palabra.',
+  mano_abierta_sostenida: 'Abre la mano un instante; luego muévela.',
+  micro_pinza: 'Junta un instante índice y pulgar.',
+  pinza_sostenida: 'Mantén la pinza y mueve la mano.',
+  liberacion_pinza: 'Abre los dedos para soltar.',
+  dos_dedos: 'Dos dedos juntos hacia arriba: sube. Hacia abajo: baja.',
+  puno_cerrado: 'Cierra el puño un momento. Repite para reanudar.',
+  palma_abierta: 'Palma abierta y quieta un segundo.',
+  trazo_airswipe: 'Con el teclado abierto, recorre las letras con el índice.',
 }
 
 // Incorpora también las posturas del contrato que antes solo aparecían en el editor de asignaciones.
 const catalogIcons = {
   liberacion_pinza: '🖐️',
   palma_abierta: '✋',
-  pulgar_arriba: '👍',
-  pulgar_abajo: '👎',
-  modo_precision: '🤘',
   trazo_airswipe: '☝️',
 }
 for (const [code, emoji] of Object.entries(catalogIcons)) {
@@ -283,5 +167,7 @@ for (const [code, emoji] of Object.entries(catalogIcons)) {
     instruction: GESTURE_HELP[code],
     toggle: entry.interruptor,
     live: false,
+    // El trazo Air-Swipe solo existe dentro del teclado: no se lista como gesto (24-11-2026).
+    hidden: code === 'trazo_airswipe',
   }
 }

@@ -5,7 +5,6 @@ import {
   SettingSlider,
   HandSelectionOptions,
   Icon,
-  NavLink,
   ToggleRow,
 } from '../components/UI'
 import { ToolsPanel } from '../components/AppTools'
@@ -305,9 +304,6 @@ export default function SettingsPage({
           />
         )}
       </div>
-      <NavLink to="/diagnosticos" navigate={navigate} className="text-link">
-        Diagnósticos del motor →
-      </NavLink>
     </main>
   )
 }

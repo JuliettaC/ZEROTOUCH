@@ -37,7 +37,7 @@ from .detector import HandDetector
 from .gaze import FaceOrientationDetector, GazeGate
 from .interpreter import GestureInterpreter
 from .os_adapter import MockOSAdapter, PynputOSAdapter
-from .window_control import MockWindowController, WindowActions, Win32WindowController
+from .text_focus import FocusPoller, TextFocusWatcher, Win32TextFocusProbe, keyboard_events
 
 DETECTOR_MAX_CONSECUTIVE_FAILURES = 30
 VALID_MODES = (MODE_OBSERVATION, MODE_CONTROL)
@@ -123,6 +123,11 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
     frame_counter = 0
     event_seq = 0
     rgb = None
+    # Teclado Air-Swipe según el foco (text_focus.py): solo con el sistema real y en Windows.
+    focus_poller: FocusPoller | None = None
+    focus_watcher = TextFocusWatcher()
+    if not use_mock_os and sys.platform == "win32":
+        focus_poller = FocusPoller(Win32TextFocusProbe).start()
 
     def dispatch(events: list[Any]) -> list[str]:
         return action_engine.dispatch(events) if action_engine is not None else []
@@ -215,7 +220,6 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
             "eventCounts": dict(action_engine.event_counts),
             "pinchDiag": dict(interpreter.pinch_diag),
             "deliveryCounts": {event: dict(outcomes) for event, outcomes in action_engine.delivery_counts.items()},
-            "windowResult": action_engine.last_window_result,
         }
 
     def handle_command(msg: dict[str, Any]) -> bool:
@@ -394,20 +398,12 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
             daemon=True,
         )
         camera_thread.start()
-        window_actions: WindowActions | None
         if use_mock_os:
             adapter = MockOSAdapter()
-            window_actions = WindowActions(MockWindowController())
         else:
             adapter = PynputOSAdapter(on_emergency_stop=lambda: cmd_queue.put({"cmd": "EMERGENCY_STOP"}))
-            try:
-                window_actions = WindowActions(Win32WindowController())
-            except Exception:
-                window_actions = None  # sin Win32 los gestos de ventana informan UNAVAILABLE
 
-        action_engine = LogicalActionEngine(
-            adapter=adapter, initial_mode=MODE_OBSERVATION, window_actions=window_actions
-        )
+        action_engine = LogicalActionEngine(adapter=adapter, initial_mode=MODE_OBSERVATION)
         detector = HandDetector(min_detection_confidence=0.50, min_tracking_confidence=0.50)
         ensure_face_detector()
         camera_thread.join()
@@ -509,6 +505,12 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
                            "emergencyStopped": action_engine.emergency_stopped,
                            "reason": "CAMERA_LOST"})
 
+            # Foco en un campo de texto: abrir el teclado; al salir, cerrarlo.
+            if focus_poller is not None:
+                focus_active = (action_engine.mode == MODE_CONTROL and not interpreter.paused
+                                and interpreter.config.airswipe_enabled)
+                dispatch(keyboard_events(focus_watcher, focus_poller.latest(), now_ms, focus_active))
+
             emit_app_events()
             latency_ms = round((time.monotonic() - t0) * 1000.0, 1)
 
@@ -551,6 +553,8 @@ def run_engine(use_mock_os: bool = False, initial_config: dict[str, Any] | None 
         emit_json({"type": "ERROR", "running": False, "message": f"Error en motor gestual: {exc}"})
         return 1
     finally:
+        if focus_poller is not None:
+            focus_poller.stop()
         if camera_thread is not None:
             camera_thread.join(timeout=5)  # no liberar la cámara mientras aún se está abriendo
         if action_engine is not None:

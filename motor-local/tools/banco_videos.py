@@ -26,30 +26,31 @@ from motor_local.config import EngineConfig
 from motor_local.detector import HandDetector
 from motor_local.interpreter import GestureInterpreter
 
-# Palabra clave del nombre del archivo -> eventos que ese video DEBE producir.
+# Palabra clave del nombre del archivo -> eventos que ese video DEBE producir. Los gestos retirados el 24-11-2026
+# (ventanas, teclado ☝️, dictado, pulgares, pestañas) ya no producen nada: sus videos quedan como «no debe actuar».
 EXPECTED = [
-    ("traerla de vuelta", {"RESTORE_WINDOW"}),  # antes que «minimizar»: su nombre también lo contiene
-    ("regresar ventana", {"RESTORE_WINDOW"}),   # 23-11: antes que «win + tecla abajo» (su nombre lo contiene)
-    ("win + tecla abajo", {"MINIMIZE_WINDOW"}),
-    ("activar teclado", {"KEYBOARD"}),
-    ("transcriptor", {"DICTATION"}),
+    ("traerla de vuelta", set()),  # antes que «minimizar»: su nombre también lo contiene
+    ("regresar ventana", set()),   # antes que «win + tecla abajo» (su nombre lo contiene)
+    ("win + tecla abajo", set()),
+    ("activar teclado", set()),
+    ("transcriptor", set()),
     ("alt tab", {"ALT_TAB"}),
     ("arrastrar", {"START_DRAG"}),
-    ("confirmar", {"CONFIRM"}),
-    ("devolver pestana", {"PREV_TAB"}),
+    ("confirmar", set()),
+    ("devolver pestana", set()),
     ("click izquierdo", {"LEFT_CLICK"}),
     ("click derecho", {"RIGHT_CLICK"}),
     ("pausar", {"PAUSE", "RESUME"}),
-    ("pasar pestana", {"NEXT_TAB"}),
-    ("minimizar", {"MINIMIZE_WINDOW"}),
+    ("pasar pestana", set()),
+    ("minimizar", set()),
     ("scroll", {"SCROLL"}),
     ("mostrar escritorio", {"SHOW_DESKTOP"}),
     ("mover cursor", set()),
 ]
 IGNORED = {"MOVE_CURSOR", "TRACKING_LOST", "END_DRAG"}
-# Configuración pedida por la persona usuaria el 21-11-2026: sin arrastre, con gestos de ventana. Para los videos
-# del 23-11 (mano izquierda, con arrastre y confirmar): --json '{"preferredHand": "LEFT", "drag": true, "thumbsUp": true}'
-DEFAULTS = {"drag": False, "windowSwipe": True, "tabGestures": True}
+# Configuración pedida por la persona usuaria el 21-11-2026: sin arrastre. Para los videos del 23-11 (mano izquierda,
+# con arrastre): --json '{"preferredHand": "LEFT", "drag": true}'
+DEFAULTS = {"drag": False}
 
 
 def plain(text: str) -> str:

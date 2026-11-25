@@ -7,95 +7,62 @@ import { describeEvent } from '../../src/engine/appEvents.js'
 import { gestures } from '../../src/data/gestures.js'
 import { GESTURE_MATCH } from '../../src/data/engineStatus.js'
 
-// Gestos locales del equipo para PC: pulgar y meñique (pestañas) y pinza con el medio (clic derecho).
-// No se sincronizan ni pasan por la API: son ajustes del equipo, como los gestos de ventana.
+// Gestos locales del equipo para PC: clic derecho (pinza con el medio), Alt+Tab y pestaña nueva (V sostenida).
+// No se sincronizan ni pasan por la API: son ajustes del equipo. El 24-11-2026 se retiraron los de ventana (tres dedos
+// y golpe de muñeca), pestañas, dictado, ☝️ sostenido y desplazar con la mano abierta.
+const RETIRADOS = ['windowGestures', 'windowSwipe', 'tabGestures', 'dictation', 'keyboardGesture', 'openHandScroll']
 
-test('los gestos de pestañas y clic derecho vienen activados y se pueden apagar por equipo', () => {
+test('el clic derecho viene activado y se apaga por equipo, sin tocar los modos', () => {
   const state = createDefaultState()
-  assert.equal(getEffectiveSettings(state).tabGestures, true)
   assert.equal(getEffectiveSettings(state).rightClick, true)
-  const next = updateActiveSettings(state, { tabGestures: false, rightClick: false })
-  assert.equal(next.device.tabGestures, false, 'es un ajuste del equipo, no del modo')
-  assert.equal(next.device.rightClick, false)
+  const next = updateActiveSettings(state, { rightClick: false })
+  assert.equal(next.device.rightClick, false, 'es un ajuste del equipo, no del modo')
   assert.deepEqual(next.modes, state.modes, 'no cambia ningún modo sincronizable')
+  assert.equal(gestures.rightClick.toggle, 'rightClick')
+  assert.deepEqual(GESTURE_MATCH.rightClick, ['PINZA_MEDIO', 'RIGHT_CLICK'])
 })
 
-test('una preferencia guardada antes de estos gestos los recibe activados', () => {
-  const device = normalizeDevice({ preferredHand: 'LEFT', windowGestures: true })
-  assert.equal(device.tabGestures, true)
-  assert.equal(device.rightClick, true)
-  assert.equal(normalizeDevice({ tabGestures: 'no' }).tabGestures, true, 'un valor no booleano se descarta')
-})
-
-test('la configuración enviada al motor incluye ambos interruptores y su cambio exige confirmación', () => {
-  const state = updateActiveSettings(createDefaultState(), { tabGestures: false })
+test('los gestos retirados desaparecen de las preferencias guardadas, de la configuración del motor y de la lista', () => {
+  const saved = Object.fromEntries(RETIRADOS.map((key) => [key, true]))
+  const device = normalizeDevice({ preferredHand: 'LEFT', ...saved })
+  for (const key of RETIRADOS) assert.equal(key in device, false, `${key} se descarta al leer`)
+  assert.equal(device.preferredHand, 'LEFT', 'el resto de la preferencia se conserva')
+  const state = createDefaultState()
   const desired = buildEngineConfig(getEffectiveSettings(state), getActiveAssignments(state))
-  assert.equal(desired.tabGestures, false)
-  assert.equal(desired.rightClick, true)
-  assert.equal(appliedMatches(desired, { ...desired, tabGestures: true }), false)
+  for (const key of RETIRADOS) assert.equal(key in desired, false, `${key} no se envía al motor`)
+  for (const id of ['threeFingers', 'windowSwipe', 'tabs', 'dictation', 'keyboard', 'openHandScroll'])
+    assert.equal(gestures[id], undefined, `${id} no aparece en la lista de gestos`)
+  for (const code of ['THREE', 'TRES_DEDOS', 'PESTANAS', 'DICTADO', 'TECLADO', 'SCROLL_MANO'])
+    assert.ok(!Object.values(GESTURE_MATCH).flat().includes(code), code)
+  for (const event of ['NEXT_TAB', 'PREV_TAB', 'DICTATION', 'MINIMIZE_WINDOW', 'RESTORE_WINDOW'])
+    assert.equal(describeEvent({ seq: 1, event, injected: true }), null, `${event} ya no tiene aviso`)
+})
+
+test('la configuración enviada al motor incluye los interruptores del equipo y su cambio exige confirmación', () => {
+  const state = updateActiveSettings(createDefaultState(), { rightClick: false })
+  const desired = buildEngineConfig(getEffectiveSettings(state), getActiveAssignments(state))
+  assert.equal(desired.rightClick, false)
+  assert.equal(desired.altTab, true)
+  assert.equal(appliedMatches(desired, { ...desired, rightClick: true }), false)
   assert.equal(appliedMatches(desired, { ...desired }), true)
 })
 
-test('la interfaz muestra los gestos, su telemetría y el aviso de pestaña', () => {
-  assert.equal(gestures.tabs.toggle, 'tabGestures')
-  assert.equal(gestures.rightClick.toggle, 'rightClick')
-  assert.equal(gestures.tabs.code, undefined, 'no apunta a un gesto del catálogo sincronizado')
-  assert.deepEqual(GESTURE_MATCH.tabs, ['PESTANAS'])
-  assert.match(describeEvent({ event: 'NEXT_TAB', injected: true }).text, /Pestaña siguiente/)
-  assert.equal(describeEvent({ event: 'PREV_TAB', injected: false }).tone, 'warn')
-})
-
-test('QA de comodidad: barrido vertical de ventanas apagado y aceleración del cursor encendida por defecto', () => {
+test('QA de comodidad: aceleración del cursor encendida por defecto y ajuste del equipo', () => {
   const state = createDefaultState()
   const effective = getEffectiveSettings(state)
-  assert.equal(effective.windowSwipe, false, 'mover el cursor rápido hacia abajo minimizaba ventanas')
   assert.equal(effective.pointerAcceleration, true)
-  const desired = buildEngineConfig(effective, getActiveAssignments(state))
-  assert.equal(desired.windowSwipe, false)
-  assert.equal(desired.pointerAcceleration, true)
+  assert.equal(buildEngineConfig(effective, getActiveAssignments(state)).pointerAcceleration, true)
   const off = updateActiveSettings(state, { pointerAcceleration: false })
   assert.equal(off.device.pointerAcceleration, false, 'ajuste del equipo')
-  assert.equal(normalizeDevice({}).windowSwipe, false)
 })
 
-test('dictado (🤙): activado por defecto, se apaga por equipo, llega al motor y tiene aviso', () => {
+test('Alt+Tab activado por defecto, se apaga por equipo, llega al motor y se anuncia', () => {
   const state = createDefaultState()
-  assert.equal(getEffectiveSettings(state).dictation, true)
-  const off = updateActiveSettings(state, { dictation: false })
-  assert.equal(off.device.dictation, false)
-  assert.equal(buildEngineConfig(getEffectiveSettings(state), getActiveAssignments(state)).dictation, true)
-  assert.equal(buildEngineConfig(getEffectiveSettings(off), getActiveAssignments(off)).dictation, false)
-  assert.equal(gestures.dictation.toggle, 'dictation')
-  assert.deepEqual(GESTURE_MATCH.dictation, ['DICTADO'])
-  assert.match(describeEvent({ seq: 1, event: 'DICTATION', injected: true }).text, /Win \+ H/)
-  assert.equal(describeEvent({ seq: 1, event: 'DICTATION', injected: false }).tone, 'warn')
-})
-
-test('abrir el teclado (☝️): activado por defecto, se apaga por equipo y llega al motor', () => {
-  const state = createDefaultState()
-  assert.equal(getEffectiveSettings(state).keyboardGesture, true)
-  const off = updateActiveSettings(state, { keyboardGesture: false })
-  assert.equal(buildEngineConfig(getEffectiveSettings(state), getActiveAssignments(state)).keyboardGesture, true)
-  assert.equal(buildEngineConfig(getEffectiveSettings(off), getActiveAssignments(off)).keyboardGesture, false)
-  assert.equal(gestures.keyboard.toggle, 'keyboardGesture')
-  assert.deepEqual(GESTURE_MATCH.keyboard, ['TECLADO'])
-  // El evento no es un aviso: lo atiende la ventana principal abriendo el teclado.
-  assert.equal(describeEvent({ seq: 1, event: 'KEYBOARD' }), null)
-  assert.equal(describeEvent({ seq: 1, event: 'KEYBOARD_CLOSE' }), null)
-  assert.match(gestures.keyboard.instruction, /hacia abajo/)
-})
-
-test('Alt+Tab activado y desplazar con mano abierta apagado por defecto; ambos llegan al motor', () => {
-  const state = createDefaultState()
-  const settings = getEffectiveSettings(state)
-  assert.equal(settings.altTab, true)
-  assert.equal(settings.openHandScroll, false)
-  const on = updateActiveSettings(state, { altTab: false, openHandScroll: true })
-  const desired = buildEngineConfig(getEffectiveSettings(on), getActiveAssignments(on))
-  assert.equal(desired.altTab, false)
-  assert.equal(desired.openHandScroll, true)
+  assert.equal(getEffectiveSettings(state).altTab, true)
+  const off = updateActiveSettings(state, { altTab: false })
+  assert.equal(buildEngineConfig(getEffectiveSettings(off), getActiveAssignments(off)).altTab, false)
   assert.equal(gestures.altTab.toggle, 'altTab')
-  assert.equal(gestures.openHandScroll.toggle, 'openHandScroll')
+  assert.doesNotMatch(gestures.altTab.instruction, /dictado/, 'ya no remite al gesto retirado')
   assert.match(describeEvent({ seq: 1, event: 'ALT_TAB', injected: true }).text, /Alt \+ Tab/)
 })
 

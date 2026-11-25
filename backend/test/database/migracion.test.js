@@ -9,7 +9,8 @@ import { openDatabase, migrateDatabase } from '../../src/config/database.js';
 
 const v1 = readFileSync(new URL('../fixtures/schema-v1.sql', import.meta.url), 'utf8');
 const v2 = readFileSync(new URL('../fixtures/schema-v2.sql', import.meta.url), 'utf8');   // esquema v2 congelado (antes de la idempotencia)
-const v3 = readFileSync(new URL('../../../db/schema.sql', import.meta.url), 'utf8');
+const v4 = readFileSync(new URL('../../../db/schema.sql', import.meta.url), 'utf8');
+const retirados = ['deslizamiento_izquierda', 'deslizamiento_derecha', 'pulgar_arriba', 'pulgar_abajo', 'modo_precision'];
 const hash = '$argon2id$v=19$m=65536,t=3,p=1$' + 'x'.repeat(70);
 const structure = db => ({
   tables: db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all(),
@@ -21,7 +22,7 @@ const structure = db => ({
   idempotenciaFks: db.pragma('foreign_key_list(idempotencia)'),
 });
 
-test('migración v1 -> v3: aditiva, con respaldo, idempotente y equivalente al esquema nuevo', async t => {
+test('migración v1 -> v4: con respaldo, con respaldo, idempotente y equivalente al esquema nuevo', async t => {
   const directory = mkdtempSync(path.join(tmpdir(), 'zt-migracion-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const filename = path.join(directory, 'v1.sqlite');
@@ -37,7 +38,7 @@ test('migración v1 -> v3: aditiva, con respaldo, idempotente y equivalente al e
   assert.throws(() => openDatabase(filename), /db:migrate/);
   const result = await migrateDatabase(filename, { now: new Date('2026-11-10T12:00:00.000Z') });
   assert.equal(result.migrated, true);
-  assert.equal(result.version, 3);
+  assert.equal(result.version, 4);
   assert.equal(result.from, 1);
   assert.ok(existsSync(result.backup));
   assert.match(path.basename(result.backup), /^v1\.sqlite\.v1-2026-11-10T12-00-00-000Z\.ztbackup$/);
@@ -49,7 +50,7 @@ test('migración v1 -> v3: aditiva, con respaldo, idempotente y equivalente al e
 
   const db = openDatabase(filename);
   try {
-    assert.equal(db.pragma('user_version', { simple: true }), 3);
+    assert.equal(db.pragma('user_version', { simple: true }), 4);
     const migrated = db.prepare('SELECT * FROM usuarios WHERE id=?').get(user);
     assert.equal(migrated.nombre_usuario, 'heredado');
     assert.equal(migrated.contrasena_hash, hash);
@@ -57,9 +58,9 @@ test('migración v1 -> v3: aditiva, con respaldo, idempotente y equivalente al e
     assert.equal(migrated.correo_verificado_en, null);
     assert.equal(db.prepare('SELECT sensibilidad_puntero s FROM modos_uso WHERE id=?').get(mode).s, 77);
     assert.equal(db.prepare('SELECT count(*) n FROM sesiones').get().n, 1, 'no se borran datos; el middleware rechaza la sesión');
-    assert.equal(db.prepare('SELECT count(*) n FROM gestos').get().n, 13);
+    assert.equal(db.prepare('SELECT count(*) n FROM gestos').get().n, 8);
     const fresh = new Database(':memory:');
-    fresh.exec(v3);
+    fresh.exec(v4);
     assert.deepEqual(structure(db), structure(fresh));
     fresh.close();
   } finally { db.close(); }
@@ -100,7 +101,7 @@ function legacyV2(directory, name = 'v2.sqlite') {
   return { filename, user, profile, mode };
 }
 
-test('el backend sigue abriendo una base v2 (sin idempotencia) y migrarla a v3 es explícito, con respaldo y sin perder datos', async t => {
+test('el backend sigue abriendo una base v2 (sin idempotencia) y migrarla a v4 es explícito, con respaldo y sin perder datos', async t => {
   const directory = mkdtempSync(path.join(tmpdir(), 'zt-migracion-v3-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const { filename, user, profile, mode } = legacyV2(directory);
@@ -113,7 +114,7 @@ test('el backend sigue abriendo una base v2 (sin idempotencia) y migrarla a v3 e
   assert.equal(readdirSync(directory).filter(name => name.endsWith('.ztbackup')).length, 0, 'abrir no genera respaldos');
 
   const result = await migrateDatabase(filename, { now: new Date('2026-11-12T09:30:00.000Z') });
-  assert.deepEqual([result.migrated, result.from, result.version], [true, 2, 3]);
+  assert.deepEqual([result.migrated, result.from, result.version], [true, 2, 4]);
   assert.match(path.basename(result.backup), /^v2\.sqlite\.v2-2026-11-12T09-30-00-000Z\.ztbackup$/);
   const backup = new Database(result.backup, { readonly: true });
   assert.equal(backup.pragma('user_version', { simple: true }), 2, 'el respaldo conserva la versión original');
@@ -122,15 +123,15 @@ test('el backend sigue abriendo una base v2 (sin idempotencia) y migrarla a v3 e
 
   const db = openDatabase(filename);
   try {
-    assert.equal(db.pragma('user_version', { simple: true }), 3);
+    assert.equal(db.pragma('user_version', { simple: true }), 4);
     assert.equal(db.prepare('SELECT nombre_usuario, correo FROM usuarios WHERE id=?').get(user).correo, 'v2@ejemplo.test');
     assert.equal(db.prepare('SELECT nombre FROM perfiles WHERE id=?').get(profile).nombre, 'Perfil v2');
     assert.equal(db.prepare('SELECT sensibilidad_puntero s FROM modos_uso WHERE id=?').get(mode).s, 31);
     assert.equal(db.prepare('SELECT habilitado h FROM asignaciones_gestos WHERE modo_id=?').get(mode).h, 0);
     assert.equal(db.prepare('SELECT count(*) n FROM idempotencia').get().n, 0, 'la tabla nueva empieza vacía');
     const fresh = new Database(':memory:');
-    fresh.exec(v3);
-    assert.deepEqual(structure(db), structure(fresh), 'la base migrada es idéntica a una base nueva v3');
+    fresh.exec(v4);
+    assert.deepEqual(structure(db), structure(fresh), 'la base migrada es idéntica a una base nueva v4');
     fresh.close();
   } finally { db.close(); }
 
@@ -158,7 +159,7 @@ test('una migración que falla no cambia nada: ni la versión ni las tablas (una
 test('la tabla de idempotencia solo admite claves UUID v7, huellas SHA-256 y respuestas JSON acotadas, y cae con el usuario', () => {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
-  db.exec(v3);
+  db.exec(v4);
   const user = randomUUID();
   db.prepare('INSERT INTO usuarios(id,nombre_usuario,contrasena_hash) VALUES(?,?,?)').run(user, 'idem', hash);
   const key = '0194f3a2-8c11-7abc-8def-0123456789ab', fingerprint = 'a'.repeat(64);
@@ -180,4 +181,40 @@ test('la tabla de idempotencia solo admite claves UUID v7, huellas SHA-256 y res
   assert.equal(db.prepare('SELECT count(*) n FROM idempotencia WHERE usuario_id=?').get(user).n, 0, 'las claves caen con la cuenta');
   assert.equal(db.prepare('SELECT count(*) n FROM idempotencia').get().n, 1);
   db.close();
+});
+
+test('migración v3 -> v4: retira los gestos del catálogo y solo sus asignaciones; el resto del modo se conserva', async t => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'zt-migracion-v4-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const { filename, mode } = legacyV2(directory, 'v3.sqlite');
+  assert.equal((await migrateDatabase(filename, { now: new Date('2026-11-23T10:00:00.000Z') })).version, 4);
+  // Reconstruye una base v3 con los gestos retirados y asignaciones suyas, como la tenían las cuentas antes del 24-11.
+  const v3 = new Database(filename);
+  v3.pragma('foreign_keys = ON');
+  const nombres = { deslizamiento_izquierda: 'atras', deslizamiento_derecha: 'adelante', pulgar_arriba: 'confirmar', pulgar_abajo: 'cancelar', modo_precision: 'precision' };
+  for (const [codigo, accion] of Object.entries(nombres)) {
+    v3.prepare('INSERT INTO gestos(codigo,nombre,accion_predeterminada) VALUES(?,?,?)').run(codigo, codigo, accion);
+    v3.prepare('INSERT INTO asignaciones_gestos(modo_id,gesto_codigo,accion_codigo,habilitado) VALUES(?,?,?,1)').run(mode, codigo, accion);
+  }
+  v3.pragma('user_version = 3');
+  v3.close();
+
+  // Sin migrar, el backend la abre y no muestra los gestos retirados.
+  const before = openDatabase(filename);
+  assert.equal(before.prepare('SELECT count(*) n FROM gestos').get().n, 13);
+  before.close();
+
+  const result = await migrateDatabase(filename, { now: new Date('2026-11-24T10:00:00.000Z') });
+  assert.deepEqual([result.migrated, result.from, result.version], [true, 3, 4]);
+  const backup = new Database(result.backup, { readonly: true });
+  assert.equal(backup.prepare('SELECT count(*) n FROM asignaciones_gestos').get().n, 6, 'el respaldo conserva las asignaciones retiradas');
+  backup.close();
+  const db = openDatabase(filename);
+  try {
+    assert.equal(db.pragma('user_version', { simple: true }), 4);
+    assert.equal(db.prepare(`SELECT count(*) n FROM gestos WHERE codigo IN (${retirados.map(() => '?').join(',')})`).get(...retirados).n, 0);
+    assert.equal(db.prepare('SELECT count(*) n FROM gestos').get().n, 8);
+    assert.deepEqual(db.prepare('SELECT gesto_codigo, habilitado FROM asignaciones_gestos WHERE modo_id=?').all(mode), [{ gesto_codigo: 'micro_pinza', habilitado: 0 }]);
+    assert.deepEqual(db.pragma('foreign_key_check'), []);
+  } finally { db.close(); }
 });

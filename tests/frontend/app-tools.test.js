@@ -31,13 +31,10 @@ test('eventos: motor detenido y vuelto a arrancar, o reiniciado con secuencia me
   assert.deepEqual(reset.events.map(e => e.seq), [1, 2], 'secuencia menor sin parada: reinicio del motor')
 })
 
-test('avisos de multimedia y ventanas dicen si llegaron al sistema', () => {
+test('avisos de multimedia dicen si llegaron al sistema', () => {
   assert.match(describeEvent(ev(1, 'MEDIA_PLAY_PAUSE', { injected: true })).text, /Reproducir/)
   assert.equal(describeEvent(ev(1, 'MEDIA_NEXT', { injected: false })).tone, 'warn')
-  assert.match(describeEvent(ev(1, 'MINIMIZE_WINDOW', { injected: true, result: 'MINIMIZED' })).text, /minimizada/)
-  assert.match(describeEvent(ev(1, 'MINIMIZE_WINDOW', { injected: true, result: 'WIN_DOWN' })).text, /minimizada/)
-  assert.match(describeEvent(ev(1, 'MINIMIZE_WINDOW', { injected: true, result: 'ALREADY_MINIMIZED' })).text, /ya estaba/)
-  assert.match(describeEvent(ev(1, 'RESTORE_WINDOW', { injected: false })).text, /Controlar/)
+  assert.equal(describeEvent(ev(1, 'MINIMIZE_WINDOW', { injected: true })), null, 'los gestos de ventana se retiraron')
   assert.equal(describeEvent(ev(1, 'AIRSWIPE_TRACE')), null, 'el trazo es del teclado, no de la ventana principal')
 })
 
@@ -82,9 +79,9 @@ test('duración del temporizador por gesto: ajuste del equipo con valor por defe
 test('qué gesto realiza cada acción del modo', () => {
   const assignments = defaultAssignments()
   assert.deepEqual(gesturesWithAction('temporizador_iniciar', assignments), [])
-  const custom = { ...assignments, pulgar_abajo: { accion: 'temporizador_iniciar', habilitado: true } }
-  assert.deepEqual(gesturesWithAction('temporizador_iniciar', custom), ['pulgar_abajo'])
-  assert.deepEqual(gesturesWithAction('temporizador_iniciar', { ...custom, pulgar_abajo: { accion: 'temporizador_iniciar', habilitado: false } }), [])
+  const custom = { ...assignments, palma_abierta: { accion: 'temporizador_iniciar', habilitado: true } }
+  assert.deepEqual(gesturesWithAction('temporizador_iniciar', custom), ['palma_abierta'])
+  assert.deepEqual(gesturesWithAction('temporizador_iniciar', { ...custom, palma_abierta: { accion: 'temporizador_iniciar', habilitado: false } }), [])
 })
 
 test('el gesto del temporizador inicia, pausa y reanuda (contrato: «inicia, pausa o reanuda»)', async () => {

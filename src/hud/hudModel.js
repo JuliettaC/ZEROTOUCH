@@ -6,7 +6,6 @@ import { getEngineState } from '../data/engineStatus.js'
 export const ACTION_LABELS = {
   LEFT_CLICK: 'Clic',
   RIGHT_CLICK: 'Clic derecho',
-  DICTATION: 'Dictado (Win + H)',
   KEYBOARD: 'Abrir teclado',
   KEYBOARD_CLOSE: 'Bajar teclado',
   ALT_TAB: 'Cambiar de ventana',
@@ -17,8 +16,6 @@ export const ACTION_LABELS = {
   END_DRAG: 'Arrastre soltado',
   PAUSE: 'Pausa',
   RESUME: 'Reanudado',
-  THUMBS_UP: 'Pulgar arriba',
-  THUMBS_DOWN: 'Pulgar abajo',
   TRACKING_LOST: 'Mano perdida',
   BACK: 'Atrás (Alt+←)',
   FORWARD: 'Adelante (Alt+→)',
@@ -29,11 +26,7 @@ export const ACTION_LABELS = {
   TIMER: 'Temporizador',
   PRECISION: 'Modo precisión',
   NAVIGATION: 'Navegación',
-  MINIMIZE_WINDOW: 'Minimizar ventana',
-  RESTORE_WINDOW: 'Restaurar ventana',
   AIRSWIPE_TRACE: 'Trazo Air-Swipe',
-  NEXT_TAB: 'Pestaña siguiente',
-  PREV_TAB: 'Pestaña anterior',
   EMERGENCY_STOP: 'Parada de emergencia',
   TYPE_TEXT: 'Texto escrito',
 }

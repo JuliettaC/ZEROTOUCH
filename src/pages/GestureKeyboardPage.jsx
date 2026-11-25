@@ -70,15 +70,17 @@ export default function GestureKeyboardPage({
             En Inicio, activa la cámara y pulsa <strong>Activar control</strong>. Mantén la mano
             abierta un momento para activar el puntero.
           </li>
-          <li>Abre el teclado: aparece abajo y no le quita el foco a lo que estés escribiendo.</li>
-          <li>Haz clic con la pinza donde quieras escribir.</li>
+          <li>
+            Haz clic con la pinza donde quieras escribir: el teclado se abre solo, abajo y sin
+            quitarle el foco al campo. Al salir del campo se cierra.
+          </li>
           <li>
             Apunta con el índice (los demás dedos plegados) y recorre las letras de la palabra; al
             soltar la postura aparece una propuesta.
           </li>
           <li>
             Toca la palabra correcta con la pinza para escribirla. Borrar, Espacio e Intro están en
-            la barra. Con pulgar arriba (si lo activas en Gestos) confirmas la primera propuesta.
+            la barra.
           </li>
         </ol>
         <p className="step-hint">

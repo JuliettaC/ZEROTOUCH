@@ -22,7 +22,7 @@ test('la configuración de la interfaz coincide con la que devuelve el motor rea
 test('una diferencia real se detecta como no aplicada', () => {
   const { desired, applied } = fixture.custom
   assert.equal(appliedMatches({ ...desired, sensitivity: desired.sensitivity + 1 }, applied), false)
-  assert.equal(appliedMatches({ ...desired, windowGestures: !desired.windowGestures }, applied), false)
+  assert.equal(appliedMatches({ ...desired, rightClick: !desired.rightClick }, applied), false)
   assert.equal(appliedMatches({ ...desired, gestos: { ...desired.gestos, palma_abierta: { accion: 'atras', habilitado: true } } }, applied), false)
   assert.equal(appliedMatches(desired, { ...applied, gaze: { ...applied.gaze, calibration: null } }), false)
   assert.equal(appliedMatches(desired, null), false)

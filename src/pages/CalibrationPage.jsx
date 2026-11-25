@@ -1,11 +1,10 @@
-import { AdvancedSettings, NavLink, ConfigStatus, EngineCard } from '../components/UI'
+import { AdvancedSettings, ConfigStatus, EngineCard } from '../components/UI'
 import { GestureList } from '../components/GestureCatalog'
 import { usesEssentialGestures, withEssentialGestures } from '../data/essentialGestures'
 
 export default function CalibrationPage({
   favorites,
   onFavorite,
-  navigate,
   settings,
   assignments,
   modeName,
@@ -24,10 +23,7 @@ export default function CalibrationPage({
   return (
     <main id="main" tabIndex={-1} className="page calibration-page">
       <div className="section-line">
-        <h1 className="page-title">Gestos</h1>{' '}
-        <NavLink to="/teclado" navigate={navigate} className="text-link">
-          Escritura Air-Swipe →
-        </NavLink>
+        <h1 className="page-title">Gestos</h1>
       </div>
       <div>
         <div className="calibration-steps">
@@ -63,9 +59,9 @@ export default function CalibrationPage({
                   ? '✓ Solo gestos esenciales'
                   : 'Usar solo gestos esenciales'}
               </button>{' '}
-              Mover, clic, desplazar, pausar y abrir el teclado (el dictado, Alt + Tab y las
-              pestañas quedan como estén). Apaga el resto, que puede dispararse solo al mover el
-              cursor; cada gesto se vuelve a encender desde esta lista.
+              Mover, clic, desplazar y pausar (Alt + Tab y la pestaña nueva quedan como estén).
+              Apaga el resto, que puede dispararse solo al mover el cursor; cada gesto se vuelve a
+              encender desde esta lista.
             </p>
             <GestureList
               favorites={favorites}

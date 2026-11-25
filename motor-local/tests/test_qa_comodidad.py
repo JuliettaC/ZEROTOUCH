@@ -174,9 +174,9 @@ def test_el_clic_cae_donde_apuntaba_antes_de_juntar_los_dedos() -> None:
     assert math.hypot(at_click[0] - aimed[0], at_click[1] - aimed[1]) < 0.6 * math.hypot(drifted[0] - aimed[0], drifted[1] - aimed[1]), (aimed, drifted, at_click)
 
 
-def test_ventana_por_barrido_vertical_viene_apagada() -> None:
-    assert EngineConfig().window_swipe_enabled is False
-    assert EngineConfig.from_dict({}).to_dict()["windowSwipe"] is False
+def test_aceleracion_del_cursor_viene_encendida() -> None:
+    # (El barrido vertical de ventanas que esta prueba fijaba apagado se retiró el 24-11-2026.)
+    assert "windowSwipe" not in EngineConfig.from_dict({}).to_dict()
     assert EngineConfig.from_dict({}).to_dict()["pointerAcceleration"] is True
 
 

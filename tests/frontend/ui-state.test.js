@@ -56,12 +56,16 @@ test('el editor de asignaciones: elegir una acción enciende el gesto; «sin acc
 test('la lista de gestos nombra la acción asignada cuando el gesto admite varias', () => {
   const state = createDefaultState()
   const id = state.activeModeId
-  assert.equal(gestureActionLabel('swipeLeft', getActiveAssignments(state)), 'Atrás', 'apagado: etiqueta por defecto')
-  let next = setToggle(state, id, 'swipeLeft', true)
-  next = setAssignment(next, id, 'deslizamiento_izquierda', { accion: 'multimedia_siguiente', habilitado: true })
-  assert.equal(gestureActionLabel('swipeLeft', getActiveAssignments(next)), 'Siguiente elemento multimedia')
+  assert.equal(gestureActionLabel('palma_abierta', getActiveAssignments(state)), 'Volver a navegación', 'etiqueta por defecto')
+  let next = setToggle(state, id, 'palm', true)
+  next = setAssignment(next, id, 'palma_abierta', { accion: 'multimedia_siguiente', habilitado: true })
+  assert.equal(gestureActionLabel('palma_abierta', getActiveAssignments(next)), 'Siguiente elemento multimedia')
   assert.equal(gestureActionLabel('click', getActiveAssignments(next)), gestures.click.action, 'un gesto de acción única conserva su texto')
-  assert.equal(gestureActionLabel('threeFingers', getActiveAssignments(next)), gestures.threeFingers.action, 'sin gesto del contrato asociado')
+  assert.equal(gestureActionLabel('altTab', getActiveAssignments(next)), gestures.altTab.action, 'sin gesto del contrato asociado')
+  // 24-11-2026: los gestos retirados ya no tienen ficha.
+  for (const retirado of ['swipeLeft', 'swipeRight', 'windowSwipe', 'threeFingers', 'tabs', 'dictation', 'keyboard', 'openHandScroll', 'pulgar_arriba', 'pulgar_abajo', 'modo_precision'])
+    assert.equal(gestures[retirado], undefined, retirado)
+  assert.equal(gestures.trazo_airswipe.hidden, true, 'el trazo existe en el contrato pero no se lista')
   for (const [name, gesture] of Object.entries(gestures)) {
     if (gesture.code) assert.ok(GESTURE_CODES.includes(gesture.code), `${name} apunta a un gesto del contrato`)
   }

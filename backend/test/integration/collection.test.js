@@ -92,7 +92,7 @@ test('colección: HTTP real, aislamiento, reinicio y exportación sin credencial
       assert.equal(configuration.formato_version, 1);
       assert.equal(configuration.modo.sensibilidad_puntero, 70);
       assert.equal(configuration.modo.version, 2);
-      assert.equal(configuration.gestos.length, 13);
+      assert.equal(configuration.gestos.length, 8);
       assert.ok(configuration.gestos.every(g => typeof g.habilitado === 'boolean'));
       assert.equal(configuration.gestos.find(g => g.gesto_codigo === 'micro_pinza').accion_codigo, 'clic');
       const oldPid = server.pid;

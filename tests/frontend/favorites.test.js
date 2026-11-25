@@ -40,5 +40,5 @@ test('la ruta de la receta abre Gestos y reemplaza la entrada antigua del histor
   assert.deepEqual(replaced, [pageUrl('/calibracion')])
   assert.equal(currentPath('/prueba'), '/calibracion')
   assert.equal(currentPath('/index.html'), '/')
-  assert.equal(currentPath('/diagnosticos'), '/diagnosticos')
+  assert.equal(currentPath('/teclado'), '/teclado')
 })

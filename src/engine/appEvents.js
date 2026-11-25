@@ -40,15 +40,6 @@ export function takeNewEvents(cursor, status) {
   }
 }
 
-const WINDOW_RESULTS = {
-  MINIMIZED: null,
-  RESTORED: null,
-  ALREADY_MINIMIZED: 'La ventana ya estaba minimizada.',
-  NO_WINDOW: 'No hay ninguna ventana activa que minimizar.',
-  NOTHING_TO_RESTORE: 'No hay ninguna ventana que traer de vuelta.',
-  UNAVAILABLE: 'El control de ventanas no está disponible en este equipo.',
-}
-
 /** Aviso breve para la persona usuaria, o null si el evento no se anuncia. */
 export function describeEvent(event) {
   switch (event?.event) {
@@ -60,30 +51,6 @@ export function describeEvent(event) {
       return event.injected
         ? { text: '⏭ Siguiente pista', tone: 'info' }
         : { text: '⏭ Siguiente pista (no enviado: activa Controlar)', tone: 'warn' }
-    case 'MINIMIZE_WINDOW':
-    case 'RESTORE_WINDOW': {
-      const down = event.event === 'MINIMIZE_WINDOW'
-      if (!event.injected)
-        return {
-          text: `${down ? 'Bajar' : 'Traer'} ventana: activa Controlar para que funcione.`,
-          tone: 'warn',
-        }
-      const problem = WINDOW_RESULTS[event.result]
-      if (problem) return { text: problem, tone: 'warn' }
-      return {
-        text: down
-          ? 'Ventana minimizada. Sube la mano abierta para traerla de vuelta.'
-          : 'Ventana restaurada.',
-        tone: 'info',
-      }
-    }
-    case 'NEXT_TAB':
-    case 'PREV_TAB': {
-      const label = event.event === 'NEXT_TAB' ? 'Pestaña siguiente' : 'Pestaña anterior'
-      return event.injected
-        ? { text: `👋 ${label}`, tone: 'info' }
-        : { text: `👋 ${label} (no enviado: activa Controlar)`, tone: 'warn' }
-    }
     case 'ALT_TAB':
       return event.injected
         ? { text: '🤟 Cambiar de ventana (Alt + Tab)', tone: 'info' }
@@ -92,13 +59,6 @@ export function describeEvent(event) {
       return event.injected
         ? { text: '✌️ Pestaña nueva (Ctrl + T)', tone: 'info' }
         : { text: '✌️ Pestaña nueva (no enviada: activa Controlar)', tone: 'warn' }
-    case 'DICTATION':
-      return event.injected
-        ? {
-            text: '🤙 Dictado de Windows (Win + H): habla ahora; repite el gesto para cerrarlo.',
-            tone: 'info',
-          }
-        : { text: '🤙 Dictado (no enviado: activa Controlar)', tone: 'warn' }
     case 'PRECISION':
       return {
         text: event.active

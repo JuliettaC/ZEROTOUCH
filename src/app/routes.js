@@ -4,7 +4,6 @@ export const PAGE_TITLES = {
   '/calibracion': 'Gestos',
   '/teclado': 'Teclado Air-Swipe',
   '/ajustes': 'Ajustes',
-  '/diagnosticos': 'Diagnósticos',
 }
 const base = (import.meta.env?.BASE_URL || '/').replace(/\/$/, '').replace(/^\.$/, '')
 

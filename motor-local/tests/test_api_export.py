@@ -17,12 +17,7 @@ DEFAULT_GESTURES = [
     ("liberacion_pinza", "soltar", True),
     ("palma_abierta", "navegacion", False),
     ("puno_cerrado", "pausar", True),
-    ("deslizamiento_izquierda", "atras", False),
-    ("deslizamiento_derecha", "adelante", False),
     ("dos_dedos", "desplazar", True),
-    ("pulgar_arriba", "confirmar", False),
-    ("pulgar_abajo", "cancelar", False),
-    ("modo_precision", "precision", False),
     ("trazo_airswipe", "escritura_airswipe", False),
 ]
 
@@ -61,7 +56,7 @@ def _document() -> dict:
 
 def test_valid_export_keeps_values_and_flags() -> None:
     doc = _document()
-    doc["gestos"][8]["habilitado"] = False  # dos_dedos desactivado
+    doc["gestos"][6]["habilitado"] = False  # dos_dedos desactivado
     imported = load_api_export(doc, runtime={"cameraIndex": 2, "mirrorCamera": False, "preferredHand": "LEFT"})
     cfg = imported.config
     assert (cfg.sensitivity, cfg.stability, cfg.pinch_tolerance) == (72, 38, 44)
@@ -86,7 +81,7 @@ def test_disabled_unimplemented_actions_are_accepted_and_reported() -> None:
 
 def test_enabled_unimplemented_action_is_rejected() -> None:
     doc = _document()
-    doc["gestos"][12].update(accion_codigo="confirmar", habilitado=True)  # trazo_airswipe solo escribe
+    doc["gestos"][7].update(accion_codigo="confirmar", habilitado=True)  # trazo_airswipe solo escribe
     with pytest.raises(ConfigError) as info:
         load_api_export(doc)
     assert info.value.code == "ACTION_NOT_IMPLEMENTED"
@@ -99,23 +94,18 @@ def test_catalog_defaults_all_enabled_are_loadable() -> None:
         item["habilitado"] = True
     imported = load_api_export(doc)
     cfg = imported.config
-    assert cfg.thumbs_up_enabled and cfg.thumbs_down_enabled and cfg.palm_enabled
-    assert cfg.swipe_left_enabled and cfg.swipe_right_enabled and cfg.precision_gesture_enabled and cfg.airswipe_enabled
-    assert cfg.discrete_actions["pulgar_arriba"] == "confirmar"
-    assert cfg.discrete_actions["pulgar_abajo"] == "cancelar"
-    assert cfg.discrete_actions["modo_precision"] == "precision"
+    assert cfg.palm_enabled and cfg.airswipe_enabled
+    assert cfg.discrete_actions == {"palma_abierta": "navegacion"}
 
 
 def test_discrete_gestures_can_be_remapped_within_the_contract() -> None:
     doc = _document()
-    doc["gestos"][9].update(accion_codigo="multimedia_siguiente", habilitado=True)  # pulgar_arriba
-    doc["gestos"][7].update(accion_codigo="temporizador_iniciar", habilitado=True)  # deslizamiento_derecha
-    doc["gestos"][8].update(accion_codigo="sin_accion", habilitado=True)            # dos_dedos sin acción
+    doc["gestos"][4].update(accion_codigo="multimedia_siguiente", habilitado=True)  # palma_abierta
+    doc["gestos"][6].update(accion_codigo="sin_accion", habilitado=True)            # dos_dedos sin acción
     imported = load_api_export(doc)
-    assert imported.config.discrete_actions["pulgar_arriba"] == "multimedia_siguiente"
-    assert imported.config.discrete_actions["deslizamiento_derecha"] == "temporizador_iniciar"
+    assert imported.config.discrete_actions["palma_abierta"] == "multimedia_siguiente"
     assert imported.config.scroll_enabled is False, "sin_accion equivale a deshabilitar"
-    doc["gestos"][9].update(accion_codigo="clic")  # un gesto discreto no puede hacer clic
+    doc["gestos"][4].update(accion_codigo="clic")  # un gesto discreto no puede hacer clic
     with pytest.raises(ConfigError) as info:
         load_api_export(doc)
     assert info.value.code == "ACTION_NOT_IMPLEMENTED"
@@ -168,3 +158,14 @@ def test_non_object_document_is_rejected() -> None:
 def test_runtime_values_follow_ipc_rules() -> None:
     with pytest.raises(ConfigError):
         load_api_export(_document(), runtime={"cameraIndex": 50})
+
+
+def test_retired_gestures_are_unknown() -> None:
+    """24-11-2026: barridos, pulgares y modo precisión se retiraron del catálogo; una exportación antigua que aún
+    los traiga se rechaza con un código estable en vez de cargarse a medias."""
+    for code in ("deslizamiento_izquierda", "deslizamiento_derecha", "pulgar_arriba", "pulgar_abajo", "modo_precision"):
+        doc = _document()
+        doc["gestos"].append({"gesto_codigo": code, "nombre": code, "accion_codigo": "sin_accion", "habilitado": False, "asignacion_version": None})
+        with pytest.raises(ConfigError) as info:
+            load_api_export(doc)
+        assert info.value.code == "GESTURE_UNKNOWN", code

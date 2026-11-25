@@ -33,7 +33,7 @@ export function checkCompatible(gesto, accion, habilitado) {
  * @returns {{gesto_codigo: string, accion_codigo: string, habilitado: boolean}[]}
  */
 export function validateAssignmentList(list) {
-  if (!Array.isArray(list) || list.length > GESTOS.length) invalid('gestos debe ser una lista de hasta 13 asignaciones.');
+  if (!Array.isArray(list) || list.length > GESTOS.length) invalid(`gestos debe ser una lista de hasta ${GESTOS.length} asignaciones.`);
   const seen = new Set();
   const rows = list.map(item => {
     validateAssignment(item);

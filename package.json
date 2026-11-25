@@ -15,6 +15,7 @@
     "desktop:build": "npm run build:app && cargo build --manifest-path desktop/Cargo.toml --locked",
     "desktop:test": "cargo test --manifest-path desktop/Cargo.toml --locked",
     "verify:tauri": "node scripts/verificar-tauri-real.mjs",
+    "verify:hito3": "node scripts/verificar-recorrido-hito3.mjs",
     "format:check": "node scripts/check-frontend.mjs",
     "format:app": "node node_modules/prettier/bin/prettier.cjs --write \"src/**/*.{js,jsx,css}\""
   },

@@ -202,30 +202,21 @@ class EngineConfig:
     drag_enabled: bool = True      # pinza_sostenida -> arrastrar
     scroll_enabled: bool = True    # dos_dedos -> desplazar
     fist_pause_enabled: bool = True  # puno_cerrado -> pausar (siempre permite reanudar)
-    swipe_left_enabled: bool = False   # deslizamiento_izquierda (apagado por defecto, como en la interfaz)
-    swipe_right_enabled: bool = False  # deslizamiento_derecha
     palm_enabled: bool = True          # palma_abierta sostenida -> acción discreta (navegacion)
-    thumbs_up_enabled: bool = False    # pulgar_arriba -> acción discreta (confirmar)
-    thumbs_down_enabled: bool = False  # pulgar_abajo -> acción discreta (cancelar)
-    precision_gesture_enabled: bool = True  # modo_precision (índice y meñique) -> acción discreta (precision)
     airswipe_enabled: bool = True      # trazo_airswipe, solo con el teclado Air-Swipe abierto
-    window_gestures_enabled: bool = False  # tres dedos: minimizar/restaurar ventanas (opt-in local)
-    window_swipe_enabled: bool = False     # mano abierta rápida hacia abajo/arriba: minimizar/restaurar ventana (opt-in: QA 19-11)
-    tab_gestures_enabled: bool = True      # abanico con la mano ladeada: pestaña siguiente (local)
     right_click_enabled: bool = True       # pinza pulgar-medio: clic derecho (local)
-    dictation_enabled: bool = True         # 🤙 sostenido: dictado de Windows, Win+H (local, 23-11-2026)
-    keyboard_gesture_enabled: bool = True  # ☝️ sostenido: abrir el teclado Air-Swipe (local, 23-11-2026)
     alt_tab_enabled: bool = True           # doblar tres dedos con el meñique arriba y volver: Alt+Tab (local, 23-11-2026)
     new_tab_enabled: bool = True           # ✌️ V sostenida y quieta: pestaña nueva, Ctrl+T (local, 23-11-2026)
-    open_hand_scroll_enabled: bool = False # experimental: mano abierta quieta y luego subir/bajar = desplazar (local)
     pointer_acceleration: bool = True      # movimientos lentos más finos, rápidos completos (local, QA 19-11)
     precision_mode: bool = False   # Ganancia fina fija desde configuración (el gesto la alterna en tiempo de ejecución)
     camera_index: int = 0
     click_cooldown_ms: int = 320   # Prevent accidental repeated clicks
-    drag_hold_ms: int = 600        # Sustained pinch duration to enter drag (22-11-2026: 380 convertia en arrastre los clics de 0,3-0,5 s medidos en vivo)
+    drag_hold_ms: int = 900        # Pinza sostenida para entrar en arrastre. 22-11-2026: 380 convertía en arrastre los clics de
+                                   # 0,3-0,5 s. 24-11-2026 (pedido: 600 se confundía con la pinza y con mover el puntero):
+                                   # videos «click izquierdo» ~0,3 s de pinza, «arrastrar» ~1,1 s.
     pause_hold_ms: int = 450       # Closed fist duration to toggle pause/resume
     tracking_loss_frames: int = 5  # Frames without hand before releasing held buttons
-    # Acción configurada de cada gesto discreto (palma, barridos, pulgares, precisión).
+    # Acción configurada de cada gesto discreto (hoy solo la palma abierta).
     discrete_actions: dict[str, str] = field(default_factory=_default_discrete)
     active_box: tuple[float, float, float, float] | None = None
     gaze: GazeConfig = field(default_factory=GazeConfig)
@@ -237,12 +228,7 @@ class EngineConfig:
         "drag": "drag_enabled",
         "scroll": "scroll_enabled",
         "fistPause": "fist_pause_enabled",
-        "swipeLeft": "swipe_left_enabled",
-        "swipeRight": "swipe_right_enabled",
         "palm": "palm_enabled",
-        "thumbsUp": "thumbs_up_enabled",
-        "thumbsDown": "thumbs_down_enabled",
-        "precision": "precision_gesture_enabled",
         "airswipe": "airswipe_enabled",
     }
 
@@ -292,15 +278,9 @@ class EngineConfig:
             movement_area=_int_field(data, ("movementArea", "area_movimiento"), 65, 20, 100),
             confidence_threshold=_int_field(data, ("confidenceThreshold", "umbral_confianza"), 65, 30, 95),
             desk_rest=_bool_field(data, ("deskRest", "modo_desk_rest"), True),
-            window_gestures_enabled=_bool_field(data, ("windowGestures",), False),
-            window_swipe_enabled=_bool_field(data, ("windowSwipe",), False),
-            tab_gestures_enabled=_bool_field(data, ("tabGestures",), True),
             right_click_enabled=_bool_field(data, ("rightClick",), True),
-            dictation_enabled=_bool_field(data, ("dictation",), True),
-            keyboard_gesture_enabled=_bool_field(data, ("keyboardGesture",), True),
             alt_tab_enabled=_bool_field(data, ("altTab",), True),
             new_tab_enabled=_bool_field(data, ("newTab",), True),
-            open_hand_scroll_enabled=_bool_field(data, ("openHandScroll",), False),
             pointer_acceleration=_bool_field(data, ("pointerAcceleration",), True),
             precision_mode=_bool_field(data, ("precisionMode", "modo_precision"), False),
             camera_index=_int_field(data, ("cameraIndex",), 0, 0, 10),
@@ -331,15 +311,9 @@ class EngineConfig:
             "movementArea": self.movement_area,
             "confidenceThreshold": self.confidence_threshold,
             "deskRest": self.desk_rest,
-            "windowGestures": self.window_gestures_enabled,
-            "windowSwipe": self.window_swipe_enabled,
-            "tabGestures": self.tab_gestures_enabled,
             "rightClick": self.right_click_enabled,
-            "dictation": self.dictation_enabled,
-            "keyboardGesture": self.keyboard_gesture_enabled,
             "altTab": self.alt_tab_enabled,
             "newTab": self.new_tab_enabled,
-            "openHandScroll": self.open_hand_scroll_enabled,
             "pointerAcceleration": self.pointer_acceleration,
             "precisionMode": self.precision_mode,
             "cameraIndex": self.camera_index,

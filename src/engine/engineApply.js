@@ -20,15 +20,9 @@ const SCALARS = [
   'stability',
   'pinchTolerance',
   'deskRest',
-  'windowGestures',
-  'windowSwipe',
-  'tabGestures',
   'rightClick',
-  'dictation',
-  'keyboardGesture',
   'altTab',
   'newTab',
-  'openHandScroll',
   'pointerAcceleration',
 ]
 const GAZE_KEYS = ['enabled', 'yawTolerance', 'pitchTolerance', 'awayMs', 'backMs']

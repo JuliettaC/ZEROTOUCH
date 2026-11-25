@@ -76,12 +76,7 @@ VALID_DOC = {
             ("liberacion_pinza", "soltar", True),
             ("palma_abierta", "navegacion", False),
             ("puno_cerrado", "pausar", True),
-            ("deslizamiento_izquierda", "atras", False),
-            ("deslizamiento_derecha", "adelante", False),
             ("dos_dedos", "desplazar", True),
-            ("pulgar_arriba", "confirmar", False),
-            ("pulgar_abajo", "cancelar", False),
-            ("modo_precision", "precision", False),
             ("trazo_airswipe", "escritura_airswipe", False),
         ]
     ],

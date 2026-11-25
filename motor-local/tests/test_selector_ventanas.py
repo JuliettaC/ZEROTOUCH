@@ -7,7 +7,7 @@ from motor_local.action_engine import LogicalActionEngine
 from motor_local.detector import HandLandmarks, Point3D
 from motor_local.interpreter import ALT_HOLD_STEP_MS, EVENT_ALT_SWITCHER, EVENT_ALT_TAB
 from motor_local.os_adapter import MockOSAdapter
-from tests.test_golpe_muneca import FRAME_MS, config, flick_hand
+from tests.test_alt_tab import FRAME_MS, config, flick_hand
 from tests.test_engine import armed
 
 THREE = (8, 12, 16)
@@ -54,13 +54,6 @@ def test_bajar_y_subir_rapido_sigue_siendo_el_alt_tab_directo() -> None:
 def test_poco_tiempo_abajo_no_abre_el_selector() -> None:
     short = REST + [down()] * 6 + REST   # 400 ms
     assert "abrir" not in phases(armed(config(windowSwipe=False)), short)
-
-
-def test_con_el_pulgar_afuera_es_el_dictado_no_el_selector() -> None:
-    call = REST + [down(thumb_out=True)] * 20 + REST
-    assert "abrir" not in phases(armed(config(windowSwipe=False)), call)
-    # Sin el dictado, el pulgar no importa.
-    assert "abrir" in phases(armed(config(windowSwipe=False, dictation=False)), call)
 
 
 def test_respeta_el_interruptor_y_un_fotograma_dudoso_no_suelta() -> None:

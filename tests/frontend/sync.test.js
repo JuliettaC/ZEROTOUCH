@@ -10,7 +10,7 @@ const retry = { retries: 0 }
 for (const joint of [true, false]) {
 test(`primera sincronización: crea perfil y modos con identidad remota y sube las asignaciones (${joint ? 'mutación conjunta' : 'servidor sin mutación conjunta'})`, async () => {
   const { api, server } = createFakeApi({ jointMode: joint })
-  let state = updateActiveSettings(createDefaultState(), { swipeLeft: true, pinch: false })
+  let state = updateActiveSettings(createDefaultState(), { palm: false, pinch: false })
   const localIds = state.modes.map(m => m.id)
   const result = await synchronize({ api, state, retry })
   state = result.state
@@ -24,9 +24,9 @@ test(`primera sincronización: crea perfil y modos con identidad remota y sube l
   assert.ok(!state.modes.some(m => localIds.includes(m.id)))
   const kitchen = state.modes.find(m => m.plantilla === 'kitchen')
   const remote = (await api.modeGestures(kitchen.id)).data
-  assert.equal(remote.gestos.find(g => g.gesto_codigo === 'deslizamiento_izquierda').habilitado, true)
+  assert.equal(remote.gestos.find(g => g.gesto_codigo === 'palma_abierta').habilitado, false)
   assert.equal(remote.gestos.find(g => g.gesto_codigo === 'micro_pinza').habilitado, false)
-  assert.equal(remote.gestos.find(g => g.gesto_codigo === 'pulgar_arriba').habilitado, false, 'los gestos apagados por defecto se suben apagados')
+  assert.equal(remote.gestos.find(g => g.gesto_codigo === 'dos_dedos').habilitado, true, 'los demás gestos se suben como estaban')
   assert.equal(state.activeModeId, kitchen.id, 'el modo activo sigue la identidad nueva')
   assert.ok(!hasPendingChanges(state))
 })
@@ -61,7 +61,7 @@ test('cambios hechos en otro equipo se descargan: ediciones, modos nuevos, perfi
   let state = (await synchronize({ api, state: createDefaultState(), retry })).state
   const desk = state.modes.find(m => m.plantilla === 'desk')
   server.editModeElsewhere(desk.id, { estabilizacion_puntero: 12 })
-  server.setAssignmentElsewhere(desk.id, 'pulgar_arriba', 'multimedia_siguiente', true)
+  server.setAssignmentElsewhere(desk.id, 'palma_abierta', 'multimedia_siguiente', true)
   const extra = server.createModeElsewhere(state.profiles[0].id, 'Taller nocturno', { categoria: 'manual' })
   const otherProfile = server.createProfileElsewhere('Oficina')
   server.createModeElsewhere(otherProfile.id, 'Reuniones')
@@ -73,7 +73,7 @@ test('cambios hechos en otro equipo se descargan: ediciones, modos nuevos, perfi
   const pulledDesk = state.modes.find(m => m.id === desk.id)
   assert.equal(pulledDesk.settings.stability, 12)
   assert.equal(pulledDesk.plantilla, 'desk', 'la plantilla local (icono) se conserva al descargar')
-  assert.deepEqual(pulledDesk.assignments.pulgar_arriba, { accion: 'multimedia_siguiente', habilitado: true })
+  assert.deepEqual(pulledDesk.assignments.palma_abierta, { accion: 'multimedia_siguiente', habilitado: true })
   assert.ok(state.modes.some(m => m.id === extra.id && m.nombre === 'Taller nocturno'))
   assert.ok(state.profiles.some(p => p.id === otherProfile.id))
   assert.equal(modesOf(state, otherProfile.id).length, 1)

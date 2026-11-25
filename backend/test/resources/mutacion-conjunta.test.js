@@ -22,7 +22,7 @@ function uuidv7() {
   const r = randomBytes(10).toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-7${r.slice(0, 3)}-8${r.slice(3, 6)}-${r.slice(6, 18)}`;
 }
-/** Las 13 asignaciones con su acción predeterminada, salvo las indicadas. */
+/** Las 8 asignaciones con su acción predeterminada, salvo las indicadas. */
 const full = (overrides = {}) => GESTOS.map(code => ({
   gesto_codigo: code,
   accion_codigo: overrides[code]?.accion ?? capacidades.gestos[code].predeterminada,
@@ -64,23 +64,23 @@ async function fixture(t) {
   return { db, request, account, profile, rows, modeRow, count };
 }
 
-test('POST con gestos: el modo y sus 13 asignaciones nacen juntos, en la versión 1', async t => {
+test('POST con gestos: el modo y sus 8 asignaciones nacen juntos, en la versión 1', async t => {
   const { request, account, profile, rows, count } = await fixture(t);
   const session = await account('conj_crear'), p = await profile(session);
-  // Tres gestos que NO coinciden con el catálogo: otra acción, otra acción deshabilitada y la acción predeterminada deshabilitada.
+  // Tres gestos que NO coinciden con el catálogo: otra acción y la acción predeterminada deshabilitada (dos veces).
   const custom = full({
-    deslizamiento_derecha: { accion: otherAction('deslizamiento_derecha') },
-    deslizamiento_izquierda: { accion: otherAction('deslizamiento_izquierda'), habilitado: false },
+    palma_abierta: { accion: otherAction('palma_abierta') },
+    dos_dedos: { accion: capacidades.gestos.dos_dedos.predeterminada, habilitado: false },
     micro_pinza: { accion: capacidades.gestos.micro_pinza.predeterminada, habilitado: false },
   });
   assert.notDeepEqual(custom, full(), 'la prueba solo vale si difiere de los predeterminados');
-  assert.notEqual(otherAction('deslizamiento_derecha'), capacidades.gestos.deslizamiento_derecha.predeterminada);
+  assert.notEqual(otherAction('palma_abierta'), capacidades.gestos.palma_abierta.predeterminada);
   const created = await request('POST', `/perfiles/${p.id}/modos`, { nombre: 'Conjunto', sensibilidad_puntero: 77, gestos: custom }, session);
   assert.equal(created.status, 201);
   assert.equal(created.body.data.version, 1, 'una sola creación: versión 1 (antes eran dos pasos y quedaba en 2)');
   assert.equal(created.body.data.sensibilidad_puntero, 77);
   assert.equal(created.body.data.gestos, undefined, 'la respuesta sigue siendo el modo');
-  assert.equal(count('asignaciones_gestos'), 13);
+  assert.equal(count('asignaciones_gestos'), 8);
   assert.deepEqual(rows(created.body.data.id).map(({ gesto_codigo, accion_codigo, habilitado }) => ({ gesto_codigo, accion_codigo, habilitado: Boolean(habilitado) })), custom);
   assert.ok(rows(created.body.data.id).every(row => row.version === 1));
   const effective = (await request('GET', `/modos/${created.body.data.id}/gestos`, undefined, session)).body.data;
@@ -145,7 +145,7 @@ test('PATCH solo con gestos (y version) es válido; gestos [] devuelve los prede
   const { request, account, profile, rows, count } = await fixture(t);
   const session = await account('conj_solo'), p = await profile(session);
   const mode = (await request('POST', `/perfiles/${p.id}/modos`, { nombre: 'Modo', gestos: full() }, session)).body.data;
-  assert.equal(count('asignaciones_gestos'), 13);
+  assert.equal(count('asignaciones_gestos'), 8);
   const onlyGestures = await request('PATCH', `/modos/${mode.id}`, { version: 1, gestos: full({ [GESTOS[1]]: { accion: capacidades.gestos[GESTOS[1]].predeterminada, habilitado: false } }) }, session);
   assert.equal(onlyGestures.status, 200);
   assert.equal(onlyGestures.body.data.version, 2);
@@ -250,7 +250,7 @@ test('con Idempotency-Key: repetir el POST conjunto devuelve el original; otra l
   assert.equal(again.headers.get('idempotent-replayed'), 'true');
   assert.equal(again.body.data.id, first.body.data.id);
   assert.equal(count('modos_uso'), 1);
-  assert.equal(count('asignaciones_gestos'), 13);
+  assert.equal(count('asignaciones_gestos'), 8);
   const changed = await request('POST', `/perfiles/${p.id}/modos`, { ...body, gestos: full({ [GESTOS[0]]: { accion: capacidades.gestos[GESTOS[0]].predeterminada, habilitado: false } }) }, session, { 'Idempotency-Key': key });
   assert.deepEqual([changed.status, changed.body.error], [409, 'IDEMPOTENCIA_CONFLICTO']);
   assert.equal(rows(first.body.data.id).every(r => r.habilitado === 1), true, 'el conflicto no modificó las asignaciones');
@@ -274,7 +274,7 @@ test('validateAssignmentList: normaliza y ordena, y es la misma validación que 
   const shuffled = [...full()].reverse().map(row => ({ habilitado: row.habilitado, accion_codigo: row.accion_codigo, gesto_codigo: row.gesto_codigo }));
   assert.deepEqual(validateAssignmentList(shuffled), full());
   assert.deepEqual(validateAssignmentList([]), []);
-  assert.equal(validateBody('modo', { nombre: ' Modo ', gestos: shuffled }).gestos.length, 13);
+  assert.equal(validateBody('modo', { nombre: ' Modo ', gestos: shuffled }).gestos.length, 8);
   assert.throws(() => validateBody('modo', { nombre: 'X', gestos: 'no' }), /lista/);
   assert.throws(() => validateBody('perfil', { nombre: 'X', gestos: [] }), /no permitido/);
 });

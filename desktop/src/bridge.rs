@@ -690,7 +690,7 @@ impl Bridge {
     /// Reemplaza las asignaciones del modo (PUT /modos/:id/gestos) con la versión conocida.
     pub fn set_mode_gestures(&mut self, id: String, g: GesturesInput) -> Result<Value> {
         let clean_id = valid_id(&id)?;
-        if g.gestos.len() > 13 {
+        if g.gestos.len() > MAX_ASSIGNMENTS {
             return Err(error("DATOS_INVALIDOS", "Demasiadas asignaciones."));
         }
         self.request(
@@ -802,9 +802,13 @@ fn context_payload(c: &ContextInput, version: Option<u64>) -> Value {
     obj
 }
 
-/// Como en `set_mode_gestures`: nunca más de 13 asignaciones (una por gesto); el backend valida el resto.
+/// Gestos del contrato (contracts/capacidades.json): 8 desde que se retiraron barridos, pulgares y precisión
+/// (24-11-2026). Nunca se envían más asignaciones que gestos; el backend valida el resto.
+const MAX_ASSIGNMENTS: usize = 8;
+
+/// Como en `set_mode_gestures`: nunca más de MAX_ASSIGNMENTS asignaciones (una por gesto).
 fn check_assignments(c: &ContextInput) -> Result<()> {
-    if c.gestos.as_ref().is_some_and(|g| g.len() > 13) {
+    if c.gestos.as_ref().is_some_and(|g| g.len() > MAX_ASSIGNMENTS) {
         return Err(error("DATOS_INVALIDOS", "Demasiadas asignaciones."));
     }
     Ok(())
@@ -1428,7 +1432,7 @@ mod tests {
                 joint_id.clone(),
                 ContextInput {
                     version: Some(1),
-                    gestos: Some(assignments("pulgar_arriba")),
+                    gestos: Some(assignments("palma_abierta")),
                     ..sample_context("Modo conjunto editado")
                 },
             )
@@ -1451,7 +1455,7 @@ mod tests {
         let unchanged = bridge.mode_gestures(joint_id.clone()).unwrap();
         assert_eq!(unchanged["data"]["modo"]["version"], 2);
         assert_eq!(unchanged["data"]["modo"]["nombre"], "Modo conjunto editado");
-        // Más de 13 asignaciones ni siquiera se envían.
+        // Más asignaciones que gestos ni siquiera se envían.
         let mut too_many = assignments("micro_pinza");
         too_many.push(GestureAssignment {
             gesto_codigo: "extra".into(),

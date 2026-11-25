@@ -8,7 +8,11 @@ export function readFavorites(storage) {
     const saved = JSON.parse(storage.getItem(KEY))
     if (Array.isArray(saved))
       return [
-        ...new Set(saved.filter((id) => typeof id === 'string' && Object.hasOwn(gestures, id))),
+        ...new Set(
+          saved.filter(
+            (id) => typeof id === 'string' && Object.hasOwn(gestures, id) && !gestures[id].hidden,
+          ),
+        ),
       ]
   } catch {
     // Un equipo nuevo o con almacenamiento bloqueado usa la selección inicial.
@@ -17,7 +21,7 @@ export function readFavorites(storage) {
 }
 
 export function toggleFavorite(current, id) {
-  if (!Object.hasOwn(gestures, id)) return current
+  if (!Object.hasOwn(gestures, id) || gestures[id].hidden) return current
   return current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
 }
 

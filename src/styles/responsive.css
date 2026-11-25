@@ -32,9 +32,6 @@
   .page {
     padding: 20px 16px;
   }
-  .tech-details dl {
-    grid-template-columns: repeat(2, 1fr);
-  }
   .dialog {
     inset: 0;
     border-radius: 24px;
@@ -98,28 +95,4 @@
   .radio-pills label {
     font-size: 13px;
   }
-}
-.test-report {
-  display: grid;
-  gap: 10px;
-  margin-block: 16px;
-  max-width: 400px;
-}
-.test-report h2,
-.test-report p {
-  margin: 0;
-}
-.test-report h2 {
-  font-size: 1rem;
-}
-.test-report label {
-  display: grid;
-  gap: 4px;
-  font-size: 0.9rem;
-}
-.test-report input {
-  padding: 6px 8px;
-  border: 1px solid #c4c8d0;
-  border-radius: 8px;
-  font: inherit;
 }

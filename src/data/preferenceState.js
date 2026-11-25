@@ -37,24 +37,14 @@ export const deviceDefaults = Object.freeze({
   movementArea: 65,
   confidenceThreshold: 65,
   diagnosticOverlay: true,
-  windowGestures: false,
-  // Mano abierta rápida hacia abajo/arriba: minimizar la ventana activa / traerla de vuelta.
-  // Apagado por defecto: un movimiento rápido del cursor hacia abajo minimizaba ventanas sin querer.
-  windowSwipe: false,
-  // Abanico con la mano abierta y ladeada: pestaña siguiente (Ctrl+Tab). Antes, pulgar y meñique (hasta el 21-11-2026).
-  tabGestures: true,
+  // 24-11-2026: se retiraron los gestos de ventana (tres dedos y golpe de muñeca), pestañas, dictado, ☝️ sostenido
+  // y desplazar con la mano abierta; normalizeDevice descarta esas claves de las preferencias guardadas.
   // Pinza pulgar-medio: clic derecho.
   rightClick: true,
-  // 🤙 sostenido: dictado de Windows (Win+H). Gesto local del equipo (23-11-2026).
-  dictation: true,
-  // ☝️ sostenido y quieto: abrir el teclado Air-Swipe. Gesto local del equipo (23-11-2026).
-  keyboardGesture: true,
   // Doblar índice, medio y anular rápido con el meñique arriba: Alt+Tab (23-11-2026).
   altTab: true,
   // ✌️ V (índice y medio separados) sostenida y quieta: pestaña nueva, Ctrl+T (23-11-2026).
   newTab: true,
-  // Experimental: mano abierta quieta y luego subir/bajar = desplazar. Apagado: choca con mover el cursor.
-  openHandScroll: false,
   // Aceleración del cursor: movimientos lentos más finos (sin temblor), rápidos completos.
   pointerAcceleration: true,
   // Minutos del temporizador que inicia un gesto (acción «temporizador_iniciar»).
@@ -230,15 +220,9 @@ export function normalizeDevice(raw) {
     movementArea: clamp(r.movementArea, 65, 20, 100),
     confidenceThreshold: clamp(r.confidenceThreshold, 65, 30, 95),
     diagnosticOverlay: bool(r.diagnosticOverlay, true),
-    windowGestures: bool(r.windowGestures, false),
-    windowSwipe: bool(r.windowSwipe, false),
-    tabGestures: bool(r.tabGestures, true),
     rightClick: bool(r.rightClick, true),
-    dictation: bool(r.dictation, true),
-    keyboardGesture: bool(r.keyboardGesture, true),
     altTab: bool(r.altTab, true),
     newTab: bool(r.newTab, true),
-    openHandScroll: bool(r.openHandScroll, false),
     pointerAcceleration: bool(r.pointerAcceleration, true),
     timerMinutes: clamp(r.timerMinutes, 5, 1, 120),
     activeBox: box,
@@ -365,7 +349,6 @@ export function migrateLegacy(legacy) {
     movementArea: s.movementArea,
     confidenceThreshold: s.confidenceThreshold,
     diagnosticOverlay: s.diagnosticOverlay,
-    windowGestures: s.windowGestures,
   })
   const legacyToggles = Object.fromEntries(
     TOGGLE_KEYS.filter((key) => typeof s[key] === 'boolean').map((key) => [key, s[key]]),

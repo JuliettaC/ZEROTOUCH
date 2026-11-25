@@ -10,16 +10,16 @@ const apply = (state) => {
   return updateActiveSettings(state, settingsPatch(settings, withEssentialGestures(settings)))
 }
 
-test('«solo gestos esenciales» deja mover, clic, desplazar, pausar y teclado, y apaga el resto en el motor', () => {
+test('«solo gestos esenciales» deja mover, clic, desplazar, pausar y el trazo, y apaga el resto en el motor', () => {
   const state = apply(createDefaultState())
   const settings = getEffectiveSettings(state)
   for (const key of ESSENTIAL_OFF) assert.equal(settings[key], false, `${key} apagado`)
   for (const key of ESSENTIAL_ON) assert.notEqual(settings[key], false, `${key} encendido`)
   assert.equal(usesEssentialGestures(settings), true)
   const config = buildEngineConfig(settings, getActiveAssignments(state))
-  for (const key of ['drag', 'rightClick', 'windowSwipe', 'palm', 'thumbsUp', 'precision'])
+  for (const key of ['drag', 'rightClick', 'palm'])
     assert.equal(config[key], false, `el motor recibe ${key} = false`)
-  for (const key of ['pointer', 'pinch', 'scroll', 'fistPause', 'airswipe', 'keyboardGesture'])
+  for (const key of ['pointer', 'pinch', 'scroll', 'fistPause', 'airswipe'])
     assert.equal(config[key], true, `el motor recibe ${key} = true`)
 })
 

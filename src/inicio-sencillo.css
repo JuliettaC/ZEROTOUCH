@@ -10,6 +10,10 @@
   overflow: hidden;
   object-fit: cover;
 }
+img.gesture-media {
+  display: block;
+  user-select: none;
+}
 .gesture-media.sm {
   width: 40px;
   height: 40px;
@@ -25,6 +29,13 @@
   width: 44px;
   height: 44px;
   font-size: 22px;
+}
+.gesture-media.xl {
+  width: min(100%, 260px);
+  height: auto;
+  aspect-ratio: 1;
+  font-size: 96px;
+  border-radius: 20px;
 }
 .gesture-media.lg {
   width: 100%;

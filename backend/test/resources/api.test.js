@@ -142,7 +142,7 @@ test('validación, duplicados y SQL como texto', async t => {
 });
 test('catálogos y configuración efectiva respetan overrides y propiedad', async t => {
   const { request, account, db } = await fixture(t), session = await account('catalogos');
-  assert.equal((await request('GET', '/api/v1/gestos', undefined, session)).body.data.length, 13);
+  assert.equal((await request('GET', '/api/v1/gestos', undefined, session)).body.data.length, 8);
   assert.equal((await request('GET', '/api/v1/acciones', undefined, session)).body.data.length, 17);
   const p = (await request('POST', '/api/v1/perfiles', { nombre: 'Perfil' }, session)).body.data;
   const m = (await request('POST', `/api/v1/perfiles/${p.id}/modos`, { nombre: 'Modo' }, session)).body.data;

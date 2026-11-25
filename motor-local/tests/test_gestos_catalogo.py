@@ -1,6 +1,6 @@
-"""Gestos del Anexo A completados: mano abierta sostenida (armado del puntero), pulgares, modo
-precisión, palma abierta (navegación), acciones discretas configurables, multimedia, temporizador
-y trazo Air-Swipe. Todo sintético: sin cámara ni sistema operativo real."""
+"""Gestos del Anexo A: mano abierta sostenida (armado del puntero), palma abierta (navegación) con su acción
+discreta configurable (multimedia, temporizador, precisión, Intro...) y trazo Air-Swipe. Los pulgares, los barridos y
+la postura de precisión se retiraron el 24-11-2026. Todo sintético: sin cámara ni sistema operativo real."""
 
 from __future__ import annotations
 
@@ -59,6 +59,17 @@ def make_pointing(cx: float = 0.5, cy: float = 0.5) -> HandLandmarks:
     for idx in (12, 16, 20):
         lms[idx] = Point3D(cx, cy + 0.09)
     return HandLandmarks(landmarks=lms, handedness="Right", confidence=0.95)
+
+
+def _palm(start_ms: float, duration_ms: float = 1200.0):
+    """Palma abierta quieta: dispara la acción discreta de palma_abierta (PALM_HOLD_MS = 900 ms)."""
+    return _hold(lambda: make_open_palm(0.5, 0.5, pinch_dist=0.14), start_ms, duration_ms)
+
+
+def _palm_config(accion: str, **kw) -> EngineConfig:
+    cfg = EngineConfig(**kw)
+    cfg.discrete_actions["palma_abierta"] = accion
+    return cfg
 
 
 def _run(interp: GestureInterpreter, frames, engine: LogicalActionEngine | None = None) -> list:
@@ -141,90 +152,63 @@ def test_pointer_toggle_off_moves_nothing_but_needs_no_arming() -> None:
     assert EVENT_LEFT_CLICK in seen and EVENT_MOVE_CURSOR not in seen
 
 
-# ------------------------------------------------------------ pulgares
+# ------------------------------------------------------------ pulgar (sin gesto)
 
-def test_thumbs_up_confirms_once_per_hold_and_thumbs_down_cancels() -> None:
+def test_el_pulgar_extendido_no_pausa_ni_actua() -> None:
+    """Los gestos de pulgar se retiraron el 24-11-2026: el puño con el pulgar fuera sigue sin ser un puño (no pausa)
+    y ya no produce Intro ni Escape."""
     adapter = MockOSAdapter()
-    interp = armed(EngineConfig(thumbs_up_enabled=True, thumbs_down_enabled=True))
-    engine = LogicalActionEngine(adapter, initial_mode=MODE_CONTROL)
-    seen = _types(_run(interp, _hold(make_thumbs_up, 0.0, 1500.0), engine))
-    assert seen.count(EVENT_CONFIRM) == 1, "una pulsación por postura sostenida, sin repetir"
-    assert EVENT_PAUSE not in seen, "el pulgar no es un puño: no pausa"
-    assert ("KEY_COMBO", {"keys": ["enter"]}) in adapter.executed_actions
-    # Soltar y volver a hacerlo: se rearma y dispara de nuevo.
-    _run(interp, [(make_open_palm(0.5, 0.5, pinch_dist=0.14), t) for t in (1600.0, 1700.0, 1800.0, 1900.0)], engine)
-    seen = _types(_run(interp, _hold(make_thumbs_up, 2000.0, 700.0), engine))
-    assert seen.count(EVENT_CONFIRM) == 1
-    seen = _types(_run(interp, _hold(make_thumbs_down, 3500.0, 700.0), engine))
-    assert seen.count(EVENT_CANCEL) == 1
-    assert ("KEY_COMBO", {"keys": ["esc"]}) in adapter.executed_actions
-
-
-def test_thumbs_are_off_by_default_and_brief_thumbs_do_not_fire() -> None:
     interp = armed(EngineConfig())
-    seen = _types(_run(interp, _hold(make_thumbs_up, 0.0, 1500.0)))
-    assert EVENT_CONFIRM not in seen
-    assert interp.telemetry.gesture == "THUMBS_UP", "se detecta y se informa aunque esté apagado"
-    interp = armed(EngineConfig(thumbs_up_enabled=True))
-    seen = _types(_run(interp, _hold(make_thumbs_up, 0.0, 300.0)))  # menos de THUMB_HOLD_MS
-    assert EVENT_CONFIRM not in seen
-
-
-def test_discrete_gestures_can_be_remapped_to_media_and_timer() -> None:
-    adapter = MockOSAdapter()
-    cfg = EngineConfig(thumbs_up_enabled=True, thumbs_down_enabled=True)
-    cfg.discrete_actions["pulgar_arriba"] = "multimedia_siguiente"
-    cfg.discrete_actions["pulgar_abajo"] = "temporizador_iniciar"
-    interp = armed(cfg)
     engine = LogicalActionEngine(adapter, initial_mode=MODE_CONTROL)
-    seen = _run(interp, _hold(make_thumbs_up, 0.0, 700.0), engine)
-    assert EVENT_MEDIA_NEXT in _types(seen)
+    seen = _types(_run(interp, _hold(make_thumbs_up, 0.0, 1500.0) + _hold(make_thumbs_down, 2000.0, 1500.0), engine))
+    assert not {EVENT_CONFIRM, EVENT_CANCEL, EVENT_PAUSE} & set(seen), seen
+    assert not any(a == "KEY_COMBO" for a, _ in adapter.executed_actions)
+
+
+def test_la_palma_se_puede_reasignar_a_multimedia_y_temporizador() -> None:
+    adapter = MockOSAdapter()
+    interp = armed(_palm_config("multimedia_siguiente"))
+    engine = LogicalActionEngine(adapter, initial_mode=MODE_CONTROL)
+    seen = _run(interp, _palm(1000.0), engine)
+    assert _types(seen).count(EVENT_MEDIA_NEXT) == 1
     assert ("KEY_COMBO", {"keys": ["media_next"]}) in adapter.executed_actions
-    _run(interp, [(make_open_palm(0.5, 0.5, pinch_dist=0.14), t) for t in (800.0, 900.0, 1000.0)], engine)
-    seen = _run(interp, _hold(make_thumbs_down, 1200.0, 700.0), engine)
-    timer = [e for e in seen if e.type == EVENT_TIMER]
-    assert len(timer) == 1 and timer[0].payload["gesto"] == "pulgar_abajo"
     app = engine.take_app_events()
-    assert [e["event"] for e in app] == [EVENT_MEDIA_NEXT, EVENT_TIMER], "aviso de multimedia y temporizador para la interfaz"
-    assert app[0]["injected"] is True
-    assert not any(a[0] == "KEY_COMBO" and a[1]["keys"] != ["media_next"] for a in adapter.executed_actions), "ningún temporizador llega al SO"
+    assert [e["event"] for e in app] == [EVENT_MEDIA_NEXT] and app[0]["injected"] is True
+
+    adapter = MockOSAdapter()
+    interp = armed(_palm_config("temporizador_iniciar"))
+    engine = LogicalActionEngine(adapter, initial_mode=MODE_CONTROL)
+    timer = [e for e in _run(interp, _palm(1000.0), engine) if e.type == EVENT_TIMER]
+    assert len(timer) == 1 and timer[0].payload["gesto"] == "palma_abierta"
+    assert [e["event"] for e in engine.take_app_events()] == [EVENT_TIMER]
+    assert not any(a == "KEY_COMBO" for a, _ in adapter.executed_actions), "ningún temporizador llega al SO"
 
 
 def test_discrete_actions_are_not_injected_in_observation_but_app_events_still_flow() -> None:
     adapter = MockOSAdapter()
-    cfg = EngineConfig(thumbs_up_enabled=True, thumbs_down_enabled=True)
-    cfg.discrete_actions["pulgar_abajo"] = "temporizador_iniciar"
-    interp = armed(cfg)
     engine = LogicalActionEngine(adapter, initial_mode=MODE_OBSERVATION)
-    _run(interp, _hold(make_thumbs_up, 0.0, 700.0), engine)
+    _run(armed(_palm_config("confirmar")), _palm(1000.0), engine)
     assert adapter.executed_actions == []
-    _run(interp, [(make_open_palm(0.5, 0.5, pinch_dist=0.14), t) for t in (800.0, 900.0, 1000.0)], engine)
-    _run(interp, _hold(make_thumbs_down, 1200.0, 700.0), engine)
+    _run(armed(_palm_config("temporizador_iniciar")), _palm(1000.0), engine)
     assert [e["event"] for e in engine.take_app_events()] == [EVENT_TIMER]
 
 
-def test_media_and_window_feedback_reports_whether_it_reached_the_system() -> None:
-    from motor_local.interpreter import EVENT_MEDIA_PLAY_PAUSE, EVENT_MINIMIZE_WINDOW, LogicalEvent
-    from motor_local.window_control import MockWindowController, WindowActions, WindowRef
-    controller = MockWindowController()
-    controller.add(WindowRef(hwnd=20, pid=200, started=2), foreground=True)
+def test_media_feedback_reports_whether_it_reached_the_system() -> None:
+    from motor_local.interpreter import EVENT_MEDIA_PLAY_PAUSE, LogicalEvent
     adapter = MockOSAdapter()
-    engine = LogicalActionEngine(adapter, initial_mode=MODE_OBSERVATION, window_actions=WindowActions(controller, own_pid=1))
+    engine = LogicalActionEngine(adapter, initial_mode=MODE_OBSERVATION)
     engine.dispatch([LogicalEvent(EVENT_MEDIA_PLAY_PAUSE, {"gesto": "palma_abierta"})])
     assert engine.take_app_events() == [{"event": EVENT_MEDIA_PLAY_PAUSE, "injected": False, "gesto": "palma_abierta"}]
     assert adapter.executed_actions == []
     engine.set_mode(MODE_CONTROL)
-    engine.dispatch([LogicalEvent(EVENT_MEDIA_PLAY_PAUSE, {}), LogicalEvent(EVENT_MINIMIZE_WINDOW, {"dy_palm": 1.5})])
-    app = engine.take_app_events()
-    assert app[0] == {"event": EVENT_MEDIA_PLAY_PAUSE, "injected": True}
-    assert app[1]["event"] == EVENT_MINIMIZE_WINDOW and app[1]["result"] == "WIN_DOWN"
-    assert ("KEY_COMBO", {"keys": ["win", "down"]}) in adapter.executed_actions
+    engine.dispatch([LogicalEvent(EVENT_MEDIA_PLAY_PAUSE, {})])
+    assert engine.take_app_events() == [{"event": EVENT_MEDIA_PLAY_PAUSE, "injected": True}]
 
 
 # ------------------------------------------------------------ precisión y palma
 
-def test_precision_pose_toggles_precision_and_shrinks_cursor_travel() -> None:
-    interp = armed(EngineConfig(stability=0))
+def test_la_palma_con_la_accion_precision_reduce_el_recorrido_del_cursor() -> None:
+    interp = armed(_palm_config("precision", stability=0))
     engine = LogicalActionEngine(MockOSAdapter(), initial_mode=MODE_CONTROL)
 
     def travel(base_ms: float) -> float:
@@ -235,23 +219,12 @@ def test_precision_pose_toggles_precision_and_shrinks_cursor_travel() -> None:
         return max(xs) - min(xs) if xs else 0.0
 
     normal = travel(5000.0)
-    seen = _run(interp, _hold(make_precision_pose, 6000.0, 600.0), engine)
+    seen = _run(interp, _palm(6000.0), engine)
     precision_events = [e for e in seen if e.type == EVENT_PRECISION]
     assert len(precision_events) == 1 and precision_events[0].payload["active"] is True
     assert interp.precision_active is True
-    assert EVENT_MOVE_CURSOR not in _types(seen), "durante la postura el cursor no se mueve"
-    _run(interp, [(make_open_palm(0.5, 0.5, pinch_dist=0.14), 7000.0)], engine)
-    fine = travel(7100.0)
+    fine = travel(7500.0)
     assert 0 < fine < normal * 0.75
-    # La misma postura otra vez la desactiva; palma abierta sostenida también vuelve a navegación.
-    _run(interp, _hold(make_precision_pose, 8000.0, 600.0), engine)
-    assert interp.precision_active is False
-    _run(interp, [(make_open_palm(0.5, 0.5, pinch_dist=0.14), t) for t in (8650.0, 8750.0, 8850.0, 8950.0)], engine)  # soltar: rearme
-    _run(interp, _hold(make_precision_pose, 9500.0, 600.0), engine)  # tras el cooldown de 800 ms
-    assert interp.precision_active is True
-    seen = _run(interp, _hold(lambda: make_open_palm(0.5, 0.5, pinch_dist=0.14), 10000.0, 1200.0), engine)
-    assert EVENT_NAVIGATION in _types(seen)
-    assert interp.precision_active is False
 
 
 def test_open_palm_must_be_still_to_count_as_sustained() -> None:
@@ -262,7 +235,7 @@ def test_open_palm_must_be_still_to_count_as_sustained() -> None:
     assert _types(_run(interp, frames)).count(EVENT_NAVIGATION) == 1
 
 
-def test_precision_pose_does_not_scroll_click_or_pause() -> None:
+def test_la_antigua_postura_de_precision_no_desplaza_hace_clic_ni_pausa() -> None:
     interp = armed(EngineConfig())
     seen = _types(_run(interp, [(make_precision_pose(0.5, 0.5 - 0.01 * i), 33.0 * i) for i in range(30)]))
     assert not {EVENT_LEFT_CLICK, "SCROLL", "START_DRAG", EVENT_PAUSE} & set(seen)
@@ -293,11 +266,11 @@ def test_pointing_records_a_trace_only_with_the_keyboard_open() -> None:
 
 def test_airswipe_confirm_and_cancel_go_to_the_interface_not_the_os() -> None:
     adapter = MockOSAdapter()
-    interp = armed(EngineConfig(thumbs_up_enabled=True, thumbs_down_enabled=True))
+    interp = armed(_palm_config("confirmar"))
     engine = LogicalActionEngine(adapter, initial_mode=MODE_CONTROL)
     interp.set_airswipe(True)
     engine.airswipe_active = True
-    _run(interp, _hold(make_thumbs_up, 0.0, 700.0), engine)
+    _run(interp, _palm(1000.0), engine)
     assert [e["event"] for e in engine.take_app_events()] == [EVENT_CONFIRM]
     assert adapter.executed_actions == [], "con el teclado abierto Intro no se inyecta"
 
@@ -323,7 +296,7 @@ def test_type_text_and_edit_keys_are_bounded_and_require_control_with_keyboard_o
 
 def test_airswipe_safety_blocks_pause_gaze_tracking_loss_config_and_emergency() -> None:
     adapter = MockOSAdapter()
-    interp = armed(EngineConfig(thumbs_up_enabled=True, tracking_loss_frames=3))
+    interp = armed(EngineConfig(tracking_loss_frames=3))
     engine = LogicalActionEngine(adapter, initial_mode=MODE_CONTROL)
     interp.set_airswipe(True)
     engine.airswipe_active = True
@@ -375,7 +348,7 @@ def test_airswipe_safety_blocks_pause_gaze_tracking_loss_config_and_emergency() 
     # 4. Deshabilitar Air-Swipe en configuración apaga airswipe_active, cancela trazo y detiene redirección.
     _run(interp, [(make_pointing(0.4 + 0.02 * i, 0.5), 1750.0 + 33.0 * i) for i in range(5)], engine)
     assert interp.telemetry.tracing is True
-    engine.dispatch(interp.update_config(EngineConfig(airswipe_enabled=False, thumbs_up_enabled=True)))
+    engine.dispatch(interp.update_config(_palm_config("confirmar", airswipe_enabled=False)))
     if not interp.config.airswipe_enabled:
         engine.airswipe_active = False
     assert interp.airswipe_active is False and engine.airswipe_active is False
@@ -383,9 +356,8 @@ def test_airswipe_safety_blocks_pause_gaze_tracking_loss_config_and_emergency() 
     assert engine.type_text("deshabilitado")[1] == "AIRSWIPE_INACTIVE"
     assert engine.press_edit_key("backspace")[1] == "AIRSWIPE_INACTIVE"
 
-    # Con Air-Swipe desactivado, pulgar arriba vuelve a inyectarse al SO en vez de redirigirse a app_events.
-    _run(interp, [(make_open_palm(0.5, 0.5, pinch_dist=0.14), 1950.0 + 100.0 * i) for i in range(5)], engine)
-    _run(interp, _hold(make_thumbs_up, 2500.0, 700.0), engine)
+    # Con Air-Swipe desactivado, «confirmar» (aquí en la palma) vuelve a inyectarse al SO en vez de ir a app_events.
+    _run(interp, _palm(2000.0), engine)
     assert engine.take_app_events() == []
     assert ("KEY_COMBO", {"keys": ["enter"]}) in adapter.executed_actions
 
@@ -421,25 +393,26 @@ def test_ipc_gestos_map_sets_flags_and_discrete_actions() -> None:
     cfg = EngineConfig.from_dict({
         "gestos": {
             "micro_pinza": {"accion": "clic", "habilitado": False},
-            "pulgar_arriba": {"accion": "multimedia_play_pause", "habilitado": True},
+            "palma_abierta": {"accion": "multimedia_play_pause", "habilitado": True},
             "dos_dedos": {"accion": "sin_accion", "habilitado": True},
         },
         "activeBox": [0.2, 0.8, 0.3, 0.9],
         "gaze": {"enabled": True, "calibration": {"yaw": 3.5, "pitch": -2}},
     })
-    assert cfg.pinch_enabled is False and cfg.scroll_enabled is False and cfg.thumbs_up_enabled is True
-    assert cfg.discrete_actions["pulgar_arriba"] == "multimedia_play_pause"
+    assert cfg.pinch_enabled is False and cfg.scroll_enabled is False and cfg.palm_enabled is True
+    assert cfg.discrete_actions["palma_abierta"] == "multimedia_play_pause"
     assert cfg.active_bounds == (0.2, 0.8, 0.3, 0.9)
     assert cfg.gaze.enabled and cfg.gaze.calibration == (3.5, -2.0)
     restored = EngineConfig.from_dict(cfg.to_dict())
     assert restored == cfg
-    assert restored.to_dict()["gestos"]["pulgar_arriba"] == {"accion": "multimedia_play_pause", "habilitado": True}
+    assert restored.to_dict()["gestos"]["palma_abierta"] == {"accion": "multimedia_play_pause", "habilitado": True}
 
 
 @pytest.mark.parametrize(
     ("payload", "code"),
     [
         ({"gestos": {"gesto_x": {"accion": "clic", "habilitado": True}}}, "GESTURE_UNKNOWN"),
+        ({"gestos": {"pulgar_arriba": {"accion": "confirmar", "habilitado": True}}}, "GESTURE_UNKNOWN"),
         ({"gestos": {"micro_pinza": {"accion": "arrastrar", "habilitado": True}}}, "ACTION_NOT_IMPLEMENTED"),
         ({"gestos": {"micro_pinza": {"accion": "calculadora", "habilitado": True}}}, "FIELD_INVALID"),
         ({"gestos": {"micro_pinza": {"accion": "clic", "habilitado": "si"}}}, "FIELD_INVALID"),
@@ -464,7 +437,8 @@ def test_ipc_defaults_match_the_interface_defaults_in_the_contract() -> None:
     cfg = EngineConfig.from_dict({})
     for toggle, value in TOGGLE_DEFAULTS.items():
         assert cfg.to_dict()[toggle] is value, toggle
-    assert cfg.swipe_left_enabled is False and cfg.thumbs_up_enabled is False
+    for retirado in ("swipeLeft", "swipeRight", "thumbsUp", "thumbsDown", "precision"):
+        assert retirado not in cfg.to_dict(), retirado
 
 
 def test_dispatch_cuenta_cada_evento_disparado_sin_contar_el_movimiento() -> None:
@@ -481,17 +455,15 @@ def test_dispatch_cuenta_el_destino_de_cada_evento_y_por_que_se_bloquea() -> Non
     """«Reconoce el gesto pero no actúa en Control» (22-11-2026): el informe debe decir adónde fue cada evento."""
     from motor_local.action_engine import MODE_CONTROL, LogicalActionEngine
     from motor_local.interpreter import (
-        EVENT_LEFT_CLICK, EVENT_MINIMIZE_WINDOW, EVENT_MOVE_CURSOR, EVENT_NEXT_TAB, EVENT_PRECISION, LogicalEvent,
+        EVENT_LEFT_CLICK, EVENT_MOVE_CURSOR, EVENT_NEW_TAB, EVENT_PRECISION, LogicalEvent,
     )
     from motor_local.os_adapter import MockOSAdapter
-    from motor_local.window_control import MockWindowController, WindowActions
 
     adapter = MockOSAdapter()
-    engine = LogicalActionEngine(adapter, window_actions=WindowActions(MockWindowController()))
+    engine = LogicalActionEngine(adapter)
     engine.dispatch([LogicalEvent(EVENT_LEFT_CLICK), LogicalEvent(EVENT_PRECISION)])          # Observar
     engine.set_mode(MODE_CONTROL)
-    engine.dispatch([LogicalEvent(EVENT_LEFT_CLICK), LogicalEvent(EVENT_NEXT_TAB), LogicalEvent(EVENT_MOVE_CURSOR)])
-    engine.dispatch([LogicalEvent(EVENT_MINIMIZE_WINDOW)])
+    engine.dispatch([LogicalEvent(EVENT_LEFT_CLICK), LogicalEvent(EVENT_NEW_TAB), LogicalEvent(EVENT_MOVE_CURSOR)])
     engine.set_external_hold(True)
     engine.dispatch([LogicalEvent(EVENT_LEFT_CLICK)])
     engine.set_external_hold(False)
@@ -501,9 +473,8 @@ def test_dispatch_cuenta_el_destino_de_cada_evento_y_por_que_se_bloquea() -> Non
     assert engine.delivery_counts[EVENT_LEFT_CLICK] == {
         "BLOQUEADO_OBSERVAR": 1, "SO": 1, "BLOQUEADO_MIRADA": 1, "BLOQUEADO_PAUSA": 1,
     }
-    assert engine.delivery_counts[EVENT_NEXT_TAB] == {"SO": 1}
+    assert engine.delivery_counts[EVENT_NEW_TAB] == {"SO": 1}
     assert engine.delivery_counts[EVENT_PRECISION] == {"INTERFAZ": 1}
-    assert set(engine.delivery_counts[EVENT_MINIMIZE_WINDOW]) == {f"VENTANA_{engine.last_window_result}"}
     assert EVENT_MOVE_CURSOR not in engine.delivery_counts
     # Lo contado como «SO» es exactamente lo que recibió el adaptador.
     assert [a for a, _ in adapter.executed_actions if a != "MOVE_CURSOR"] == ["LEFT_CLICK", "KEY_COMBO"]
