@@ -8,6 +8,9 @@ Para personas que realizan tareas manuales mientras consultan información digit
 * Adan Mendoza (@Adammm14)
 * Anais Perez (@Youpuipui)
 
+## Video promocional.
+https://github.com/user-attachments/assets/e38ed437-f08b-494a-a723-1d1e74e901b4
+
 ## Instalación (Windows)
 
 ### Requisitos
