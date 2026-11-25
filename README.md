@@ -4,9 +4,12 @@ ZeroTouch es para personas que hacen tareas manuales (cocina, taller) mientras c
 
 > **Estado (24-11-2026):** el software está implementado de punta a punta y cubierto por pruebas automáticas. El recorrido interfaz, API y SQLite se comprueba con la aplicación real (`npm run verify:hito3`). Los gestos **todavía no se han medido con cámara y manos de otras personas**: los umbrales son hipótesis ajustadas con grabaciones del equipo. No hay instalador: se ejecuta desde el código fuente.
 
+## Video promocional
+https://github.com/user-attachments/assets/a93857f9-3402-4337-ab9e-931c69c93beb
+
 ## Manual de instalación y uso
 
-Guía completa en 20 apartados: resumen, arquitectura, levantar el servicio desde cero, recuperación ante caída, respaldos y restauración, seguridad, comandos rápidos, el recorrido de comprobación, la demostración con cámara y los problemas conocidos. Los apartados que solo tendrían sentido en un servidor remoto (SSH, dominio, correo corporativo) dicen expresamente que no aplican en esta entrega: **[docs/manual-instalacion-y-uso.md](docs/manual-instalacion-y-uso.md)**.
+Guía completa en 20 apartados: resumen, arquitectura, levantar el servicio desde cero, recuperación ante caída, respaldos y restauración, seguridad, comandos rápidos, el recorrido de comprobación, la demostración con cámara y los problemas conocidos. Los apartados que solo tendrían sentido en un servidor remoto (SSH, dominio, correo corporativo) dicen expresamente que no aplican en esta entrega: **[Manual de instalación y uso (PDF)](docs/Manual%20de%20instalaci%C3%B3n%20y%20uso.pdf)**.
 
 ## Inicio rápido (Windows)
 
@@ -50,8 +53,8 @@ La base SQLite está **cifrada en reposo** (SQLite3 Multiple Ciphers, ChaCha20-P
 ## Enlaces
 
 - [Prototipo del Hito 1](https://juliettac.github.io/ZEROTOUCH/) (versión web histórica, se conserva sin cambios)
-- [Informe del Hito 1](docs/Informe%20Hito%201.pdf) · [Matriz de cumplimiento](docs/matriz-hito1.md)
-- [Manual de instalación y uso](docs/manual-instalacion-y-uso.md) · [Contrato de la API (OpenAPI)](docs/api/openapi.yaml)
+- [Informe del Hito 1](docs/Informe%20Hito%201.pdf) · [Informe del Hito 2](docs/Informe%20Hito%202.pdf) · [Informe del Hito 3](docs/Informe%20Hito%203.pdf)
+- [Manual de instalación y uso](docs/Manual%20de%20instalaci%C3%B3n%20y%20uso.pdf) · [Contrato de la API (OpenAPI)](docs/api/openapi.yaml)
 - [Registro de cambios](CHANGELOG.md) · [Progreso técnico](PROGRESO.md)
 
 ## Cómo está hecho
@@ -120,8 +123,10 @@ npm run verify:hito3                                                   # recorri
 
 ## Documentación
 
-- [Manual de instalación y uso](docs/manual-instalacion-y-uso.md)
-- [Matriz de cumplimiento del Hito 1](docs/matriz-hito1.md)
+- [Informe del Hito 1](docs/Informe%20Hito%201.pdf)
+- [Informe del Hito 2](docs/Informe%20Hito%202.pdf)
+- [Informe del Hito 3](docs/Informe%20Hito%203.pdf)
+- [Manual de instalación y uso](docs/Manual%20de%20instalaci%C3%B3n%20y%20uso.pdf)
 - [Contrato OpenAPI](docs/api/openapi.yaml), [colección Postman](docs/api/coleccion.json) y [entorno sin secretos](docs/api/entorno.example.json)
 - Hito 2: [informe](docs/hito2/informe.md), [datos y seguridad](docs/hito2/datos-seguridad.md), [API y arquitectura](docs/hito2/api-arquitectura.md), [motor local](docs/hito2/motor-local.md), [pruebas](docs/hito2/pruebas.md), [auditoría de seguridad](docs/hito2/auditoria-seguridad.md)
 
