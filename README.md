@@ -3,7 +3,7 @@
 Para personas que realizan tareas manuales mientras consultan información digital, ZeroTouch propone una interacción gestual que busca reducir el contacto directo con el dispositivo y las interrupciones durante la actividad, sin requerir sensores gestuales especializados adicionales.
 
 ## Video promocional
-https://github.com/user-attachments/assets/e38ed437-f08b-494a-a723-1d1e74e901b4
+https://github.com/user-attachments/assets/a93857f9-3402-4337-ab9e-931c69c93beb
 
 ## Integrantes
 
