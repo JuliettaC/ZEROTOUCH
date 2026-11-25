@@ -2,8 +2,6 @@
 
 ZeroTouch es para personas que hacen tareas manuales (cocina, taller) mientras consultan información en el computador. Permite controlar Windows con gestos de la mano frente a una cámara web común, sin sensores especiales: mover el cursor, hacer clic, arrastrar, desplazar, pausar, cambiar de ventana, abrir una pestaña nueva, manejar temporizadores y multimedia, y escribir con trazos en el aire.
 
-> **Estado (24-11-2026):** el software está implementado de punta a punta y cubierto por pruebas automáticas. El recorrido interfaz, API y SQLite se comprueba con la aplicación real (`npm run verify:hito3`). Los gestos **todavía no se han medido con cámara y manos de otras personas**: los umbrales son hipótesis ajustadas con grabaciones del equipo. No hay instalador: se ejecuta desde el código fuente.
-
 ## Video promocional
 https://github.com/user-attachments/assets/a93857f9-3402-4337-ab9e-931c69c93beb
 
