@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import { readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { openDatabase, validateDatabasePath } from '../../src/config/database.js';
+import { TEST_KEY } from '../helpers/clave.js';
 
 const sql = readFileSync(new URL('../../../db/schema.sql', import.meta.url), 'utf8');
 // SQL fixture only: password validity is exercised with Argon2 in security tests.
@@ -21,10 +22,10 @@ function fixture(t) {
   db.prepare('INSERT INTO modos_uso(id,perfil_id,nombre) VALUES(?,?,?)').run(mode, profile, 'Modo');
   return { db, user, profile, mode };
 }
-test('nueve tablas (v3), catálogos y restricciones de identidad/hash/roles/correo', t => {
+test('nueve tablas (v4), catálogos y restricciones de identidad/hash/roles/correo', t => {
   const { db, user } = fixture(t);
   assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table'").get().n, 9);
-  assert.equal(db.pragma('user_version', { simple: true }), 3);
+  assert.equal(db.pragma('user_version', { simple: true }), 4);
   const email = db.prepare('UPDATE usuarios SET correo=? WHERE id=?');
   for (const value of ['MAYUS@ejemplo.test', ' espacio@ejemplo.test', 'sin-arroba', '@ejemplo.test']) assert.throws(() => email.run(value, user));
   assert.throws(() => db.prepare("UPDATE usuarios SET correo=NULL, correo_verificado_en='2026-01-01T00:00:00.000Z' WHERE id=?").run(user));
@@ -36,7 +37,7 @@ test('nueve tablas (v3), catálogos y restricciones de identidad/hash/roles/corr
   token.run('a'.repeat(64), other, 'verificacion', 'a@b.cl');
   db.prepare('DELETE FROM usuarios WHERE id=?').run(other);
   assert.equal(db.prepare('SELECT count(*) n FROM tokens_cuenta').get().n, 0, 'los tokens se eliminan en cascada');
-  assert.equal(db.prepare('SELECT count(*) n FROM gestos').get().n, 13);
+  assert.equal(db.prepare('SELECT count(*) n FROM gestos').get().n, 8);
   assert.equal(db.prepare('SELECT count(*) n FROM acciones').get().n, 17);
   const insert = db.prepare('INSERT INTO usuarios(id,nombre_usuario,contrasena_hash,rol) VALUES(?,?,?,?)');
   for (const id of [null, '', 'incorrecto', '12345678-1234-1234-1234-123456789012']) {
@@ -79,21 +80,21 @@ test('conexión exclusiva, persistencia, cierre y rechazo de esquema ajeno', t =
   const directory = mkdtempSync(path.join(tmpdir(), 'zerotouch-i1-db-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const filename = path.join(directory, 'test.sqlite');
-  let db = openDatabase(filename, { initialize: true });
+  let db = openDatabase(filename, { key: TEST_KEY, initialize: true });
   const id = randomUUID();
   db.prepare('INSERT INTO usuarios(id,nombre_usuario,contrasena_hash) VALUES(?,?,?)').run(id, 'persistente', sqlHash);
   assert.equal(db.pragma('foreign_keys', { simple: true }), 1);
   assert.equal(db.pragma('journal_mode', { simple: true }), 'wal');
-  assert.throws(() => openDatabase(filename, { initialize: true }), { code: 'EEXIST' });
+  assert.throws(() => openDatabase(filename, { key: TEST_KEY, initialize: true }), { code: 'EEXIST' });
   db.close();
   assert.equal(db.open, false);
-  db = openDatabase(filename);
+  db = openDatabase(filename, { key: TEST_KEY });
   assert.equal(db.prepare('SELECT id FROM usuarios').get().id, id);
   db.close();
   const foreign = path.join(directory, 'foreign.sqlite');
   writeFileSync(foreign, '');
-  assert.throws(() => openDatabase(foreign), /incompatible/);
-  assert.throws(() => openDatabase(path.join(directory, 'missing.sqlite')));
+  assert.throws(() => openDatabase(foreign, { key: TEST_KEY }), /incompatible/);
+  assert.throws(() => openDatabase(path.join(directory, 'missing.sqlite'), { key: TEST_KEY }));
 });
 test('rutas relativas, del repositorio y OneDrive rechazadas', () => {
   assert.throws(() => validateDatabasePath('datos.sqlite'));

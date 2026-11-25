@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import { createApp } from '../../src/app.js';
 import { createMemoryMailer, lastToken } from '../helpers/correo.js';
 import { capacidades } from '../../src/domain/capacidades.js';
@@ -65,17 +65,17 @@ test('PUT reemplaza las asignaciones, sube la versión del modo y la exportació
   const put = await request('PUT', `/api/v1/modos/${m.id}/gestos`, {
     version: 1,
     gestos: [
-      { gesto_codigo: 'pulgar_arriba', accion_codigo: 'multimedia_siguiente', habilitado: true },
-      { gesto_codigo: 'deslizamiento_izquierda', accion_codigo: 'atras', habilitado: false },
+      { gesto_codigo: 'palma_abierta', accion_codigo: 'multimedia_siguiente', habilitado: true },
+      { gesto_codigo: 'dos_dedos', accion_codigo: 'desplazar', habilitado: false },
       { gesto_codigo: 'micro_pinza', accion_codigo: 'sin_accion', habilitado: true },
     ],
   }, session);
   assert.equal(put.status, 200, JSON.stringify(put.body));
   assert.equal(put.body.data.formato_version, 1);
   assert.equal(put.body.data.modo.version, 2, 'una sola versión cubre modo y asignaciones');
-  assert.deepEqual(byCode(put.body.data.gestos, 'pulgar_arriba'), { gesto_codigo: 'pulgar_arriba', nombre: 'Pulgar arriba', accion_codigo: 'multimedia_siguiente', habilitado: true, asignacion_version: 1 });
-  assert.equal(byCode(put.body.data.gestos, 'deslizamiento_izquierda').habilitado, false);
-  assert.equal(byCode(put.body.data.gestos, 'dos_dedos').accion_codigo, 'desplazar', 'los gestos no enviados vuelven al catálogo');
+  assert.deepEqual(byCode(put.body.data.gestos, 'palma_abierta'), { gesto_codigo: 'palma_abierta', nombre: 'Palma abierta', accion_codigo: 'multimedia_siguiente', habilitado: true, asignacion_version: 1 });
+  assert.equal(byCode(put.body.data.gestos, 'dos_dedos').habilitado, false);
+  assert.equal(byCode(put.body.data.gestos, 'puno_cerrado').accion_codigo, 'pausar', 'los gestos no enviados vuelven al catálogo');
   const read = await request('GET', `/api/v1/modos/${m.id}/gestos`, undefined, session);
   assert.deepEqual(read.body.data, put.body.data);
   assert.equal((await request('GET', `/api/v1/modos/${m.id}`, undefined, session)).body.data.version, 2);
@@ -83,7 +83,7 @@ test('PUT reemplaza las asignaciones, sube la versión del modo y la exportació
   const stale = await request('PUT', `/api/v1/modos/${m.id}/gestos`, { version: 1, gestos: [] }, session);
   assert.equal(stale.status, 409);
   assert.equal(stale.body.error, 'VERSION_CONFLICTO');
-  assert.equal(byCode((await request('GET', `/api/v1/modos/${m.id}/gestos`, undefined, session)).body.data.gestos, 'pulgar_arriba').accion_codigo, 'multimedia_siguiente');
+  assert.equal(byCode((await request('GET', `/api/v1/modos/${m.id}/gestos`, undefined, session)).body.data.gestos, 'palma_abierta').accion_codigo, 'multimedia_siguiente');
   // Reemplazo vacío con la versión correcta: todo vuelve al catálogo.
   const reset = await request('PUT', `/api/v1/modos/${m.id}/gestos`, { version: 2, gestos: [] }, session);
   assert.equal(reset.status, 200);
@@ -94,17 +94,17 @@ test('PUT reemplaza las asignaciones, sube la versión del modo y la exportació
 test('PATCH edita una asignación y conserva las demás', async t => {
   const { request, account, mode } = await fixture(t), session = await account('parche');
   const m = await mode(session);
-  assert.equal((await request('PUT', `/api/v1/modos/${m.id}/gestos`, { version: 1, gestos: [{ gesto_codigo: 'pulgar_abajo', accion_codigo: 'cancelar', habilitado: false }] }, session)).status, 200);
-  const patched = await request('PATCH', `/api/v1/modos/${m.id}/gestos/pulgar_arriba`, { accion_codigo: 'precision', version: 2 }, session);
+  assert.equal((await request('PUT', `/api/v1/modos/${m.id}/gestos`, { version: 1, gestos: [{ gesto_codigo: 'micro_pinza', accion_codigo: 'clic', habilitado: false }] }, session)).status, 200);
+  const patched = await request('PATCH', `/api/v1/modos/${m.id}/gestos/palma_abierta`, { accion_codigo: 'precision', version: 2 }, session);
   assert.equal(patched.status, 200, JSON.stringify(patched.body));
-  assert.equal(byCode(patched.body.data.gestos, 'pulgar_arriba').accion_codigo, 'precision');
-  assert.equal(byCode(patched.body.data.gestos, 'pulgar_abajo').habilitado, false, 'la asignación anterior se conserva');
+  assert.equal(byCode(patched.body.data.gestos, 'palma_abierta').accion_codigo, 'precision');
+  assert.equal(byCode(patched.body.data.gestos, 'micro_pinza').habilitado, false, 'la asignación anterior se conserva');
   assert.equal(patched.body.data.modo.version, 3);
-  const toggled = await request('PATCH', `/api/v1/modos/${m.id}/gestos/pulgar_arriba`, { habilitado: false, version: 3 }, session);
-  assert.deepEqual([byCode(toggled.body.data.gestos, 'pulgar_arriba').accion_codigo, byCode(toggled.body.data.gestos, 'pulgar_arriba').habilitado, byCode(toggled.body.data.gestos, 'pulgar_arriba').asignacion_version], ['precision', false, 2]);
-  assert.equal((await request('PATCH', `/api/v1/modos/${m.id}/gestos/pulgar_arriba`, { habilitado: true, version: 3 }, session)).status, 409);
+  const toggled = await request('PATCH', `/api/v1/modos/${m.id}/gestos/palma_abierta`, { habilitado: false, version: 3 }, session);
+  assert.deepEqual([byCode(toggled.body.data.gestos, 'palma_abierta').accion_codigo, byCode(toggled.body.data.gestos, 'palma_abierta').habilitado, byCode(toggled.body.data.gestos, 'palma_abierta').asignacion_version], ['precision', false, 2]);
+  assert.equal((await request('PATCH', `/api/v1/modos/${m.id}/gestos/palma_abierta`, { habilitado: true, version: 3 }, session)).status, 409);
   assert.equal((await request('PATCH', `/api/v1/modos/${m.id}/gestos/gesto_inventado`, { habilitado: true, version: 4 }, session)).status, 404);
-  assert.equal((await request('PATCH', `/api/v1/modos/${m.id}/gestos/pulgar_arriba`, { version: 4 }, session)).status, 400);
+  assert.equal((await request('PATCH', `/api/v1/modos/${m.id}/gestos/palma_abierta`, { version: 4 }, session)).status, 400);
 });
 
 test('solo se guardan asignaciones habilitadas que el motor puede ejecutar', async t => {
@@ -112,9 +112,9 @@ test('solo se guardan asignaciones habilitadas que el motor puede ejecutar', asy
   const m = await mode(session);
   const cases = [
     [[{ gesto_codigo: 'micro_pinza', accion_codigo: 'arrastrar', habilitado: true }], 400, 'ACCION_NO_COMPATIBLE'],
-    [[{ gesto_codigo: 'pulgar_arriba', accion_codigo: 'clic', habilitado: true }], 400, 'ACCION_NO_COMPATIBLE'],
+    [[{ gesto_codigo: 'palma_abierta', accion_codigo: 'clic', habilitado: true }], 400, 'ACCION_NO_COMPATIBLE'],
     [[{ gesto_codigo: 'trazo_airswipe', accion_codigo: 'confirmar', habilitado: true }], 400, 'ACCION_NO_COMPATIBLE'],
-    [[{ gesto_codigo: 'pulgar_arriba', accion_codigo: 'calculadora', habilitado: true }], 400, 'DATOS_INVALIDOS'],
+    [[{ gesto_codigo: 'palma_abierta', accion_codigo: 'calculadora', habilitado: true }], 400, 'DATOS_INVALIDOS'],
     [[{ gesto_codigo: 'cmd', accion_codigo: 'clic', habilitado: true }], 400, 'DATOS_INVALIDOS'],
     [[{ gesto_codigo: 'micro_pinza', accion_codigo: 'clic', habilitado: 'true' }], 400, 'DATOS_INVALIDOS'],
     [[{ gesto_codigo: 'micro_pinza', accion_codigo: 'clic', habilitado: true, shell: 'calc' }], 400, 'DATOS_INVALIDOS'],

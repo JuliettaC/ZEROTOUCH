@@ -238,7 +238,7 @@ def m_false_clicks(fps: float, palm_px: float, seconds: float = 20.0, seed: int 
         nx, ny = 320 + rng.uniform(-120, 120), 250 + rng.uniform(-90, 90)
         s.run(400, "relajada", x, y, to=(nx, ny))
         x, y = nx, ny
-    return {k: s.count(k, since) for k in ("LEFT_CLICK", "RIGHT_CLICK", "START_DRAG", "SCROLL", "PAUSE", "PRECISION", "NEXT_TAB", "PREV_TAB", "MINIMIZE_WINDOW", "RESTORE_WINDOW", "BACK", "FORWARD")}
+    return {k: s.count(k, since) for k in ("LEFT_CLICK", "RIGHT_CLICK", "START_DRAG", "SCROLL", "PAUSE", "PRECISION", "BACK", "FORWARD")}
 
 
 def m_click_drift(fps: float, palm_px: float, seed: int = 9) -> float:
@@ -263,7 +263,7 @@ def m_poses(fps: float, palm_px: float, seed: int = 11) -> dict:
     """Mantener cada postura 1,5 s: eventos que produce (quieta, sin moverse)."""
     out = {}
     for name in ("puno", "dos_dedos", "tres_dedos", "indice_menique", "pulgar_arriba", "pulgar_abajo", "pulgar_menique", "pinza_medio", "indice"):
-        s = Session(fps=fps, seed=seed, palm_px=palm_px, config=EngineConfig.from_dict({"thumbsUp": True, "thumbsDown": True, "windowGestures": True}))
+        s = Session(fps=fps, seed=seed, palm_px=palm_px, config=EngineConfig.from_dict({}))
         s.arm()
         s.run(300, "relajada")
         since = s.t
@@ -373,20 +373,6 @@ def m_fists(fps: float, palm_px: float) -> tuple[int, int]:
     return s.count("PAUSE", since) + s.count("RESUME", since), s.count("START_DRAG", since)
 
 
-def m_false_window(fps: float, palm_px: float) -> int:
-    cfg = EngineConfig.from_dict({"windowSwipe": True})
-    s = Session(fps=fps, seed=43, palm_px=palm_px, config=cfg)
-    s.arm()
-    since = s.t
-    rng = random.Random(43)
-    x, y = 320, 250
-    for _ in range(60):
-        nx, ny = 320 + rng.uniform(-120, 120), 250 + rng.uniform(-100, 100)
-        s.run(350, "relajada", x, y, to=(nx, ny))
-        x, y = nx, ny
-    return s.count("MINIMIZE_WINDOW", since) + s.count("RESTORE_WINDOW", since)
-
-
 def report() -> None:
     print("== Alcance (fracción de la imagen para cruzar la pantalla, config por defecto) ==")
     print(m_reach(85))
@@ -400,7 +386,6 @@ def report() -> None:
             print("latencia cursor 90 % (ms):", m_latency(fps, palm))
             print("movimiento lento 12 px cámara (px recorridos, error final px):", m_slow(fps, palm))
             print("armado:", m_arming(fps, palm))
-            print("ventanas falsas en 21 s moviendo (barrido vertical activado):", m_false_window(fps, palm))
             for k, v in m_moving(fps, palm).items():
                 print(f"   {k}: {v}")
             for k, v in m_poses(fps, palm).items():

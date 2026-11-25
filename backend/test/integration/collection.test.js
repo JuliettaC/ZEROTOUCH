@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { openDatabase } from '../../src/config/database.js';
+import { TEST_KEY } from '../helpers/clave.js';
 import { tokenFromOutbox } from '../helpers/correo.js';
 
 // Executes only this repository's Postman scripts, with a small explicit pm adapter.
@@ -15,7 +16,7 @@ import { tokenFromOutbox } from '../helpers/correo.js';
 test('colección: HTTP real, aislamiento, reinicio y exportación sin credenciales', { timeout: 60000 }, async t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'zt-i3-'));
   const database = path.join(dir, 'test.sqlite');
-  openDatabase(database, { initialize: true }).close();
+  openDatabase(database, { key: TEST_KEY, initialize: true }).close();
   const processes = [];
   t.after(async () => {
     for (const runtime of processes) await runtime.stop();
@@ -24,7 +25,7 @@ test('colección: HTTP real, aislamiento, reinicio y exportación sin credencial
   async function start() {
     const child = fork(fileURLToPath(new URL('../../src/server.js', import.meta.url)), [], {
       cwd: dir, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      env: { ...process.env, DATABASE_PATH: database, HOST: '127.0.0.1', PORT: '0', NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:3000', SESSION_TTL_SECONDS: '28800' },
+      env: { ...process.env, DATABASE_PATH: database, DATABASE_KEY: TEST_KEY, HOST: '127.0.0.1', PORT: '0', NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:3000', SESSION_TTL_SECONDS: '28800' },
     });
     child.stderr.resume();
     const exit = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
@@ -92,7 +93,7 @@ test('colección: HTTP real, aislamiento, reinicio y exportación sin credencial
       assert.equal(configuration.formato_version, 1);
       assert.equal(configuration.modo.sensibilidad_puntero, 70);
       assert.equal(configuration.modo.version, 2);
-      assert.equal(configuration.gestos.length, 13);
+      assert.equal(configuration.gestos.length, 8);
       assert.ok(configuration.gestos.every(g => typeof g.habilitado === 'boolean'));
       assert.equal(configuration.gestos.find(g => g.gesto_codigo === 'micro_pinza').accion_codigo, 'clic');
       const oldPid = server.pid;

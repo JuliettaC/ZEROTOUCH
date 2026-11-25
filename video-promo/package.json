@@ -1,0 +1,17 @@
+{
+  "name": "zerotouch-video-promo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "musica": "node scripts/musica.mjs",
+    "render": "remotion render src/index.ts Promo out/zerotouch-promo.mp4 --codec h264 --crf 18"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.520",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.520",
+    "typescript": "5.9.3"
+  }
+}

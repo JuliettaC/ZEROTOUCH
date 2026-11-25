@@ -28,7 +28,7 @@ export const QUICK_START_MESSAGES = {
   ok: 'Listo: mueve el cursor con la mano abierta. Cierra el puño para pausar; Ctrl+Alt+Z lo detiene todo.',
   already: 'Ya estás controlando.',
   cameraTimeout:
-    'La cámara no se abrió. Revisa que esté conectada y que otra aplicación no la esté usando, o elige otra en Calibrar.',
+    'La cámara no se abrió. Revisa que esté conectada y que otra aplicación no la esté usando, o elige otra en Ajustes.',
   stopped: 'El motor se detuvo mientras se abría la cámara. Vuelve a pulsar Empezar.',
 }
 
@@ -41,7 +41,7 @@ export function quickStartError(error) {
     case 'EMERGENCY_HOTKEY_UNAVAILABLE':
       return 'Windows no dejó registrar Ctrl+Alt+Z, la parada de emergencia, así que el control no se activa por seguridad. Cierra la aplicación que use ese atajo y vuelve a intentarlo.'
     default:
-      return error?.message || 'No se pudo empezar. Revisa la cámara en Calibrar.'
+      return error?.message || 'No se pudo empezar. Revisa la cámara en Ajustes.'
   }
 }
 

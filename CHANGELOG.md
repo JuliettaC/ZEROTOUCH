@@ -10,6 +10,110 @@ Convenciones:
 
 ---
 
+## 25-11-2026 — Endurecimiento del backend tras una revisión de seguridad (sin confirmar)
+
+### Seguridad
+
+- Cuotas por cuenta (`backend/src/domain/cuotas.js`): 100 perfiles por cuenta y 50 modos por perfil (409 `LIMITE_RECURSOS`), comprobadas en la misma sentencia `INSERT` que crea el recurso; 2000 creaciones con `Idempotency-Key` por cuenta dentro de la retención (429). Antes una cuenta podía llenar el disco creando sin límite.
+- Limitador de intentos: IPv4 mapeada en IPv6 cuenta como su IPv4 y las IPv6 se agrupan por /64 (antes bastaba con rotar direcciones); barrido de ventanas vencidas como mucho una vez por minuto en vez de en cada petición; tope de 20 000 claves.
+- Una sesión vencida o de una cuenta inactiva se borra al intentar usarla.
+- Los errores 500 se registran (código y ruta, nunca el mensaje) en el registro de seguridad; antes no dejaban rastro.
+- `encryptDatabase` conserva la causa del error original (`cause`).
+- Pruebas: `backend/test/security/endurecimiento.test.js` (7). OpenAPI: nota v1.6.
+
+---
+
+## [Sin publicar] — 2026-11-25 — Cifrado en reposo de la base SQLite
+
+Sin cambios de API ni de esquema SQLite (sigue en v4).
+
+### Seguridad
+- La base SQLite se cifra completa con SQLite3 Multiple Ciphers (cifrador por defecto ChaCha20-Poly1305) y una clave de 256 bits en `DATABASE_KEY` (64 caracteres hexadecimales). La clave se aplica al abrir, antes de cualquier lectura. El archivo, el WAL y los respaldos de `db:migrate` (ahora con `VACUUM INTO`, porque la API de respaldo en línea no admite bases cifradas) quedan cifrados.
+- El servidor y todos los scripts (`db:init`, `db:migrate`, `db:modos`, `admin:bootstrap`) se niegan a arrancar sin `DATABASE_KEY` o con una clave mal formada o trivial. Con una clave incorrecta responden `CLAVE_BASE_INVALIDA`, y el mensaje no incluye la clave.
+
+### Agregado
+- `npm run db:clave --prefix backend`: genera una clave aleatoria (`crypto.randomBytes(32)`) para pegarla en `.env`.
+- `npm run db:cifrar --prefix backend`: convierte una base creada antes del cifrado. Hace una copia consistente, la cifra y comprueba que abre, que supera `quick_check` y que tiene las mismas filas por tabla. Solo entonces cambia los archivos, y deja el original sin cifrar como `<base>.sin-cifrar-<fecha>.ztbackup` (no borra datos). Repetirlo no cambia nada.
+- `backend/test/database/cifrado.test.js` (7 pruebas): el archivo y el WAL no contienen texto en claro, la base no abre sin la clave ni con otra, los respaldos van cifrados, la conversión conserva las filas y los comandos funcionan. Las pruebas existentes usan una clave ficticia (`backend/test/helpers/clave.js`). Las verificaciones con el `.exe` y las pruebas de Rust generan una clave nueva en cada ejecución.
+
+### Dependencias
+- `better-sqlite3@13.0.3` reemplazado por `better-sqlite3-multiple-ciphers@13.0.3` (misma API; trae el binario precompilado para Windows x64).
+
+### Comprobado
+- Backend 98/98, integración 1/1, `cargo test` 10/10 (incluida la prueba de Rust que arranca el backend real sobre SQLite). No se ejecutaron `verify:tauri` ni `verify:hito3` tras este cambio.
+
+---
+
+## [Sin publicar] — 2026-11-24 — Entrega del Hito 3: manual, recorrido verificable y herramientas de demostración
+
+Sin cambios de API ni de esquema SQLite.
+
+### Agregado
+- `docs/manual-instalacion-y-uso.md`: instalación desde el código fuente en Windows (versiones probadas, comandos, carpeta y resultado esperado de cada paso), base SQLite nueva fuera del repositorio y de OneDrive, cuenta de prueba verificada, recorrido de comprobación, demostración gestual con cámara, cierre ordenado y tres problemas conocidos. README reescrito con inicio rápido, gestos vigentes y enlace al manual (sin los datos de la versión móvil retirada ni de la página Diagnósticos).
+- `npm run verify:hito3` (`scripts/verificar-recorrido-hito3.mjs`): con el `.exe` real y un backend real sobre una base nueva y temporal, cambia «Velocidad del cursor» de «Cocina y Taller» de 70 a 55 por la interfaz, comprueba la API y el archivo SQLite, cierra y reabre el backend sobre la misma base, recarga la interfaz, y demuestra el origen en el servidor (un cambio de 58 hecho solo por la API aparece al sincronizar y tras recargar). 10/10. No abre la cámara.
+- `npm run correo:enlace --prefix backend -- <correo>` (`backend/scripts/enlace-verificacion.js`): imprime el enlace de confirmación del último correo guardado como archivo (el `.eml` lo parte con saltos de línea de quoted-printable). Solo con `MAIL_TRANSPORT=archivo`.
+- `npm run db:modos --prefix backend -- [usuario]` (`backend/scripts/leer-modos.js`): lee en solo lectura los modos y la sensibilidad guardados en el archivo SQLite; no muestra contraseñas, correos ni tokens.
+
+### Corregido
+- `db:init` decía «esquema v2: ocho tablas»; ahora «esquema v4: nueve tablas».
+- Los avisos de cámara remitían a «Calibrar» para elegir otra cámara; esa opción está en Ajustes.
+- `docs/prueba-manual-hardware.md` lleva un aviso de que es anterior a esta entrega.
+
+### Comprobado en una copia limpia (sin `node_modules`, entorno de Python ni compilación)
+- `npm ci` (raíz y backend), `pip install -r motor-local/requirements-dev.txt`, `npm run desktop:build` (cargo en frío: 4 min 25 s), `db:init` sobre una base nueva, backend con `npm start` en el puerto por defecto 3000, registro por la interfaz, confirmación por el enlace en el navegador, inicio de sesión y sincronización por la interfaz con la dirección por defecto (24 asignaciones, esquema v4), cierre y reapertura de la aplicación (el valor 55 se conserva tras iniciar sesión de nuevo). Backend 91 (3 nuevas, de `correo:enlace` y `db:modos`), interfaz 184, motor 192, `verify:hito3` 10/10, `verify:tauri` 52/52.
+- Un «equipo nuevo» (otro perfil de WebView2) con una cuenta que ya tiene datos en el servidor recibe la decisión «Ya existe en tu cuenta un perfil llamado «Perfil principal»»; con «Subir con otro nombre» no se sobrescribe nada. Está avisado en el manual.
+- **Sin probar:** la demostración con cámara y manos (sección 16 del manual) y la instalación de las herramientas (Node, Python, Rust, Build Tools) en un Windows que no las tenga.
+
+---
+
+## [Sin publicar] — 2026-11-24 — Imágenes de los gestos
+
+- Las fichas de gestos muestran una **imagen de una mano real** (JPEG 480 × 480 en `public/gestos/`, esquinas redondeadas) en vez del emoji: clic, desplazar (alterna arriba y abajo cada 1,4 s; fija con «reducir movimiento»), pausar, clic derecho, Alt+Tab y pestaña nueva. Después se agregaron la mano abierta (`mano-abierta.jpg`: mover el cursor, soltar y volver a navegación) y Arrastrar (`arrastrar.jpg`, la misma foto que Hacer clic: es la misma pinza de índice y pulgar, sostenida). Las explicaciones quedaron en una frase y la ficha de cada gesto muestra la imagen grande (260 px, tamaño `xl`) arriba del texto. Sustituye a los clips de video (`GESTURE_CLIPS` → `GESTURE_IMAGES` en `src/data/gestureMedia.js`; `src/components/GestureMedia.jsx`). Prueba nueva `tests/frontend/gesture-media.test.js`. Probado en el navegador con Vite.
+
+---
+
+## [Sin publicar] — 2026-11-24 — Desplazar con dos dedos sostenidos; sin página de Diagnósticos
+
+Sin commits. Sin cambios de API ni de esquema SQLite.
+
+### Modificado
+- **Desplazar** (`dos_dedos`, motor): índice y medio extendidos y juntos, anular y meñique doblados, **sostenidos**: con las puntas hacia arriba la página sube sin parar; con las puntas hacia abajo, baja (`SCROLL_HOLD_MS` = 300 ms de espera, `SCROLL_NOTCHES_PER_SEC` = 8 × sensibilidad, dirección a menos de 60° de la vertical; de lado no desplaza). La V separada sigue siendo la pestaña nueva y no desplaza. Mientras dura, el cursor no se mueve. Sustituye a mover la mano con los dos dedos y a doblar los dos dedos (`CURL_*`, retirado). Umbrales sin medir con videos de este gesto.
+- Textos del gesto en `src/data/gestures.js` y efecto de `desplazar` en el contrato (dos copias).
+
+### Eliminado
+- Página **Diagnósticos** (`/diagnosticos`, `DiagnosticsPage.jsx`) y su enlace en Ajustes, con lo que solo ella usaba: `CalibrationCamera.jsx` (grabar prueba de gestos), `TestReport.jsx` e `src/engine/testSession.js` (informe .md) y sus estilos y pruebas.
+- Enlace «Escritura Air-Swipe →» de la página Gestos. El teclado flotante sigue abriéndose al entrar en un campo de texto; la página `/teclado` sigue existiendo, sin enlaces que lleven a ella.
+- `verify:tauri`: se quitaron las comprobaciones de la vista previa de Diagnósticos y de la grabación WebM.
+
+### Pruebas
+- Motor 192 (`test_ajustes_arrastre_scroll_pestanas.py` → `test_arrastre_y_desplazar.py`, 10 pruebas del gesto nuevo; regresiones de desplazar reescritas), frontend 182, backend 88, `verify:tauri` 52/52 con el `.exe` real. **No probado en vivo** con cámara.
+
+---
+
+## [Sin publicar] — 2026-11-24 — Retiro de los gestos que no se usaban
+
+Sin commits. Pedido de la persona usuaria: quitar de la aplicación y de la base de datos los gestos que tenía apagados, salvo Arrastrar. **Esquema SQLite 3 → 4** y contrato de capacidades con 8 gestos (antes 13).
+
+### Eliminado
+- **Gestos del catálogo sincronizado** (contrato, base de datos, interfaz y motor): Atrás y Adelante (`deslizamiento_izquierda`, `deslizamiento_derecha`), Confirmar y Cancelar (`pulgar_arriba`, `pulgar_abajo`) y Activar modo precisión (`modo_precision`), con sus interruptores `swipeLeft`, `swipeRight`, `thumbsUp`, `thumbsDown` y `precision`. Las acciones (`atras`, `adelante`, `confirmar`, `cancelar`, `precision`…) se conservan: la palma abierta puede seguir usándolas.
+- **Gestos locales del equipo** (interfaz, preferencias y motor): Bajar o traer la ventana (`windowSwipe`, golpe de muñeca y mano colgando), Minimizar o restaurar ventana (`windowGestures`, tres dedos), Pestaña siguiente / anterior (`tabGestures`, abanico y sacudida lateral), Dictado por voz (`dictation`, 🤙), ☝️ sostenido = Enter (`keyboardGesture`) y Desplazar (experimental) con la mano abierta (`openHandScroll`). Las preferencias guardadas descartan esas claves al leerse. Ya no se emiten `NEXT_TAB`, `PREV_TAB`, `DICTATION`, `MINIMIZE_WINDOW` ni `RESTORE_WINDOW`; `teclas_equipo` queda en `cambiar_ventana` y `nueva_pestana`.
+- `motor-local/motor_local/window_control.py` (control de ventanas Win32) y el campo de telemetría `windowResult` (motor, `desktop/src/engine.rs` e interfaz).
+
+### Modificado
+- **Escritura mediante Air-Swipe** (`trazo_airswipe`) sigue en el contrato y en el motor (es como se escribe en el teclado), pero ya no aparece en la lista de gestos (`hidden` en `src/data/gestures.js`).
+- El pulgar extendido con el puño sigue sin pausar, pero ya no produce Intro ni Escape. El selector de Alt+Tab ya no exige el pulgar recogido (solo servía para distinguirlo del dictado).
+- `backend`: el catálogo efectivo (`GET /gestos`, `GET /modos/{id}/gestos`) solo devuelve los gestos del contrato, así una base v2/v3 sin migrar no muestra los retirados; el límite de asignaciones sale del contrato (8). OpenAPI: `maxItems` 13 → 8. Puente Tauri: `MAX_ASSIGNMENTS = 8`.
+
+### Base de datos
+- `db/schema.sql` v4: el seed de `gestos` tiene 8 filas. Migración explícita `db/migraciones/003_v3_a_v4.sql` (con `npm run db:migrate --prefix backend`, respaldo previo y una sola transacción): **borra** las filas de `gestos` retiradas y las asignaciones de esos gestos en cada modo; no toca cuentas, perfiles, modos ni las demás asignaciones. El backend sigue abriendo bases v2 y v3.
+
+### Pruebas
+- Backend 88 (nueva: migración v3 → v4), integración 1, frontend 190, motor 190, `cargo test` 10. Se eliminaron las pruebas de los gestos retirados (`test_ventanas_barrido.py` y casi todo `test_golpe_muneca.py`, renombrado `test_alt_tab.py`, y `test_sacudida_pestanas.py`, renombrado `test_pinza_mano_rapida.py`); las de acciones discretas usan ahora la palma abierta. Fixture `engine-applied.json` regenerada con `EngineConfig.from_dict(desired).to_dict()`.
+- `npm run desktop:build` + `npm run verify:tauri`: 54/54 con el `.exe` real (3 modos × 8 asignaciones = 24, versión 1).
+- **Pendiente:** migrar las bases existentes con `npm run db:migrate --prefix backend`. Los documentos `docs/hito2/*`, `docs/prueba-manual-hardware.md` y `PROGRESO.md` aún describen los gestos retirados.
+
+---
+
 ## [Sin publicar] — 2026-11-19 — QA de comodidad y reconocimiento del motor
 
 Sin commits. Sin cambios de API ni de esquema SQLite. Informe con mediciones antes/después: [`docs/qa-comodidad-19-11.md`](docs/qa-comodidad-19-11.md).

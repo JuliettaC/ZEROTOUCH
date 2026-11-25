@@ -10,5 +10,13 @@ export function errorHandler(error, req, res, next) {
   else if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') { status = 409; code = 'RELACION_INVALIDA'; message = 'La operación viola una relación.'; }
   else if (error.code === 'SQLITE_BUSY' || error.code === 'SQLITE_BUSY_SNAPSHOT') { status = 503; code = 'DATOS_OCUPADOS'; message = 'La base está ocupada; reintenta más tarde.'; }
   if (status === 503) res.set('Retry-After', '1');
+  // Un 500 sin registrar ocultaba fallos (y posibles ataques) a quien opera el servidor. Solo el código o nombre del
+  // error y la ruta: nunca su mensaje, que puede contener datos de la petición.
+  if (status === 500) {
+    req.app?.locals?.securityLog?.('error_interno', {
+      codigo: String(error?.code ?? error?.name ?? 'desconocido'), metodo: req.method, ruta: (req.originalUrl ?? '').split('?')[0],
+      usuario_id: req.auth?.usuarioId,
+    });
+  }
   res.status(status).json({ error: code, mensaje: message });
 }

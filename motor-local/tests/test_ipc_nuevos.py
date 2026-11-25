@@ -8,7 +8,7 @@ from tests.test_ipc_protocol import VALID_DOC, _acks, _run
 
 def test_set_config_ack_returns_the_applied_configuration(monkeypatch, capsys) -> None:
     commands = [
-        {"id": 1, "cmd": "SET_CONFIG", "config": {"sensitivity": 70, "gestos": {"pulgar_arriba": {"accion": "multimedia_siguiente", "habilitado": True}}}},
+        {"id": 1, "cmd": "SET_CONFIG", "config": {"sensitivity": 70, "gestos": {"palma_abierta": {"accion": "multimedia_siguiente", "habilitado": True}}}},
         {"id": 2, "cmd": "SET_CONFIG", "config": {"gestos": {"micro_pinza": {"accion": "arrastrar", "habilitado": True}}}},
         {"id": 3, "cmd": "LOAD_EXPORT", "document": VALID_DOC},
         {"id": 4, "cmd": "STOP"},
@@ -18,11 +18,12 @@ def test_set_config_ack_returns_the_applied_configuration(monkeypatch, capsys) -
     acks = _acks(messages)
     assert acks[1]["ok"] is True
     assert acks[1]["config"]["sensitivity"] == 70
-    assert acks[1]["config"]["gestos"]["pulgar_arriba"] == {"accion": "multimedia_siguiente", "habilitado": True}
-    assert acks[1]["config"]["thumbsUp"] is True
+    assert acks[1]["config"]["gestos"]["palma_abierta"] == {"accion": "multimedia_siguiente", "habilitado": True}
+    assert acks[1]["config"]["palm"] is True
+    assert "pulgar_arriba" not in acks[1]["config"]["gestos"] and "thumbsUp" not in acks[1]["config"]
     assert acks[2]["ok"] is False and acks[2]["code"] == "ACTION_NOT_IMPLEMENTED"
     assert acks[3]["ok"] is True and acks[3]["config"]["sensitivity"] == 60
-    assert acks[3]["gestures"]["pulgar_arriba"]["habilitado"] is False
+    assert acks[3]["gestures"]["dos_dedos"]["habilitado"] is True
     ready = next(m for m in messages if m["type"] == "READY")
     assert "gestos" in ready["config"]
 

@@ -80,7 +80,7 @@ export default function GestureKeyboardPage({
           </li>
           <li>
             Toca la palabra correcta con la pinza para escribirla. Borrar, Espacio e Intro están en
-            la barra. Con pulgar arriba (si lo activas en Gestos) confirmas la primera propuesta.
+            la barra.
           </li>
         </ol>
         <p className="step-hint">

@@ -10,7 +10,9 @@ export function GestureList({
   favorites,
   onFavorite,
 }) {
-  const ordered = Object.entries(gestures).sort(([, a], [, b]) => (a.order ?? 99) - (b.order ?? 99))
+  const ordered = Object.entries(gestures)
+    .filter(([, g]) => !g.hidden)
+    .sort(([, a], [, b]) => (a.order ?? 99) - (b.order ?? 99))
   const renderGesture = ([id, g]) => {
     const enabled = !g.toggle || settings?.[g.toggle] !== false
     const live = enabled && isGestureLive(id, engineStatus)

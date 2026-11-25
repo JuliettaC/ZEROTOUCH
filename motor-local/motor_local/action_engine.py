@@ -22,7 +22,6 @@ from .interpreter import (
     EVENT_BACK,
     EVENT_CANCEL,
     EVENT_CONFIRM,
-    EVENT_DICTATION,
     EVENT_KEYBOARD,
     EVENT_KEYBOARD_CLOSE,
     EVENT_END_DRAG,
@@ -30,27 +29,20 @@ from .interpreter import (
     EVENT_LEFT_CLICK,
     EVENT_MEDIA_NEXT,
     EVENT_MEDIA_PLAY_PAUSE,
-    EVENT_MINIMIZE_WINDOW,
     EVENT_MOVE_CURSOR,
     EVENT_NAVIGATION,
     EVENT_NEW_TAB,
-    EVENT_NEXT_TAB,
     EVENT_PAUSE,
     EVENT_PRECISION,
-    EVENT_PREV_TAB,
-    EVENT_RESTORE_WINDOW,
     EVENT_RESUME,
     EVENT_RIGHT_CLICK,
     EVENT_SCROLL,
     EVENT_START_DRAG,
-    EVENT_THUMBS_DOWN,
-    EVENT_THUMBS_UP,
     EVENT_TIMER,
     EVENT_TRACKING_LOST,
     LogicalEvent,
 )
 from .os_adapter import EDIT_KEYS, OSAdapterProtocol, validate_text
-from .window_control import WindowActions, WindowResult
 
 MODE_OBSERVATION = "OBSERVATION"
 MODE_CONTROL = "CONTROL"
@@ -64,9 +56,6 @@ _KEY_EVENTS: dict[str, tuple[str, ...]] = {
     EVENT_MEDIA_PLAY_PAUSE: ALLOWED_KEYS["multimedia_play_pause"],
     EVENT_MEDIA_NEXT: ALLOWED_KEYS["multimedia_siguiente"],
     # Gestos locales del equipo (contrato `teclas_equipo`).
-    EVENT_NEXT_TAB: DEVICE_KEYS["pestana_siguiente"],
-    EVENT_PREV_TAB: DEVICE_KEYS["pestana_anterior"],
-    EVENT_DICTATION: DEVICE_KEYS["dictado"],
     EVENT_ALT_TAB: DEVICE_KEYS["cambiar_ventana"],
     EVENT_NEW_TAB: DEVICE_KEYS["nueva_pestana"],
 }
@@ -75,9 +64,9 @@ _KEY_EVENTS: dict[str, tuple[str, ...]] = {
 _AIRSWIPE_REDIRECTED = frozenset({EVENT_BACK, EVENT_FORWARD, EVENT_CONFIRM, EVENT_CANCEL})
 # Eventos que solo informan a la interfaz de ZeroTouch.
 _APP_EVENTS = frozenset({EVENT_TIMER, EVENT_PRECISION, EVENT_NAVIGATION, EVENT_AIRSWIPE_TRACE, EVENT_KEYBOARD, EVENT_KEYBOARD_CLOSE})
-# Acciones que SÍ llegan al SO pero de las que la interfaz muestra un aviso (multimedia y ventanas):
-# además de ejecutarse, se encolan como evento informativo con `injected` (y `result` en ventanas).
-_FEEDBACK_EVENTS = frozenset({EVENT_MEDIA_PLAY_PAUSE, EVENT_MEDIA_NEXT, EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW, EVENT_NEXT_TAB, EVENT_PREV_TAB, EVENT_DICTATION, EVENT_ALT_TAB, EVENT_NEW_TAB})
+# Acciones que SÍ llegan al SO pero de las que la interfaz muestra un aviso (multimedia, Alt+Tab, pestaña nueva):
+# además de ejecutarse, se encolan como evento informativo con `injected`.
+_FEEDBACK_EVENTS = frozenset({EVENT_MEDIA_PLAY_PAUSE, EVENT_MEDIA_NEXT, EVENT_ALT_TAB, EVENT_NEW_TAB})
 
 ALLOWED_EVENTS = frozenset(
     {
@@ -91,11 +80,7 @@ ALLOWED_EVENTS = frozenset(
         EVENT_END_DRAG,
         EVENT_PAUSE,
         EVENT_RESUME,
-        EVENT_THUMBS_UP,
-        EVENT_THUMBS_DOWN,
         EVENT_TRACKING_LOST,
-        EVENT_MINIMIZE_WINDOW,
-        EVENT_RESTORE_WINDOW,
         *_KEY_EVENTS,
         *_APP_EVENTS,
     }
@@ -112,10 +97,8 @@ class LogicalActionEngine:
         self,
         adapter: OSAdapterProtocol,
         initial_mode: str = MODE_OBSERVATION,
-        window_actions: WindowActions | None = None,
     ) -> None:
         self.adapter = adapter
-        self.window_actions = window_actions
         self.mode: str = initial_mode if initial_mode in (MODE_OBSERVATION, MODE_CONTROL) else MODE_OBSERVATION
         self.emergency_stopped: bool = False
         self.paused: bool = False
@@ -123,14 +106,13 @@ class LogicalActionEngine:
         self.tracking_lost: bool = False
         self.airswipe_active: bool = False
         self.last_dispatched_event: str = "NONE"
-        self.last_window_result: str = "NONE"
         self.total_clicks: int = 0
         self.total_scrolls: int = 0
         # Cuántas veces el intérprete disparó cada evento (en cualquier modo, enviado o no al SO).
         # Solo conteos: sirve para medir pruebas de gestos sin guardar imágenes ni puntos.
         self.event_counts: dict[str, int] = {}
         # Qué pasó con cada evento disparado: llegó al SO («SO»), se bloqueó (y por qué), lo recibió la
-        # interfaz o el teclado Air-Swipe, o, en ventanas, el resultado de Win32. Distingue «el motor no
+        # interfaz o el teclado Air-Swipe. Distingue «el motor no
         # reconoce el gesto» de «lo reconoce pero no llega a la aplicación». Solo conteos.
         self.delivery_counts: dict[str, dict[str, int]] = {}
         self.app_events: list[dict[str, Any]] = []
@@ -169,22 +151,6 @@ class LogicalActionEngine:
         self.tracking_lost = bool(lost)
         if self.tracking_lost:
             self.adapter.release_all()
-
-    def _window_event(self, evt_type: str) -> None:
-        if self.window_actions is None:
-            # Sin control de ventanas Win32 aún se puede bajar la ventana con el atajo; traerla no.
-            if evt_type == EVENT_MINIMIZE_WINDOW:
-                self.adapter.key_combo(DEVICE_KEYS["minimizar_ventana"])
-                self.last_window_result = "WIN_DOWN"
-            else:
-                self.last_window_result = "UNAVAILABLE"
-            return
-        result: WindowResult = (
-            self.window_actions.minimize_target(send_keys=lambda: self.adapter.key_combo(DEVICE_KEYS["minimizar_ventana"]))
-            if evt_type == EVENT_MINIMIZE_WINDOW
-            else self.window_actions.restore_last()
-        )
-        self.last_window_result = result.code
 
     def _queue_app_event(self, evt: LogicalEvent) -> None:
         self.app_events.append({"event": evt.type, **evt.payload})
@@ -310,20 +276,9 @@ class LogicalActionEngine:
                 # Selector de ventanas: Alt mantenido + Tab (mismo atajo permitido «cambiar_ventana»). release_all
                 # (pausa, mano perdida, parada, Observar) lo cancela con Esc y suelta Alt.
                 self.adapter.alt_switcher(str(evt.payload.get("fase", "")))
-            elif evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):
-                self._window_event(evt.type)
-            if evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):
-                # Se cuenta el código: WIN_DOWN (atajo enviado), RESTORED, o por qué no (NO_LAST_WINDOW, NOT_MINIMIZED…).
-                self._delivered(evt.type, f"VENTANA_{self.last_window_result}")
-            elif evt.type in (EVENT_THUMBS_UP, EVENT_THUMBS_DOWN):
-                self._delivered(evt.type, "SIN_ACCION")
-            else:
-                self._delivered(evt.type, "SO")
+            self._delivered(evt.type, "SO")
             if evt.type in _FEEDBACK_EVENTS:
-                feedback: dict[str, Any] = {"event": evt.type, "injected": True, **evt.payload}
-                if evt.type in (EVENT_MINIMIZE_WINDOW, EVENT_RESTORE_WINDOW):
-                    feedback["result"] = self.last_window_result
-                self.app_events.append(feedback)
+                self.app_events.append({"event": evt.type, "injected": True, **evt.payload})
 
         return handled
 

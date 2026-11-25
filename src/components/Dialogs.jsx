@@ -251,14 +251,12 @@ export function GestureCalibrationDialog({
       />
       <div className="dialog-body">
         <div className={`gesture-live ${live ? 'ok' : ''}`}>
-          <GestureMedia id={gesture} size="md" />
-          <div>
-            <p className="gesture-how">{item.instruction}</p>
-            <p className="gesture-feedback" role="status">
-              {live && <span aria-hidden="true">✓ </span>}
-              {feedback}
-            </p>
-          </div>
+          <GestureMedia id={gesture} size="xl" />
+          <p className="gesture-how">{item.instruction}</p>
+          <p className="gesture-feedback" role="status">
+            {live && <span aria-hidden="true">✓ </span>}
+            {feedback}
+          </p>
         </div>
         {!state.running && onStartEngine && (
           <button

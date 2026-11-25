@@ -31,15 +31,17 @@ def test_every_allowed_binding_is_executable_by_the_motor() -> None:
         assert entry["predeterminada"] in entry["acciones"], f"{code}: la acción predeterminada debe ser ejecutable"
     for accion, keys in caps.ALLOWED_KEYS.items():
         assert tuple(keys) in ALLOWED_KEY_COMBOS, accion
-    assert caps.is_allowed("pulgar_arriba", "sin_accion")
-    assert not caps.is_allowed("pulgar_arriba", "clic")
-    assert caps.is_allowed("pulgar_arriba", "clic", habilitado=False)
-    assert set(caps.DISCRETE_GESTURES) == {"palma_abierta", "deslizamiento_izquierda", "deslizamiento_derecha", "pulgar_arriba", "pulgar_abajo", "modo_precision"}
+    assert caps.is_allowed("palma_abierta", "sin_accion")
+    assert not caps.is_allowed("palma_abierta", "clic")
+    assert caps.is_allowed("palma_abierta", "clic", habilitado=False)
+    assert set(caps.DISCRETE_GESTURES) == {"palma_abierta"}
+    assert not caps.is_allowed("pulgar_arriba", "sin_accion"), "gesto retirado el 24-11-2026"
 
 
 def test_default_bindings_follow_interface_defaults() -> None:
     bindings = caps.default_bindings()
     assert set(bindings) == caps.KNOWN_GESTURES
     assert bindings["micro_pinza"] == {"accion": "clic", "habilitado": True}
-    assert bindings["pulgar_arriba"] == {"accion": "confirmar", "habilitado": False}
+    assert bindings["palma_abierta"] == {"accion": "navegacion", "habilitado": True}
+    assert len(bindings) == 8
     assert bindings["liberacion_pinza"]["habilitado"] is True

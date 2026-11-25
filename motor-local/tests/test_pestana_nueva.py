@@ -47,11 +47,12 @@ def test_los_dedos_juntos_del_desplazar_no_abren_pestana() -> None:
     assert EVENT_NEW_TAB not in run([make_v(spread=0.036)] * frames(3000))
 
 
-def test_desplazar_con_la_v_en_movimiento_desplaza_y_no_abre_pestana() -> None:
+def test_la_v_en_movimiento_no_abre_pestana_ni_desplaza() -> None:
+    # 24-11-2026: desplazar es con los dos dedos JUNTOS y sostenidos; la V separada solo es la pestaña nueva (quieta).
     hands = [make_v(cy=0.5 + 0.012 * i) for i in range(frames(2000))]
     seen = run(hands)
     assert EVENT_NEW_TAB not in seen
-    assert EVENT_SCROLL in seen, "la V en movimiento sigue desplazando"
+    assert EVENT_SCROLL not in seen
 
 
 def test_soltar_y_repetir_abre_otra() -> None:

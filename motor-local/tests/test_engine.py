@@ -225,23 +225,23 @@ def test_two_finger_scroll_pause_and_emergency_stop() -> None:
     engine = LogicalActionEngine(mock_os, initial_mode=MODE_CONTROL)
 
     scroll_dy = 0
-    for t, cy in ((100.0, 0.62), (130.0, 0.62), (160.0, 0.62), (190.0, 0.44), (220.0, 0.44), (250.0, 0.44)):
-        evts = interp.process_frame(make_two_fingers(0.5, cy), now_ms=t)
+    for t in range(100, 800, 25):   # dos dedos hacia arriba sostenidos (24-11-2026: ya no hace falta mover la mano)
+        evts = interp.process_frame(make_two_fingers(0.5, 0.5), now_ms=float(t))
         engine.dispatch(evts)
         scroll_dy += sum(e.payload["dy"] for e in evts if e.type == EVENT_SCROLL)
-    assert scroll_dy > 0, "mover la mano hacia arriba debe desplazar hacia arriba"
+    assert scroll_dy > 0, "dos dedos hacia arriba sostenidos deben desplazar hacia arriba"
     assert engine.total_scrolls >= 1
 
     evts_pause = []
-    for t in range(300, 1100, 33):  # puño confirmado (~250 ms) y mantenido 450 ms
+    for t in range(820, 1620, 33):  # puño confirmado (~250 ms) y mantenido 450 ms
         evts_pause += interp.process_frame(make_closed_fist(), now_ms=float(t))
     assert any(e.type == EVENT_PAUSE for e in evts_pause)
     assert interp.paused is True
 
-    assert len(interp.process_frame(make_open_palm(0.7, 0.7), now_ms=1150.0)) == 0
+    assert len(interp.process_frame(make_open_palm(0.7, 0.7), now_ms=1650.0)) == 0
 
     evts_resume = []
-    for t in range(1200, 2000, 33):
+    for t in range(1700, 2500, 33):
         evts_resume += interp.process_frame(make_closed_fist(), now_ms=float(t))
     assert any(e.type == EVENT_RESUME for e in evts_resume)
     assert interp.paused is False

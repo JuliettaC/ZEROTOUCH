@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import express from 'express';
 import { readFileSync } from 'node:fs';
 import { createAuthRouter } from '../../src/routes/authRoutes.js';

@@ -29,10 +29,10 @@ const calls = (server, name) => server.log.filter(([method]) => method === name)
 /** Asignación local que el motor no ejecuta: la interfaz no la permitiría, se inyecta a mano para provocar el rechazo del servidor. */
 const withIncompatible = (state, modeId) => ({
   ...state,
-  modes: state.modes.map(m => (m.id === modeId ? { ...m, assignments: { ...m.assignments, deslizamiento_derecha: { accion: 'activar_puntero', habilitado: true } } } : m)),
+  modes: state.modes.map(m => (m.id === modeId ? { ...m, assignments: { ...m.assignments, palma_abierta: { accion: 'activar_puntero', habilitado: true } } } : m)),
 })
 
-test('con el anuncio, cada modo nuevo se crea CON sus 13 asignaciones, en la versión 1 y sin ningún PUT', async () => {
+test('con el anuncio, cada modo nuevo se crea CON sus 8 asignaciones, en la versión 1 y sin ningún PUT', async () => {
   const { api, server } = createFakeApi()
   const initial = createDefaultState()
   const result = await sync(api, initial)
@@ -42,12 +42,12 @@ test('con el anuncio, cada modo nuevo se crea CON sus 13 asignaciones, en la ver
   const creations = calls(server, 'createContext')
   assert.equal(creations.length, 3)
   for (const [, , body] of creations) {
-    assert.equal(body.gestos.length, 13)
+    assert.equal(body.gestos.length, 8)
     assert.deepEqual(body.gestos.map(g => g.gesto_codigo), [...body.gestos.map(g => g.gesto_codigo)].sort(), 'ordenadas por gesto')
     assert.ok(body.gestos.every(g => typeof g.gesto_codigo === 'string' && typeof g.accion_codigo === 'string' && typeof g.habilitado === 'boolean'))
   }
   assert.ok(result.state.modes.every(m => m.version === 1 && !m.dirty && server.modes.has(m.id)), 'versión 1 y sin pendientes')
-  assert.ok(result.state.modes.every(m => server.assignments.get(m.id)?.size === 13), 'el servidor tiene las 13 asignaciones de cada modo')
+  assert.ok(result.state.modes.every(m => server.assignments.get(m.id)?.size === 8), 'el servidor tiene las 8 asignaciones de cada modo')
   assert.equal(server.log.filter(([name]) => name === 'capabilities').length, 1, 'una sola consulta de capacidades')
   // Lo que se envió es exactamente lo que había en local.
   for (const mode of initial.modes) {
@@ -79,7 +79,7 @@ test('editar un modo: UN PATCH con campos y asignaciones, UNA subida de versión
   let state = (await sync(api, createDefaultState())).state
   const mode = state.modes[0]
   state = updateMode(state, mode.id, { nombre: 'Editado', settings: { sensitivity: 17 } })
-  state = { ...state, modes: state.modes.map(m => (m.id === mode.id ? { ...m, assignments: { ...m.assignments, pulgar_arriba: { ...m.assignments.pulgar_arriba, habilitado: !m.assignments.pulgar_arriba.habilitado } } } : m)) }
+  state = { ...state, modes: state.modes.map(m => (m.id === mode.id ? { ...m, assignments: { ...m.assignments, palma_abierta: { ...m.assignments.palma_abierta, habilitado: !m.assignments.palma_abierta.habilitado } } } : m)) }
   const edited = state.modes.find(m => m.id === mode.id)
   const patchesBefore = calls(server, 'updateContext').length
   const result = await sync(api, state)
@@ -93,7 +93,7 @@ test('editar un modo: UN PATCH con campos y asignaciones, UNA subida de versión
   assert.equal(remote.version, mode.version + 1, 'UNA subida (antes PATCH + PUT daban dos)')
   assert.equal(remote.nombre, 'Editado')
   assert.equal(remote.sensibilidad_puntero, 17)
-  assert.equal(server.assignments.get(mode.id).get('pulgar_arriba').habilitado, edited.assignments.pulgar_arriba.habilitado)
+  assert.equal(server.assignments.get(mode.id).get('palma_abierta').habilitado, edited.assignments.palma_abierta.habilitado)
   const local = result.state.modes.find(m => m.id === mode.id)
   assert.equal(local.version, remote.version)
   assert.equal(local.dirty, false, 'ya incluye sus asignaciones: no queda a medias')
@@ -118,7 +118,7 @@ test('una asignación rechazada por el servidor no deja NADA aplicado (con el se
     const local = partial.modes.find(m => m.id === mode.id)
     assert.equal(local.dirty, true, 'el contenido local sigue pendiente')
     assert.equal(local.settings.sensitivity, 17)
-    assert.equal(local.assignments.deslizamiento_derecha.accion, 'activar_puntero', 'y no se perdió')
+    assert.equal(local.assignments.palma_abierta.accion, 'activar_puntero', 'y no se perdió')
   }
 })
 
@@ -139,7 +139,7 @@ test('respuesta perdida al crear un modo: la siguiente sincronización lo recupe
   const { state: interrupted } = await failure(sync(api, createDefaultState()))
   const partial = reload(interrupted)
   assert.equal(partial.syncOperation.method, 'createContext')
-  assert.equal(partial.syncOperation.args.at(-1).gestos.length, 13, 'la operación pendiente conserva las asignaciones')
+  assert.equal(partial.syncOperation.args.at(-1).gestos.length, 8, 'la operación pendiente conserva las asignaciones')
   assert.equal(server.modes.size, 1)
   restore()
   const recovered = await sync(api, partial)
@@ -148,7 +148,7 @@ test('respuesta perdida al crear un modo: la siguiente sincronización lo recupe
   assert.equal(server.modes.size, 3, 'sin duplicados')
   assert.equal(calls(server, 'setModeGestures').length, 0)
   assert.ok(recovered.state.modes.every(m => m.version === 1 && !m.dirty), 'completos desde la recuperación, no a medias')
-  assert.ok(recovered.state.modes.every(m => server.assignments.get(m.id)?.size === 13))
+  assert.ok(recovered.state.modes.every(m => server.assignments.get(m.id)?.size === 8))
   const firstKey = calls(server, 'createContext').find(([, , body]) => body.name === partial.syncOperation.args.at(-1).name).at(-1)
   assert.equal(calls(server, 'createContext').filter(entry => entry.at(-1) === firstKey).length, 4, 'tres intentos y la recuperación, todos con la misma clave')
 })
@@ -178,8 +178,8 @@ test('una creación de dos pasos interrumpida se completa con un PATCH conjunto 
   assert.equal(calls(server, 'setModeGestures').length, setsBefore, 'ningún PUT: las asignaciones del modo recuperado van en un PATCH conjunto')
   const recoveredId = [...server.modes.values()].find(m => m.nombre === partial.syncOperation.args.at(-1).name).id
   assert.equal(server.modes.get(recoveredId).version, 2, 'creado (v1) + PATCH conjunto (v2)')
-  assert.equal(server.assignments.get(recoveredId)?.size, 13)
-  assert.ok(recovered.state.modes.every(m => !m.dirty && server.assignments.get(m.id)?.size === 13))
+  assert.equal(server.assignments.get(recoveredId)?.size, 8)
+  assert.ok(recovered.state.modes.every(m => !m.dirty && server.assignments.get(m.id)?.size === 8))
 })
 
 test('si el servidor pierde la mutación conjunta entre dos sincronizaciones, el cliente vuelve a los dos pasos', async () => {

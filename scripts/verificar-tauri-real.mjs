@@ -11,7 +11,6 @@
 // No sustituye la prueba manual con cámara y manos (ver PROGRESO.md): gestos, clic por pinza sobre la overlay y escritura real.
 import { fork, spawn, execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -27,7 +26,8 @@ const url = file => pathToFileURL(`${ROOT}/${file}`).href
 const { openDatabase } = await import(url('backend/src/config/database.js'))
 const { tokenFromOutbox } = await import(url('backend/test/helpers/correo.js'))
 const { createDefaultState } = await import(url('src/data/preferences.js'))
-const Database = createRequire(`${ROOT}/backend/package.json`)('better-sqlite3')
+// Clave de cifrado de la base temporal (DATABASE_KEY): nueva en cada ejecución, nunca la de tu .env.
+const DATABASE_KEY = randomBytes(32).toString('hex')
 
 if (!existsSync(EXE)) { console.error('Falta el ejecutable. Compila primero: npm run desktop:build'); process.exit(2) }
 const running = execFileSync('powershell', ['-NoProfile', '-Command', "(Get-Process -Name 'zerotouch-desktop' -ErrorAction SilentlyContinue | Measure-Object).Count"], { encoding: 'utf8' }).trim()
@@ -91,8 +91,8 @@ const cleanup = async () => {
 
 try {
   // 1. Backend temporal aislado y cuenta de prueba verificada.
-  openDatabase(database, { initialize: true }).close()
-  backend = fork(`${ROOT}/backend/src/server.js`, [], { cwd: temp, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, DATABASE_PATH: database, HOST: '127.0.0.1', PORT: '0', NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:3000', SESSION_TTL_SECONDS: '28800' } })
+  openDatabase(database, { key: DATABASE_KEY, initialize: true }).close()
+  backend = fork(`${ROOT}/backend/src/server.js`, [], { cwd: temp, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, DATABASE_PATH: database, DATABASE_KEY, HOST: '127.0.0.1', PORT: '0', NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:3000', SESSION_TTL_SECONDS: '28800' } })
   backend.stderr.resume()
   const port = await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error('backend no inició')), 15000); backend.once('message', m => { clearTimeout(timer); resolve(m.port) }) })
   const base = `http://127.0.0.1:${port}/api/v1`
@@ -198,7 +198,7 @@ try {
   await closeDialog()
 
   // 4b. Creaciones idempotentes por el puente real (UI → Tauri → HTTP → SQLite v3).
-  const registry = new Database(database, { readonly: true })
+  const registry = openDatabase(database, { key: DATABASE_KEY, readonly: true })
   const keyRows = registry.prepare('SELECT clave, recurso_tipo, recurso_id, usuario_id FROM idempotencia ORDER BY creado_en').all()
   registry.close()
   const uuidV7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -215,14 +215,14 @@ try {
   check('GET /capacidades anuncia servidor.idempotencia (uuid-v7, 30 días) por el puente real', replayed.capacidad?.clave === 'uuid-v7' && replayed.capacidad?.retencion_dias === 30, replayed.capacidad)
 
   // 4c. Mutación conjunta: la interfaz real crea cada modo CON sus asignaciones en una sola solicitud.
-  const jointDb = new Database(database, { readonly: true })
+  const jointDb = openDatabase(database, { key: DATABASE_KEY, readonly: true })
   const jointCounts = {
     versiones: jointDb.prepare('SELECT DISTINCT version FROM modos_uso').all().map(r => r.version),
     asignaciones: jointDb.prepare('SELECT count(*) n FROM asignaciones_gestos').get().n,
-    modosCompletos: jointDb.prepare('SELECT count(*) n FROM (SELECT modo_id FROM asignaciones_gestos GROUP BY modo_id HAVING count(*) = 13)').get().n,
+    modosCompletos: jointDb.prepare('SELECT count(*) n FROM (SELECT modo_id FROM asignaciones_gestos GROUP BY modo_id HAVING count(*) = 8)').get().n,
   }
   jointDb.close()
-  check('mutación conjunta por la interfaz real: 3 modos con sus 13 asignaciones cada uno y todos en la versión 1 (ningún PUT aparte)', jointCounts.versiones.length === 1 && jointCounts.versiones[0] === 1 && jointCounts.asignaciones === 39 && jointCounts.modosCompletos === 3, jointCounts)
+  check('mutación conjunta por la interfaz real: 3 modos con sus 8 asignaciones cada uno y todos en la versión 1 (ningún PUT aparte)', jointCounts.versiones.length === 1 && jointCounts.versiones[0] === 1 && jointCounts.asignaciones === 24 && jointCounts.modosCompletos === 3, jointCounts)
   const target = modes[0]
   const jointBridge = await run(page, async ({ id, version }) => ({
     anuncio: (await invoke('capabilities')).data.servidor.modo_con_asignaciones,
@@ -258,7 +258,7 @@ try {
   const profileStill = (await http('GET', `/perfiles/${profile.id}`, undefined, other)).status
   check('perfil: un modo nuevo en otro equipo invalida el ETag de agregado (412) y no se borra nada', cascadeClash.conflicts.some(c => /perfil/i.test(c) && /cambió en otro equipo/.test(c)) && profileStill === 200, cascadeClash.conflicts)
   const forced = await decideUi('de todos modos')
-  const db = new Database(database, { readonly: true })
+  const db = openDatabase(database, { key: DATABASE_KEY, readonly: true })
   const counts = { perfiles: db.prepare('SELECT count(*) n FROM perfiles').get().n, modos: db.prepare('SELECT count(*) n FROM modos_uso').get().n, asignaciones: db.prepare('SELECT count(*) n FROM asignaciones_gestos').get().n }
   db.close()
   check('«Borrarlo de todos modos»: cascada atómica en SQLite real (perfil, modos y asignaciones)', /borrado/.test(forced.report) && counts.perfiles === 0 && counts.modos === 0 && counts.asignaciones === 0, { informe: forced.report, ...counts })
@@ -295,40 +295,6 @@ try {
   const afterQuick = winState(app.pid).windows.find(w => w.title === 'ZEROTOUCH')
   check('«Empezar» real sin cámara: avisa que la cámara no se abrió, sigue en Observar y no minimiza la ventana', quick.boton === 'Activar control' && /cámara no se abrió/.test(quick.aviso) && quick.estado === 'OBSERVATION' && afterQuick?.visible && afterQuick.width > 400, { ...quick, ventana: afterQuick && [afterQuick.width, afterQuick.height] })
   await run(page, async () => { document.querySelector('.toast-error button')?.click() })
-
-  const preview = await run(page, async () => {
-    document.querySelector('.main-nav [aria-label="Ajustes"]').click()
-    await until(() => document.querySelector('a[href$="/diagnosticos"]'))
-    document.querySelector('a[href$="/diagnosticos"]').click()
-    const button = await until(() => document.querySelector('.calibration-camera button'))
-    const value = await settle(() => invoke('engine_preview'))
-    document.querySelector('.main-nav [aria-label="Inicio"]').click()
-    return { disabled: button.disabled, value }
-  })
-  check('Diagnósticos deshabilita la vista previa cuando falta la cámara', preview.disabled && preview.value.ok && preview.value.value === null, preview)
-
-  const webm = await run(page, async () => {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    ctx.fillRect(0, 0, 40, 40)
-    const image = new Image()
-    image.src = canvas.toDataURL('image/jpeg')
-    await image.decode()
-    const stream = canvas.captureStream(10)
-    try {
-      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
-      const clip = new Promise((resolve, reject) => {
-        recorder.ondataavailable = event => resolve(event.data)
-        recorder.onerror = reject
-      })
-      recorder.start()
-      for (let i = 0; i < 5; i++) { ctx.drawImage(image, i, i); await wait(120) }
-      recorder.stop()
-      const blob = await clip
-      return { type: blob.type, size: blob.size, audioTracks: stream.getAudioTracks().length }
-    } finally { stream.getTracks().forEach(track => track.stop()) }
-  })
-  check('WebView2 permite grabar en WebM un lienzo con JPEG local y sin audio', webm.type.startsWith('video/webm') && webm.size > 0 && webm.audioTracks === 0, webm)
 
   // 7b. Indicador flotante (HUD): la ventana principal lo abre sola al estar el motor en marcha.
   let hud

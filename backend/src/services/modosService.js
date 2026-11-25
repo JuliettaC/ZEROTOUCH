@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { validateId, validateQuery, validateBody } from './resourceValidation.js';
 import { notFound, conflict, preconditionFailed, preconditionRequired } from '../domain/resourceError.js';
 import { parseIfMatch } from '../domain/etag.js';
+import { quotaExceeded } from '../domain/cuotas.js';
 export function createModosService(repository, profiles, idempotency) {
   function get(id) {
     const item = repository.get(validateId(id));
@@ -27,7 +28,7 @@ export function createModosService(repository, profiles, idempotency) {
         header: idempotencyKey, tipo: 'modo', ruta: `/perfiles/${id}/modos`, cuerpo: data,
         create: () => {
           const result = repository.create(id, { ...fields, id: randomUUID() }, gestos);
-          if (!result) throw notFound();
+          if (!result) throw profiles.get(id) ? quotaExceeded('modos por perfil') : notFound();
           return result;
         },
       });

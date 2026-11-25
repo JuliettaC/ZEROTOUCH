@@ -1,4 +1,5 @@
 import { profileEtag } from '../domain/etag.js';
+import { MAX_PERFILES_POR_USUARIO } from '../domain/cuotas.js';
 
 export function createPerfilesRepository(db, usuarioId) {
   if (!usuarioId) throw new Error('Se requiere propietario.');
@@ -6,8 +7,10 @@ export function createPerfilesRepository(db, usuarioId) {
   return {
     get: id => db.prepare('SELECT * FROM perfiles WHERE id=? AND usuario_id=?').get(id, usuarioId),
     list: ({ limite, offset }) => db.prepare('SELECT * FROM perfiles WHERE usuario_id=? ORDER BY creado_en,id LIMIT ? OFFSET ?').all(usuarioId, limite, offset),
+    /** Crea el perfil si la cuenta no alcanzó la cuota (comprobación e inserción en una sola sentencia). `undefined` si la alcanzó. */
     create(data) {
-      return db.prepare('INSERT INTO perfiles(id,usuario_id,nombre,descripcion) VALUES(?,?,?,?) RETURNING *').get(data.id, usuarioId, data.nombre, data.descripcion);
+      return db.prepare('INSERT INTO perfiles(id,usuario_id,nombre,descripcion) SELECT ?,?,?,? WHERE (SELECT count(*) FROM perfiles WHERE usuario_id=?) < ? RETURNING *')
+        .get(data.id, usuarioId, data.nombre, data.descripcion, usuarioId, MAX_PERFILES_POR_USUARIO);
     },
     update(id, data) {
       const keys = ['nombre', 'descripcion'].filter(key => Object.hasOwn(data, key));

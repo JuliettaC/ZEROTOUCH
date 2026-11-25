@@ -45,7 +45,7 @@ function beep() {
 }
 
 // `onKeyboardRequest`: el foco entró en un campo de texto; pide abrir el teclado Air-Swipe (lo abre quien conoce
-// la ventana). `onKeyboardClose`: el foco salió del campo, o el golpe de muñeca hacia abajo con el teclado abierto.
+// la ventana). `onKeyboardClose`: el foco salió del campo.
 export function useAppEvents({
   engineStatus,
   timerMinutes = 5,

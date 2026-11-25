@@ -45,11 +45,11 @@ Conserva los contratos existentes y consulta el código, `db/schema.sql`, las mi
 ### Entorno y persistencia
 
 - Node 24.x como entorno de backend inicialmente previsto; fijar una revisión compatible en README/CI tras verificar instalación de dependencias. No actualizar paquetes indiscriminadamente.
-- SQLite con el driver vigente, better-sqlite3. Verifica la instalación y las versiones del repositorio antes de cambiar dependencias.
+- SQLite con el driver vigente, better-sqlite3-multiple-ciphers (API de better-sqlite3 con cifrado en reposo; la base se abre con `DATABASE_KEY`). Verifica la instalación y las versiones del repositorio antes de cambiar dependencias.
 - Base fuera del repositorio y OneDrive; ubicación absoluta configurada por DATABASE_PATH. Cada prueba usa una base temporal aislada.
 - `.env` en la raíz; el cargador lo resuelve independientemente del directorio desde el que se lance el comando.
-- Variables base: NODE_ENV, HOST, PORT, DATABASE_PATH, APP_ORIGIN y SESSION_TTL_SECONDS. Añadir otras solo si se usan realmente. Ningún secreto de ejemplo funcional.
-- Interfaz de datos: `openDatabase(filename, { initialize = false } = {})`, que devuelve conexión con close(). Inicializar crea solo una base nueva; abrir no reinicializa ni adapta esquemas ajenos.
+- Variables base: NODE_ENV, HOST, PORT, DATABASE_PATH, DATABASE_KEY (clave de cifrado de 64 hex, solo en `.env`), APP_ORIGIN y SESSION_TTL_SECONDS. Añadir otras solo si se usan realmente. Ningún secreto de ejemplo funcional.
+- Interfaz de datos: `openDatabase(filename, { key, initialize = false, readonly = false } = {})` (la clave es obligatoria), que devuelve conexión con close(). Inicializar crea solo una base nueva; abrir no reinicializa ni adapta esquemas ajenos.
 - Interfaz de aplicación: `createApp({ db, config })`, sin listen ni inicialización destructiva al importar. server.js carga configuración, abre datos y monta/cierra HTTP y SQLite.
 - Instalar dependencias en el clon es aceptable dentro del trabajo autorizado; preservar lockfiles y no subir node_modules.
 

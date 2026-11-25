@@ -6,12 +6,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDatabase } from '../../src/config/database.js';
+import { TEST_KEY } from '../helpers/clave.js';
 import { tokenFromOutbox } from '../helpers/correo.js';
 
 test('servidor real: bloqueo 503, cierre y persistencia después de reiniciar el proceso', { timeout: 30000 }, async t => {
   const directory = mkdtempSync(path.join(tmpdir(), 'zt-i2-server-'));
   const filename = path.join(directory, 'test.sqlite');
-  openDatabase(filename, { initialize: true }).close();
+  openDatabase(filename, { key: TEST_KEY, initialize: true }).close();
   const processes = [];
   t.after(async () => {
     for (const process of processes) await process.stop();
@@ -20,7 +21,7 @@ test('servidor real: bloqueo 503, cierre y persistencia después de reiniciar el
   async function start() {
     const child = fork(fileURLToPath(new URL('../../src/server.js', import.meta.url)), [], {
       cwd: directory, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      env: { ...process.env, DATABASE_PATH: filename, HOST: '127.0.0.1', PORT: '0', NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:3000', SESSION_TTL_SECONDS: '28800' },
+      env: { ...process.env, DATABASE_PATH: filename, DATABASE_KEY: TEST_KEY, HOST: '127.0.0.1', PORT: '0', NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:3000', SESSION_TTL_SECONDS: '28800' },
     });
     child.stdout.resume(); child.stderr.resume();
     const exited = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
@@ -60,7 +61,7 @@ test('servidor real: bloqueo 503, cierre y persistencia después de reiniciar el
   const session = { cookie: login.headers.get('set-cookie').split(';')[0], csrf: login.body.data.csrf_token };
   const p = (await server.request('POST', '/perfiles', { nombre: 'Persistente' }, session)).body.data;
   const m = (await server.request('POST', `/perfiles/${p.id}/modos`, { nombre: 'Mi modo', sensibilidad_puntero: 72 }, session)).body.data;
-  const lock = openDatabase(filename);
+  const lock = openDatabase(filename, { key: TEST_KEY });
   try {
     lock.exec('BEGIN IMMEDIATE');
     assert.equal((await server.request('POST', '/perfiles', { nombre: 'Bloqueado' }, session)).status, 503);

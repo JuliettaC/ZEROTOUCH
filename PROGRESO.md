@@ -633,3 +633,28 @@ Sin commits. Respaldo del árbol completo (incluidos los archivos sin seguimient
 **No probado**: con cámara y manos (la permanencia depende de que el cursor se quede quieto ~0,8 s sobre teclas de ~115×78 px) ni el teclado por permanencia dentro del `.exe` real (verify:tauri cubre el modo trazo).
 
 Implementación asistida por Claude; revisión humana pendiente.
+
+## Bloque Claude — cierre de los cambios sin confirmar (24-11-2026)
+
+Sin commits. El detalle de lo hecho el 24-11 (retiro de gestos y esquema v4, desplazar con dos dedos, sin Diagnósticos, imágenes de gestos, manual y `verify:hito3`) está en `CHANGELOG.md`; **sustituye** a los bloques anteriores de este archivo donde describen gestos o pantallas retirados.
+
+**Verificado con el árbol actual**: backend 91/91, integración 1/1, interfaz 184/184, motor 192 (1 `hardware` deseleccionada), `cargo test` 10/10, `lint` 0 errores (aviso previo de `prototype/`), `format:check`, `build:app`, `verify:separation`, `desktop:build`, `verify:hito3` 10/10, `verify:tauri` 52/52.
+
+**Hecho en este bloque**: `docs/hito2/informe.md` (6.1 y conclusión) tenía los resultados de una ejecución bloqueada por su entorno (24 aprobadas, 64 fallidas, persistencia pendiente); ahora lleva los medidos. El PDF de `output/defensa-20261124/` no se regeneró.
+
+**Pendiente**
+- La base local `C:\ZeroTouchData\zerotouch-hito2.db` sigue en v2 (13 gestos, 3 cuentas). El backend la abre; migrar (`npm run db:migrate --prefix backend`, con respaldo) borra los gestos retirados y sus asignaciones: decisión de la persona usuaria.
+- `public/gestos/*.mp4` ya no se usa (las fichas muestran imágenes), está fuera de Git por `.gitignore`, pero Vite lo copia a `dist-app`. `motor-local/tools/procesar_videos_gestos.py` (sin seguimiento) solo generaba esos clips.
+- Demostración con cámara y manos sin probar.
+- Nada confirmado en Git.
+
+## Bloque Claude — cifrado en reposo de la base SQLite (25-11-2026)
+
+Sin commits. El detalle está en `CHANGELOG.md` (entrada del 25-11). En resumen: `better-sqlite3-multiple-ciphers@13.0.3` reemplaza a `better-sqlite3` y la base se abre siempre con `DATABASE_KEY` (64 caracteres hexadecimales). Se agregaron `db:clave` (genera la clave) y `db:cifrar` (convierte una base sin cifrar y deja el original como `.sin-cifrar-<fecha>.ztbackup`). Los respaldos de migración ahora usan `VACUUM INTO`, porque la API de respaldo en línea no admite bases cifradas.
+
+**Verificado**: backend 98/98 (7 nuevas en `backend/test/database/cifrado.test.js`), integración 1/1, `cargo test` 10/10.
+
+**Pendiente**
+- **Tu `.env` real todavía no tiene `DATABASE_KEY`**, así que el servidor no arranca hasta agregarla (`npm run db:clave --prefix backend`). La base local `C:\ZeroTouchData\zerotouch-hito2.db` sigue sin cifrar. Para convertirla, con el servidor detenido: `npm run db:cifrar --prefix backend`. Después hay que borrar a mano el `.sin-cifrar-*.ztbackup`.
+- Falta ejecutar `verify:tauri` y `verify:hito3` con el cifrado (sí se actualizaron para pasar una clave temporal).
+- Los documentos de Canva (Hito 3 y Manual) todavía dicen que la base no está cifrada. Los `.md` de origen ya están actualizados.

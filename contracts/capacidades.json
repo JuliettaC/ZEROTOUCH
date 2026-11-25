@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "descripcion": "Contrato único de capacidades gestuales de ZeroTouch. Lo consumen el backend (validación de asignaciones), la interfaz (editor de gestos) y el motor local (motor-local/motor_local/capacidades.json es una copia verificada por prueba). Una asignación habilitada solo es válida si la acción figura en la lista de acciones del gesto; sin_accion siempre está permitida y equivale a deshabilitar el gesto. Ninguna acción ejecuta shell, scripts, rutas ni comandos arbitrarios: las teclas emitidas están en teclas_permitidas (acciones del catálogo) o en teclas_equipo (gestos locales del equipo que no se sincronizan, como pulgar y meñique para cambiar de pestaña) y los eventos de aplicación (temporizador, Air-Swipe, precisión) se entregan a la interfaz de ZeroTouch, no al sistema operativo.",
+  "descripcion": "Contrato único de capacidades gestuales de ZeroTouch. Lo consumen el backend (validación de asignaciones), la interfaz (editor de gestos) y el motor local (motor-local/motor_local/capacidades.json es una copia verificada por prueba). Una asignación habilitada solo es válida si la acción figura en la lista de acciones del gesto; sin_accion siempre está permitida y equivale a deshabilitar el gesto. Ninguna acción ejecuta shell, scripts, rutas ni comandos arbitrarios: las teclas emitidas están en teclas_permitidas (acciones del catálogo) o en teclas_equipo (gestos locales del equipo que no se sincronizan, como el clic derecho o Alt+Tab) y los eventos de aplicación (temporizador, Air-Swipe, precisión) se entregan a la interfaz de ZeroTouch, no al sistema operativo.",
   "acciones": {
     "activar_puntero": { "nombre": "Activar puntero", "tipo": "continua", "efecto": "Mano abierta sostenida arma el puntero; después la mano mueve el cursor." },
     "clic": { "nombre": "Clic", "tipo": "continua", "efecto": "Pulsación izquierda en la posición del puntero." },
     "arrastrar": { "nombre": "Arrastrar", "tipo": "continua", "efecto": "Mantiene el botón izquierdo mientras se mueve la mano." },
     "soltar": { "nombre": "Soltar", "tipo": "continua", "efecto": "Termina el arrastre; implícita en la liberación de la pinza." },
-    "desplazar": { "nombre": "Desplazamiento vertical", "tipo": "continua", "efecto": "Rueda del ratón según el movimiento vertical." },
+    "desplazar": { "nombre": "Desplazamiento vertical", "tipo": "continua", "efecto": "Rueda del ratón mientras se sostienen dos dedos: hacia arriba sube, hacia abajo baja." },
     "pausar": { "nombre": "Pausar interacción", "tipo": "continua", "efecto": "Pausa y reanuda la interpretación de gestos." },
     "navegacion": { "nombre": "Volver a navegación", "tipo": "discreta", "efecto": "Sale del modo precisión y cancela un trazo Air-Swipe en curso." },
     "atras": { "nombre": "Atrás", "tipo": "discreta", "efecto": "Alt+Izquierda en la aplicación activa." },
@@ -29,11 +29,6 @@
     "dos_dedos": { "nombre": "Dos dedos", "tipo": "continuo", "predeterminada": "desplazar", "acciones": ["desplazar"], "interruptor": "scroll" },
     "puno_cerrado": { "nombre": "Puño cerrado", "tipo": "continuo", "predeterminada": "pausar", "acciones": ["pausar"], "interruptor": "fistPause", "nota": "Reanudar siempre está permitido aunque el gesto esté deshabilitado." },
     "palma_abierta": { "nombre": "Palma abierta", "tipo": "discreto", "predeterminada": "navegacion", "acciones": ["navegacion", "atras", "adelante", "confirmar", "cancelar", "precision", "multimedia_play_pause", "multimedia_siguiente", "temporizador_iniciar"], "interruptor": "palm" },
-    "deslizamiento_izquierda": { "nombre": "Deslizamiento hacia la izquierda", "tipo": "discreto", "predeterminada": "atras", "acciones": ["navegacion", "atras", "adelante", "confirmar", "cancelar", "precision", "multimedia_play_pause", "multimedia_siguiente", "temporizador_iniciar"], "interruptor": "swipeLeft" },
-    "deslizamiento_derecha": { "nombre": "Deslizamiento hacia la derecha", "tipo": "discreto", "predeterminada": "adelante", "acciones": ["navegacion", "atras", "adelante", "confirmar", "cancelar", "precision", "multimedia_play_pause", "multimedia_siguiente", "temporizador_iniciar"], "interruptor": "swipeRight" },
-    "pulgar_arriba": { "nombre": "Pulgar arriba", "tipo": "discreto", "predeterminada": "confirmar", "acciones": ["navegacion", "atras", "adelante", "confirmar", "cancelar", "precision", "multimedia_play_pause", "multimedia_siguiente", "temporizador_iniciar"], "interruptor": "thumbsUp" },
-    "pulgar_abajo": { "nombre": "Pulgar abajo", "tipo": "discreto", "predeterminada": "cancelar", "acciones": ["navegacion", "atras", "adelante", "confirmar", "cancelar", "precision", "multimedia_play_pause", "multimedia_siguiente", "temporizador_iniciar"], "interruptor": "thumbsDown" },
-    "modo_precision": { "nombre": "Modo precisión", "tipo": "discreto", "predeterminada": "precision", "acciones": ["navegacion", "atras", "adelante", "confirmar", "cancelar", "precision", "multimedia_play_pause", "multimedia_siguiente", "temporizador_iniciar"], "interruptor": "precision", "nota": "Postura: índice y meñique extendidos (medio y anular plegados) sostenida." },
     "trazo_airswipe": { "nombre": "Trazo en teclado Air-Swipe", "tipo": "modo", "predeterminada": "escritura_airswipe", "acciones": ["escritura_airswipe"], "interruptor": "airswipe" }
   },
   "teclas_permitidas": {
@@ -45,18 +40,14 @@
     "multimedia_siguiente": ["media_next"]
   },
   "teclas_equipo": {
-    "pestana_siguiente": ["ctrl", "tab"],
-    "pestana_anterior": ["ctrl", "shift", "tab"],
-    "minimizar_ventana": ["win", "down"],
-    "dictado": ["win", "h"],
     "cambiar_ventana": ["alt", "tab"],
     "nueva_pestana": ["ctrl", "t"]
   },
   "eventos_interfaz": ["temporizador_iniciar", "precision", "navegacion", "escritura_airswipe"],
   "predeterminados_interfaz": {
     "pointer": true, "pinch": true, "drag": true, "scroll": true, "fistPause": true, "palm": true,
-    "swipeLeft": false, "swipeRight": false, "thumbsUp": false, "thumbsDown": false, "precision": true, "airswipe": true
+    "airswipe": true
   },
-  "ajustes_equipo": ["preferredHand", "mirrorCamera", "cameraIndex", "movementArea", "confidenceThreshold", "diagnosticOverlay", "windowGestures", "windowSwipe", "tabGestures", "rightClick", "dictation", "keyboardGesture", "altTab", "newTab", "openHandScroll", "pointerAcceleration", "timerMinutes", "activeBox", "gaze"],
+  "ajustes_equipo": ["preferredHand", "mirrorCamera", "cameraIndex", "movementArea", "confidenceThreshold", "diagnosticOverlay", "rightClick", "altTab", "newTab", "pointerAcceleration", "timerMinutes", "activeBox", "gaze"],
   "ajustes_sincronizados": ["sensitivity", "stability", "pinchTolerance", "deskRest", "gazeAssist"]
 }

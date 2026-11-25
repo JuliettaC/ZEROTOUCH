@@ -45,7 +45,6 @@ pub struct EngineStatus {
     pub airswipe: bool,
     pub tracing: bool,
     pub gaze: Value,
-    pub window_result: String,
     pub pinch_distance_px: u32,
     pub pinch_ratio: f64,
     pub cursor_x: f64,
@@ -95,7 +94,6 @@ impl Default for EngineStatus {
             airswipe: false,
             tracing: false,
             gaze: json!({ "state": "desactivado", "holding": false }),
-            window_result: "NONE".into(),
             pinch_distance_px: 0,
             pinch_ratio: 1.0,
             cursor_x: 0.5,
@@ -289,9 +287,6 @@ fn apply_telemetry(st: &mut EngineStatus, val: &Value) {
     }
     if val["gaze"].is_object() {
         st.gaze = val["gaze"].clone();
-    }
-    if let Some(w) = val["windowResult"].as_str() {
-        st.window_result = w.to_string();
     }
     if let Some(pd) = val["pinchDistancePx"].as_u64() {
         st.pinch_distance_px = pd as u32;
@@ -746,7 +741,7 @@ mod tests {
         apply_telemetry(&mut st, &json!({
             "type": "TELEMETRY", "running": true, "cameraOpen": true, "mode": "CONTROL", "pointerArmed": true,
             "precision": true, "airswipe": true, "tracing": false, "gaze": {"state": "presente", "holding": false},
-            "hotkeyActive": true, "windowResult": "MINIMIZED"
+            "hotkeyActive": true
         }));
         assert!(st.pointer_armed && st.precision && st.airswipe && st.hotkey_active);
         assert_eq!(st.gaze["state"], "presente");

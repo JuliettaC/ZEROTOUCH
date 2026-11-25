@@ -1,6 +1,7 @@
 import { modeEtag } from '../domain/etag.js';
 import { createAssignmentWriter } from './asignacionesWriter.js';
 import { prepared } from './statements.js';
+import { MAX_MODOS_POR_PERFIL } from '../domain/cuotas.js';
 // All dynamic SQL identifiers below are internal constants, never request keys.
 const fields = ['nombre', 'categoria', 'plataforma', 'sensibilidad_puntero', 'estabilizacion_puntero', 'tolerancia_micro_pinza', 'desk_rest_habilitado', 'asistencia_mirada_habilitada', 'activacion_contextual_movil'];
 const booleans = ['desk_rest_habilitado', 'asistencia_mirada_habilitada', 'activacion_contextual_movil'];
@@ -20,8 +21,9 @@ export function createModosRepository(db, usuarioId) {
     create(perfilId, data, rows) {
       const keys = fields.filter(key => Object.hasOwn(data, key));
       const apply = () => {
-        const row = prepared(db, `INSERT INTO modos_uso(id,perfil_id,${keys.join(',')}) SELECT ?,id,${keys.map(() => '?').join(',')} FROM perfiles WHERE id=? AND usuario_id=? RETURNING *`)
-          .get(data.id, ...keys.map(key => value(key, data)), perfilId, usuarioId);
+        // Propiedad del perfil y cuota de modos en la misma sentencia: `undefined` si el perfil es ajeno o está lleno.
+        const row = prepared(db, `INSERT INTO modos_uso(id,perfil_id,${keys.join(',')}) SELECT ?,id,${keys.map(() => '?').join(',')} FROM perfiles WHERE id=? AND usuario_id=? AND (SELECT count(*) FROM modos_uso WHERE perfil_id=?) < ? RETURNING *`)
+          .get(data.id, ...keys.map(key => value(key, data)), perfilId, usuarioId, perfilId, MAX_MODOS_POR_PERFIL);
         if (row && rows) assignments.replaceAll(row.id, rows, new Date().toISOString());
         return modeDto(row);
       };

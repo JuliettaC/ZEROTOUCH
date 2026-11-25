@@ -1,19 +1,22 @@
-// Clips de ejemplo de cada gesto (mano real vista desde la webcam). Cómo grabarlos: docs/grabar-gestos.md.
-// El archivo va en public/gestos/<nombre> y la clave es el id del gesto en src/data/gestures.js.
-// Formato: MP4 de la app Cámara de Windows (o WebM), 2–3 s, en bucle; se reproduce sin sonido.
-// Sin clip, la interfaz muestra el emoji del gesto: nunca una imagen de otra persona ni un video inventado.
-export const GESTURE_CLIPS = {
-  // pointer: 'mover.mp4',
-  // click: 'clic.mp4',
-  // scroll: 'desplazar.mp4',
-  // pause: 'pausar.mp4',
-  // drag: 'arrastrar.mp4',
-  // rightClick: 'clic-derecho.mp4',
-  // tabs: 'pestanas.mp4',
-  // dictation: 'dictado.mp4',
-  // keyboard: 'teclado.mp4',
-  // altTab: 'alt-tab.mp4',
-  // openHandScroll: 'desplazar-mano-abierta.mp4',
+// Imágenes de ejemplo de cada gesto (mano real). El archivo va en public/gestos/<nombre> y la clave es el id del
+// gesto en src/data/gestures.js. Formato: JPEG cuadrado de 480 px. Con varias imágenes (p. ej. desplazar hacia
+// arriba y hacia abajo) se alternan. Sin imagen, la interfaz muestra el emoji del gesto: nunca una imagen de otra
+// persona ni una inventada. (Hasta el 24-11-2026 eran clips de video.)
+export const GESTURE_IMAGES = {
+  pointer: ['mano-abierta.jpg'],
+  liberacion_pinza: ['mano-abierta.jpg'],
+  palma_abierta: ['mano-abierta.jpg'],
+  click: ['clic.jpg'],
+  scroll: ['desplazar-arriba.jpg', 'desplazar-abajo.jpg'],
+  pause: ['pausar.jpg'],
+  drag: ['arrastrar.jpg'],
+  rightClick: ['clic-derecho.jpg'],
+  altTab: ['alt-tab.jpg'],
+  newTab: ['nueva-pestana.jpg'],
 }
 
-export const clipFor = (id) => GESTURE_CLIPS[id] ?? null
+/** Imágenes del gesto (lista vacía si no tiene). */
+export const imagesFor = (id) => GESTURE_IMAGES[id] ?? []
+
+/** Cada cuánto se alterna entre las imágenes de un mismo gesto. */
+export const IMAGE_CYCLE_MS = 1400

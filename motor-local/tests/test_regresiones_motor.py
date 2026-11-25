@@ -1,7 +1,7 @@
 """Regresiones de seguridad y de gestos del motor (sintéticas, sin cámara ni SO real).
 
 Cubre: observación sin efectos, ruido de un fotograma, liberación al cambiar configuración,
-pausa y puño durante arrastre, scroll con signo/zona muerta/cadencia, horizontal sin scroll
+pausa y puño durante arrastre, desplazar con dos dedos sostenidos (signo, espera, cadencia)
 y validación de la configuración IPC.
 """
 
@@ -21,6 +21,7 @@ from motor_local.interpreter import (
 )
 from motor_local.os_adapter import MockOSAdapter
 
+from tests.test_arrastre_y_desplazar import two_fingers
 from tests.test_engine import armed, make_closed_fist, make_open_palm, make_two_fingers
 
 
@@ -204,49 +205,35 @@ def _scroll_sum(events) -> int:
     return sum(e.payload["dy"] for e in events if e.type == EVENT_SCROLL)
 
 
-def test_quiet_two_finger_pose_does_not_scroll_and_jitter_is_ignored() -> None:
+def test_a_brief_two_finger_pose_does_not_scroll_and_jitter_does_not_matter() -> None:
     interp = armed(EngineConfig())
     total = 0
-    for i in range(30):
+    for i in range(8):   # ~230 ms: por debajo de SCROLL_HOLD_MS
         jitter = 0.002 if i % 2 else -0.002
         total += _scroll_sum(interp.process_frame(make_two_fingers(0.5, 0.5 + jitter), now_ms=100.0 + i * 33.0))
     assert total == 0
 
 
 def test_two_finger_scroll_sign_is_up_positive_and_down_negative() -> None:
-    def run(start: float, end: float) -> int:
+    def run(direction: str) -> int:
         interp = armed(EngineConfig())
-        total = 0
-        ys = [start] * 3 + [start + (end - start) * k / 10 for k in range(1, 11)] + [end] * 15
-        for i, cy in enumerate(ys):
-            total += _scroll_sum(interp.process_frame(make_two_fingers(0.5, cy), now_ms=100.0 + i * 33.0))
-        return total
+        return sum(_scroll_sum(interp.process_frame(two_fingers(direction), now_ms=100.0 + i * 33.0)) for i in range(40))
 
-    assert run(0.62, 0.44) > 0   # subir la mano -> desplazar hacia arriba
-    assert run(0.44, 0.62) < 0   # bajar la mano -> desplazar hacia abajo
+    assert run("arriba") > 0
+    assert run("abajo") < 0
+    assert run("lado") == 0
 
 
 def test_scroll_total_is_similar_across_cadences() -> None:
     def run(step_ms: float) -> int:
         interp = armed(EngineConfig())
-        total = 0
-        ys = [0.62] * 3 + [0.62 - 0.18 * k / 12 for k in range(1, 13)] + [0.44] * 80
-        for i, cy in enumerate(ys):
-            total += _scroll_sum(interp.process_frame(make_two_fingers(0.5, cy), now_ms=100.0 + i * step_ms))
-        return total
+        steps = int(2000 / step_ms)
+        return sum(_scroll_sum(interp.process_frame(make_two_fingers(0.5, 0.5), now_ms=100.0 + i * step_ms)) for i in range(steps))
 
     fast = run(33.0)
     slow = run(100.0)
     assert fast > 0 and slow > 0
     assert abs(fast - slow) <= 2
-
-
-def test_horizontal_two_finger_motion_does_not_scroll() -> None:
-    interp = armed(EngineConfig())
-    total = 0
-    for i in range(20):
-        total += _scroll_sum(interp.process_frame(make_two_fingers(0.3 + 0.02 * i, 0.5), now_ms=100.0 + i * 33.0))
-    assert total == 0
 
 
 def test_scroll_speed_is_limited_per_second() -> None:
@@ -317,9 +304,10 @@ def test_pinch_survives_jitter_between_enter_and_exit_thresholds() -> None:
 
 def test_one_bad_frame_does_not_reset_scroll_confirmation() -> None:
     interp = armed(EngineConfig())
-    seen = []
-    for t, cy in ((100.0, 0.62), (130.0, 0.62), (160.0, 0.62)):
-        seen += _types(interp.process_frame(make_two_fingers(0.5, cy), now_ms=t))
-    seen += _types(interp.process_frame(make_open_palm(0.5, 0.62), now_ms=190.0))  # un fotograma malo
-    evts = interp.process_frame(make_two_fingers(0.5, 0.44), now_ms=220.0)
-    assert any(e.type == EVENT_SCROLL and e.payload["dy"] > 0 for e in evts)
+    for t in range(100, 360, 33):   # ~260 ms sostenidos: casi termina la espera
+        interp.process_frame(make_two_fingers(0.5, 0.5), now_ms=float(t))
+    interp.process_frame(make_open_palm(0.5, 0.5), now_ms=380.0)  # un fotograma malo
+    evts = []
+    for t in range(410, 600, 33):
+        evts += interp.process_frame(make_two_fingers(0.5, 0.5), now_ms=float(t))
+    assert any(e.type == EVENT_SCROLL and e.payload["dy"] > 0 for e in evts), "la espera no vuelve a empezar"
