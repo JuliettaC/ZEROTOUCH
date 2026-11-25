@@ -15,7 +15,6 @@
 // Capturas y resultados: tmp/verificacion-hito3/ (carpeta ignorada por Git).
 import { fork, spawn, execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -33,7 +32,8 @@ const url = file => pathToFileURL(`${ROOT}/${file}`).href
 const { openDatabase } = await import(url('backend/src/config/database.js'))
 const { tokenFromOutbox } = await import(url('backend/test/helpers/correo.js'))
 const { createDefaultState } = await import(url('src/data/preferences.js'))
-const Database = createRequire(`${ROOT}/backend/package.json`)('better-sqlite3')
+// Clave de cifrado de la base temporal (DATABASE_KEY): nueva en cada ejecución, nunca la de tu .env.
+const DATABASE_KEY = randomBytes(32).toString('hex')
 
 if (!existsSync(EXE)) { console.error('Falta el ejecutable. Compila primero: npm run desktop:build'); process.exit(2) }
 const ps = command => execFileSync('powershell', ['-NoProfile', '-Command', command], { encoding: 'utf8' }).trim()
@@ -86,7 +86,7 @@ const port = await freePort()
 const base = `http://127.0.0.1:${port}/api/v1`
 let backend, app
 const startBackend = () => new Promise((resolve, reject) => {
-  const child = fork(`${ROOT}/backend/src/server.js`, [], { cwd: temp, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, DATABASE_PATH: database, HOST: '127.0.0.1', PORT: String(port), NODE_ENV: 'development', APP_ORIGIN: `http://127.0.0.1:${port}`, SESSION_TTL_SECONDS: '28800', MAIL_TRANSPORT: 'archivo', MAIL_OUTBOX_DIR: outbox } })
+  const child = fork(`${ROOT}/backend/src/server.js`, [], { cwd: temp, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, DATABASE_PATH: database, DATABASE_KEY, HOST: '127.0.0.1', PORT: String(port), NODE_ENV: 'development', APP_ORIGIN: `http://127.0.0.1:${port}`, SESSION_TTL_SECONDS: '28800', MAIL_TRANSPORT: 'archivo', MAIL_OUTBOX_DIR: outbox } })
   child.stderr.resume()
   const timer = setTimeout(() => reject(new Error('backend no inició')), 15000)
   child.once('message', m => { clearTimeout(timer); resolve(child) })
@@ -104,12 +104,12 @@ const http = async (method, route, body, session) => {
   const text = await response.text()
   return { status: response.status, body: text ? JSON.parse(text) : null, headers: response.headers }
 }
-const sqliteValue = (modeId) => { const db = new Database(database, { readonly: true }); try { return db.prepare('SELECT sensibilidad_puntero AS s, version AS v FROM modos_uso WHERE id=?').get(modeId) } finally { db.close() } }
+const sqliteValue = (modeId) => { const db = openDatabase(database, { key: DATABASE_KEY, readonly: true }); try { return db.prepare('SELECT sensibilidad_puntero AS s, version AS v FROM modos_uso WHERE id=?').get(modeId) } finally { db.close() } }
 const MODE = 'Cocina y Taller'
 
 try {
   // 1. Base NUEVA fuera del repositorio y de OneDrive, y backend real.
-  openDatabase(database, { initialize: true }).close()
+  openDatabase(database, { key: DATABASE_KEY, initialize: true }).close()
   backend = await startBackend()
   const health = await fetch(`${base}/health`).then(r => r.status, () => 0)
   check('base SQLite nueva en una carpeta temporal y backend real escuchando solo en 127.0.0.1', health === 200, { puerto: port, carpeta: 'temporal (fuera del repositorio y de OneDrive)' })

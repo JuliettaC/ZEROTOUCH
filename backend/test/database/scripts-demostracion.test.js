@@ -7,6 +7,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { openDatabase } from '../../src/config/database.js';
+import { TEST_KEY } from '../helpers/clave.js';
 
 // Herramientas de la demostración del Hito 3: correo:enlace (enlace de confirmación guardado como archivo) y
 // db:modos (lectura directa del archivo SQLite). Datos ficticios, base temporal fuera del repositorio.
@@ -21,7 +22,7 @@ function fixture(t) {
   const database = path.join(directory, 'demo.sqlite');
   const outbox = path.join(directory, 'correo-saliente');
   mkdirSync(outbox);
-  return { directory, database, outbox, env: { DATABASE_PATH: database, MAIL_OUTBOX_DIR: outbox, MAIL_TRANSPORT: 'archivo', NODE_ENV: 'development' } };
+  return { directory, database, outbox, env: { DATABASE_PATH: database, DATABASE_KEY: TEST_KEY, MAIL_OUTBOX_DIR: outbox, MAIL_TRANSPORT: 'archivo', NODE_ENV: 'development' } };
 }
 
 test('correo:enlace decodifica el enlace partido por quoted-printable y respeta el correo pedido', t => {
@@ -50,7 +51,7 @@ test('correo:enlace solo funciona con el transporte de archivo', t => {
 
 test('db:modos lee solo lectura los modos guardados y no muestra contraseñas, correos ni tokens', t => {
   const { database, env } = fixture(t);
-  const db = openDatabase(database, { initialize: true });
+  const db = openDatabase(database, { key: TEST_KEY, initialize: true });
   const user = randomUUID(), profile = randomUUID(), mode = randomUUID();
   db.prepare('INSERT INTO usuarios(id,nombre_usuario,contrasena_hash,correo) VALUES(?,?,?,?)').run(user, 'profesor_demo', hash, 'secreto@ejemplo.test');
   db.prepare('INSERT INTO perfiles(id,usuario_id,nombre) VALUES(?,?,?)').run(profile, user, 'Perfil principal');

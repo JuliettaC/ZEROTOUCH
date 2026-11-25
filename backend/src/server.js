@@ -12,7 +12,7 @@ async function listen(app, port, host) {
 }
 
 export async function startServer(config = loadConfig()) {
-  const db = openDatabase(config.databasePath);
+  const db = openDatabase(config.databasePath, { key: config.databaseKey });
   let server;
   try {
     const app = createApp({ db, config });

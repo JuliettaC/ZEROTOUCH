@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { validateId, validateQuery, validateBody } from './resourceValidation.js';
 import { notFound, conflict, preconditionFailed, preconditionRequired } from '../domain/resourceError.js';
 import { parseIfMatch } from '../domain/etag.js';
+import { quotaExceeded } from '../domain/cuotas.js';
 export function createPerfilesService(repository, idempotency) {
   function get(id) {
     const item = repository.get(validateId(id));
@@ -16,7 +17,11 @@ export function createPerfilesService(repository, idempotency) {
       const data = validateBody('perfil', body);
       return idempotency.run({
         header: idempotencyKey, tipo: 'perfil', ruta: '/perfiles', cuerpo: data,
-        create: () => repository.create({ descripcion: '', ...data, id: randomUUID() }),
+        create: () => {
+          const created = repository.create({ descripcion: '', ...data, id: randomUUID() });
+          if (!created) throw quotaExceeded('perfiles');
+          return created;
+        },
       });
     },
     update(id, body) {

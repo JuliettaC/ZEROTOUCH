@@ -11,7 +11,6 @@
 // No sustituye la prueba manual con cámara y manos (ver PROGRESO.md): gestos, clic por pinza sobre la overlay y escritura real.
 import { fork, spawn, execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -27,7 +26,8 @@ const url = file => pathToFileURL(`${ROOT}/${file}`).href
 const { openDatabase } = await import(url('backend/src/config/database.js'))
 const { tokenFromOutbox } = await import(url('backend/test/helpers/correo.js'))
 const { createDefaultState } = await import(url('src/data/preferences.js'))
-const Database = createRequire(`${ROOT}/backend/package.json`)('better-sqlite3')
+// Clave de cifrado de la base temporal (DATABASE_KEY): nueva en cada ejecución, nunca la de tu .env.
+const DATABASE_KEY = randomBytes(32).toString('hex')
 
 if (!existsSync(EXE)) { console.error('Falta el ejecutable. Compila primero: npm run desktop:build'); process.exit(2) }
 const running = execFileSync('powershell', ['-NoProfile', '-Command', "(Get-Process -Name 'zerotouch-desktop' -ErrorAction SilentlyContinue | Measure-Object).Count"], { encoding: 'utf8' }).trim()
@@ -91,8 +91,8 @@ const cleanup = async () => {
 
 try {
   // 1. Backend temporal aislado y cuenta de prueba verificada.
-  openDatabase(database, { initialize: true }).close()
-  backend = fork(`${ROOT}/backend/src/server.js`, [], { cwd: temp, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, DATABASE_PATH: database, HOST: '127.0.0.1', PORT: '0', NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:3000', SESSION_TTL_SECONDS: '28800' } })
+  openDatabase(database, { key: DATABASE_KEY, initialize: true }).close()
+  backend = fork(`${ROOT}/backend/src/server.js`, [], { cwd: temp, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, DATABASE_PATH: database, DATABASE_KEY, HOST: '127.0.0.1', PORT: '0', NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:3000', SESSION_TTL_SECONDS: '28800' } })
   backend.stderr.resume()
   const port = await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error('backend no inició')), 15000); backend.once('message', m => { clearTimeout(timer); resolve(m.port) }) })
   const base = `http://127.0.0.1:${port}/api/v1`
@@ -198,7 +198,7 @@ try {
   await closeDialog()
 
   // 4b. Creaciones idempotentes por el puente real (UI → Tauri → HTTP → SQLite v3).
-  const registry = new Database(database, { readonly: true })
+  const registry = openDatabase(database, { key: DATABASE_KEY, readonly: true })
   const keyRows = registry.prepare('SELECT clave, recurso_tipo, recurso_id, usuario_id FROM idempotencia ORDER BY creado_en').all()
   registry.close()
   const uuidV7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -215,7 +215,7 @@ try {
   check('GET /capacidades anuncia servidor.idempotencia (uuid-v7, 30 días) por el puente real', replayed.capacidad?.clave === 'uuid-v7' && replayed.capacidad?.retencion_dias === 30, replayed.capacidad)
 
   // 4c. Mutación conjunta: la interfaz real crea cada modo CON sus asignaciones en una sola solicitud.
-  const jointDb = new Database(database, { readonly: true })
+  const jointDb = openDatabase(database, { key: DATABASE_KEY, readonly: true })
   const jointCounts = {
     versiones: jointDb.prepare('SELECT DISTINCT version FROM modos_uso').all().map(r => r.version),
     asignaciones: jointDb.prepare('SELECT count(*) n FROM asignaciones_gestos').get().n,
@@ -258,7 +258,7 @@ try {
   const profileStill = (await http('GET', `/perfiles/${profile.id}`, undefined, other)).status
   check('perfil: un modo nuevo en otro equipo invalida el ETag de agregado (412) y no se borra nada', cascadeClash.conflicts.some(c => /perfil/i.test(c) && /cambió en otro equipo/.test(c)) && profileStill === 200, cascadeClash.conflicts)
   const forced = await decideUi('de todos modos')
-  const db = new Database(database, { readonly: true })
+  const db = openDatabase(database, { key: DATABASE_KEY, readonly: true })
   const counts = { perfiles: db.prepare('SELECT count(*) n FROM perfiles').get().n, modos: db.prepare('SELECT count(*) n FROM modos_uso').get().n, asignaciones: db.prepare('SELECT count(*) n FROM asignaciones_gestos').get().n }
   db.close()
   check('«Borrarlo de todos modos»: cascada atómica en SQLite real (perfil, modos y asignaciones)', /borrado/.test(forced.report) && counts.perfiles === 0 && counts.modos === 0 && counts.asignaciones === 0, { informe: forced.report, ...counts })

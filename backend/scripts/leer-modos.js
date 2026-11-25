@@ -1,6 +1,6 @@
-import Database from 'better-sqlite3';
+import { openDatabase } from '../src/config/database.js';
 import { existsSync } from 'node:fs';
-import { databasePathFromEnv } from '../src/security/cli-config.js';
+import { databaseFromEnv } from '../src/security/cli-config.js';
 
 // Lectura DIRECTA del archivo SQLite (solo lectura) para comprobar qué guardó el servidor: cuenta, perfil, modo,
 // sensibilidad del puntero, versión y fecha de la última modificación. No muestra contraseñas, correos ni tokens.
@@ -8,9 +8,9 @@ import { databasePathFromEnv } from '../src/security/cli-config.js';
 const user = process.argv[2];
 let db;
 try {
-  const filename = databasePathFromEnv();
+  const { filename, key } = databaseFromEnv();
   if (!existsSync(filename)) throw new Error(`No existe la base ${filename}. Créala con: npm run db:init --prefix backend`);
-  db = new Database(filename, { readonly: true, fileMustExist: true });
+  db = openDatabase(filename, { key, readonly: true });
   const rows = db.prepare(`
     SELECT u.nombre_usuario AS cuenta, p.nombre AS perfil, m.nombre AS modo,
            m.sensibilidad_puntero AS sensibilidad, m.version, m.actualizado_en AS actualizado

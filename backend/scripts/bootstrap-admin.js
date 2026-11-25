@@ -43,7 +43,7 @@ try {
   }
   const config = loadConfig();
   const mailer = createMailer(config.mail);
-  db = openDatabase(config.databasePath);
+  db = openDatabase(config.databasePath, { key: config.databaseKey });
   line = createInterface({ input: process.stdin, output: process.stdout });
   const name = await line.question('Nombre del primer administrador: ');
   const address = await line.question('Correo del administrador (recibirá el enlace de verificación): ');

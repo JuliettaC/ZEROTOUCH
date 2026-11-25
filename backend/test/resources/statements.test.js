@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import { prepared } from '../../src/repositories/statements.js';
 
 test('prepared: una sola sentencia por conexión y SQL, distinta entre conexiones y entre SQL', t => {

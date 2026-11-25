@@ -1,4 +1,5 @@
 import { ResourceError } from '../domain/resourceError.js';
+import { MAX_IDEMPOTENCIA_POR_USUARIO } from '../domain/cuotas.js';
 import { fingerprint, parseIdempotencyKey, retentionCutoff } from '../domain/idempotencia.js';
 
 /**
@@ -10,7 +11,7 @@ import { fingerprint, parseIdempotencyKey, retentionCutoff } from '../domain/ide
  *   misma clave y otra huella => 409. Solo se registran creaciones que terminaron bien: un error de validación o un
  *   nombre duplicado no deja rastro, así que la misma clave puede reutilizarse tras corregir la solicitud.
  */
-export function createIdempotencyRunner({ repository, enabled, now = Date.now }) {
+export function createIdempotencyRunner({ repository, enabled, now = Date.now, maxPorUsuario = MAX_IDEMPOTENCIA_POR_USUARIO }) {
   return {
     run({ header, tipo, ruta, cuerpo, create }) {
       if (header === undefined) return { data: create(), replayed: false };
@@ -26,6 +27,10 @@ export function createIdempotencyRunner({ repository, enabled, now = Date.now })
             throw new ResourceError(409, 'IDEMPOTENCIA_CONFLICTO', 'Esta Idempotency-Key ya se usó con una solicitud distinta.');
           }
           return { data: JSON.parse(found.respuesta), replayed: true };
+        }
+        // Tope por cuenta: sin él, crear y borrar en bucle llenaba la tabla durante toda la retención.
+        if (repository.count() >= maxPorUsuario) {
+          throw new ResourceError(429, 'LIMITE_SOLICITUDES', 'Demasiadas creaciones recientes en esta cuenta; reintenta más tarde.');
         }
         const data = create();
         repository.insert({ clave: key, huella, tipo, recurso: data.id, respuesta: JSON.stringify(data), creadoEn: new Date(now()).toISOString() });

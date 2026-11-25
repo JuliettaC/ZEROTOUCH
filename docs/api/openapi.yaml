@@ -1,0 +1,4392 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ZeroTouch Hito 2",
+    "version": "1.5.0",
+    "description": "Monolito modular. Sesión en cookie y CSRF en mutaciones autenticadas. Propietario siempre obtenido de sesión; admin no accede a configuraciones ajenas. SQLite nueva; catálogos no prueban capacidades del motor. DELETE perfil elimina sus modos/asignaciones. PATCH exige version. Nombres NFC; unicidad NOCASE solo ASCII. JSON UTF-8, máximo 16 KB. Alias heredado /api/health fuera de esta versión. El error 500 nunca incluye detalles internos. Contraseñas de 8 a 128 caracteres; registro, restablecimiento y primer administrador rechazan contraseñas comunes o iguales al usuario o correo. v1.1: verificación de correo obligatoria antes de iniciar sesión (el login acepta usuario o correo y, solo con la contraseña correcta, responde 403 CUENTA_NO_VERIFICADA), recuperación de contraseña y respuestas que no revelan si un correo existe. Los enlaces abren /cuenta/verificar y /cuenta/restablecer fuera de /api/v1. v1.2: asignaciones gesto -> accion editables por modo (PUT /modos/{id}/gestos reemplaza todas; PATCH /modos/{id}/gestos/{gesto} edita una) con control de version optimista del modo (una sola version cubre modo y asignaciones) y contrato de capacidades (GET /capacidades, contracts/capacidades.json): una asignacion habilitada solo se guarda si el motor local ejecuta esa accion para ese gesto (400 ACCION_NO_COMPATIBLE); sin_accion siempre vale. v1.3: borrado condicional. DELETE /perfiles/{id} y DELETE /modos/{id} exigen If-Match con el ETag que el cliente conocia (428 si falta, 400 si no es un unico ETag fuerte, 412 si el recurso cambio, 404 si no existe o es ajeno). El ETag de un modo cubre su version (que incluye sus asignaciones); el del perfil es un agregado: version del perfil + (id, version) de todos sus modos, asi que detecta tambien altas, bajas y ediciones de modos y asignaciones antes del borrado en cascada. El servidor recalcula el ETag, compara y borra en una misma transaccion con bloqueo de escritura. GET /perfiles/{id} y GET /modos/{id} entregan el ETag vigente en la cabecera ETag. GET /capacidades anuncia servidor.borrado_condicional. Algoritmo y vectores: backend/src/domain/etag.js, src/sync/etag.js y contracts/etag-vectores.json. Sin cambios de esquema SQLite. v1.4: creaciones idempotentes. POST /perfiles y POST /perfiles/{id}/modos aceptan la cabecera opcional Idempotency-Key (UUID v7 en minusculas; sus 48 primeros bits son la hora, asi que la clave indica su antiguedad). Repetir la misma clave con el mismo cuerpo (tras normalizar) devuelve la respuesta ORIGINAL con la cabecera Idempotent-Replayed: true y no crea otro recurso; la misma clave con otro cuerpo o contra otro perfil padre responde 409 IDEMPOTENCIA_CONFLICTO. La comprobacion de la clave, la creacion y el registro de su resultado ocurren en una misma transaccion, de modo que dos solicitudes simultaneas crean un solo recurso. Solo se registran las creaciones que terminaron bien (un 400 o un 409 NOMBRE_DUPLICADO no deja rastro y la clave puede reutilizarse). Una clave se acepta durante 30 dias contados desde la hora que lleva incrustada (mas antigua: 422 IDEMPOTENCIA_CLAVE_EXPIRADA; hora en el futuro, mas de 5 minutos: 400 IDEMPOTENCIA_CLAVE_INVALIDA); el ambito es la cuenta autenticada. Sin la cabecera todo funciona como antes. Con una base en esquema v2 (sin la tabla) el servidor sigue operando pero responde 501 IDEMPOTENCIA_NO_DISPONIBLE a cualquier Idempotency-Key en lugar de ignorarla, y GET /capacidades anuncia servidor.idempotencia = false. Esquema SQLite v3: migracion aditiva db/migraciones/002_v2_a_v3.sql (tabla idempotencia), explicita, con respaldo previo. v1.5: mutacion conjunta modo + asignaciones. POST /perfiles/{id}/modos y PATCH /modos/{id} aceptan el campo opcional gestos (la lista completa de asignaciones, con la semantica de PUT /modos/{id}/gestos: los gestos sin fila vuelven a la accion predeterminada del catalogo; [] las borra todas). El modo y sus asignaciones se escriben en UNA transaccion y con UNA sola subida de version (un modo se crea en la version 1; un PATCH sube de v a v+1): si cualquier cosa falla, incluida una asignacion invalida o no compatible con el motor (400 DATOS_INVALIDOS / ACCION_NO_COMPATIBLE) o una version obsoleta (409), no se aplica nada, ni los campos del modo ni las asignaciones. Un PATCH puede traer solo gestos y version. La respuesta sigue siendo el modo; las asignaciones efectivas se leen con GET /modos/{id}/gestos. Con Idempotency-Key, la lista de gestos forma parte de la huella de la solicitud (el orden de la lista no importa). GET /capacidades anuncia servidor.modo_con_asignaciones; un cliente que no lo vea debe seguir usando PATCH/POST del modo y PUT de asignaciones por separado. Sin cambios de esquema SQLite. v1.6: cuotas por cuenta. Como maximo 100 perfiles por cuenta y 50 modos por perfil (409 LIMITE_RECURSOS al superarlas) y 2000 creaciones con Idempotency-Key registradas por cuenta dentro de la retencion (429 LIMITE_SOLICITUDES; las repeticiones de claves ya registradas siguen respondiendo). Sin cambios de esquema SQLite."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:3000/api/v1",
+      "description": "Demo local"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Consultar salud",
+        "operationId": "Consultar_salud",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Salud"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/registro": {
+      "post": {
+        "summary": "Registrar usuario (pendiente de verificar correo)",
+        "description": "Crea la cuenta sin verificar y envía un enlace de un solo uso (24 h). La respuesta es idéntica si el correo ya pertenece a otra cuenta: en ese caso la cuenta nueva queda sin correo y el dueño recibe un aviso. 409 solo para nombre_usuario duplicado. No inicia sesión.",
+        "operationId": "Registrar_usuario",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VerificacionPendiente"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Registro"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Iniciar sesion",
+        "description": "nombre_usuario acepta el nombre de usuario o el correo de la cuenta. 401 CREDENCIALES_INVALIDAS genérico para usuario, correo o contraseña incorrectos y cuentas suspendidas. 403 CUENTA_NO_VERIFICADA solo tras una contraseña correcta, igual para cuentas sin correo y con correo pendiente; no emite cookie.",
+        "operationId": "Iniciar_sesion",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Sesion"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "zt_session; HttpOnly; SameSite=Strict; Path=/api/v1; Secure bajo HTTPS."
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado o CUENTA_NO_VERIFICADA (contraseña correcta, correo sin confirmar)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credenciales"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Recuperar cuenta autenticada y CSRF",
+        "operationId": "Consultar_cuenta_autenticada",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Sesion"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/sesion": {
+      "get": {
+        "summary": "Consultar sesion",
+        "operationId": "Consultar_sesion",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Sesion"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Cerrar sesion",
+        "operationId": "Cerrar_sesion",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sin cuerpo"
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verificacion": {
+      "post": {
+        "summary": "Confirmar correo con token",
+        "operationId": "Confirmar_correo",
+        "description": "Token de 43 caracteres base64url leído del fragmento #token= del enlace. Un solo uso; ligado al correo al que se envió. 400 TOKEN_INVALIDO (inexistente, usado o con otro correo) o TOKEN_EXPIRADO.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Correo confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Aviso"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Token"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verificacion/reenviar": {
+      "post": {
+        "summary": "Reenviar correo de verificación",
+        "operationId": "Reenviar_verificacion",
+        "description": "Respuesta 202 idéntica exista o no la cuenta. Solo cuentas activas pendientes reciben un enlace nuevo, que invalida el anterior; enfriamiento de 60 s por cuenta y límites por correo (silencioso) e IP (429).",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Solicitud aceptada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Aviso"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorreoSolicitud"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/correo": {
+      "post": {
+        "summary": "Vincular o corregir correo de una cuenta no verificada",
+        "operationId": "Vincular_correo",
+        "description": "Requiere nombre_usuario y contrasena. Para cuentas migradas de v1 (sin correo) o con un correo aún no confirmado. 401 credenciales inválidas; 409 CUENTA_YA_VERIFICADA. Si el correo pertenece a otra cuenta, la respuesta es la misma y no se reasigna.",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Verificación pendiente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VerificacionPendiente"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cuenta ya verificada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VincularCorreo"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/contrasena/olvido": {
+      "post": {
+        "summary": "Solicitar recuperación de contraseña",
+        "operationId": "Solicitar_recuperacion",
+        "description": "Respuesta 202 idéntica exista o no la cuenta. Envía un enlace de un solo uso (30 min) a cuentas activas.",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Solicitud aceptada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Aviso"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorreoSolicitud"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/contrasena/restablecer": {
+      "post": {
+        "summary": "Restablecer contraseña con token",
+        "operationId": "Restablecer_contrasena",
+        "description": "Cambia el hash Argon2id, invalida los tokens de la cuenta, revoca todas sus sesiones, marca el correo como verificado y notifica al titular. 400 TOKEN_INVALIDO o TOKEN_EXPIRADO.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Contraseña actualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Aviso"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen denegado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes por IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Restablecer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/perfiles": {
+      "get": {
+        "summary": "Listar perfiles",
+        "operationId": "Listar_perfiles",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Perfil"
+                      }
+                    },
+                    "paginacion": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "limite": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "limite",
+                        "offset"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "paginacion"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limite",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Crear perfil",
+        "description": "Con la cabecera opcional Idempotency-Key la creacion es idempotente (ver el parametro). Sin ella, el comportamiento no cambia.",
+        "operationId": "Crear_perfil",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Creado. Con Idempotency-Key repetida (mismo cuerpo) devuelve esta misma respuesta con Idempotent-Replayed: true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Perfil"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Ruta individual del recurso creado."
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "description": "Datos invalidos, o IDEMPOTENCIA_CLAVE_INVALIDA (Idempotency-Key no es un UUID v7 en minusculas o su hora esta en el futuro)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de version o ultimo administrador; LIMITE_RECURSOS: se alcanzo la cuota de perfiles o de modos; IDEMPOTENCIA_CONFLICTO: la clave ya se uso con una solicitud distinta (otro cuerpo)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "IDEMPOTENCIA_CLAVE_EXPIRADA: la clave tiene mas de 30 dias y ya no puede repetirse. No se creo nada; genera una clave nueva y comprueba antes si la creacion se aplico.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "IDEMPOTENCIA_NO_DISPONIBLE: este servidor no tiene habilitada la idempotencia (base en esquema v2). Se rechaza en vez de ignorar la clave; no se creo nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PerfilCrear"
+              },
+              "example": {
+                "nombre": "Cocina",
+                "descripcion": "Configuración de recetas"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/perfiles/{id}": {
+      "get": {
+        "summary": "Consultar perfil",
+        "operationId": "Consultar_perfil",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Perfil"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Editar perfil",
+        "operationId": "Editar_perfil",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Perfil"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PerfilEditar"
+              },
+              "example": {
+                "nombre": "Taller",
+                "version": 1
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Eliminar perfil (condicional)",
+        "operationId": "Eliminar_perfil",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sin cuerpo"
+          },
+          "400": {
+            "description": "Datos invalidos (incluye un If-Match que no sea un unico ETag fuerte)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "PRECONDICION_FALLIDA: el recurso (o, en un perfil, alguno de sus modos o asignaciones) cambio; no se borro nada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "PRECONDICION_REQUERIDA: falta If-Match",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "description": "Borra el perfil, sus modos y sus asignaciones solo si If-Match coincide con el ETag actual; comprobacion y borrado ocurren en una misma transaccion. Si algo cambio desde que el cliente lo consulto, responde 412 y no borra nada."
+      }
+    },
+    "/perfiles/{id}/modos": {
+      "get": {
+        "summary": "Listar modos",
+        "operationId": "Listar_modos",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Modo"
+                      }
+                    },
+                    "paginacion": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "limite": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "limite",
+                        "offset"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "paginacion"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Crear modo",
+        "description": "Con la cabecera opcional Idempotency-Key la creacion es idempotente (ver el parametro). Sin ella, el comportamiento no cambia. Con el campo opcional gestos el modo y todas sus asignaciones se crean en una sola transaccion (version 1); si alguna asignacion es invalida el modo no se crea.",
+        "operationId": "Crear_modo",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Creado. Con Idempotency-Key repetida (mismo cuerpo) devuelve esta misma respuesta con Idempotent-Replayed: true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Modo"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Ruta individual del recurso creado."
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "description": "Datos invalidos, o IDEMPOTENCIA_CLAVE_INVALIDA (Idempotency-Key no es un UUID v7 en minusculas o su hora esta en el futuro); DATOS_INVALIDOS o ACCION_NO_COMPATIBLE en gestos (no se crea nada)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de version o ultimo administrador; LIMITE_RECURSOS: se alcanzo la cuota de perfiles o de modos; IDEMPOTENCIA_CONFLICTO: la clave ya se uso con una solicitud distinta (otro cuerpo o contra otro perfil padre)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "IDEMPOTENCIA_CLAVE_EXPIRADA: la clave tiene mas de 30 dias y ya no puede repetirse. No se creo nada; genera una clave nueva y comprueba antes si la creacion se aplico.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "IDEMPOTENCIA_NO_DISPONIBLE: este servidor no tiene habilitada la idempotencia (base en esquema v2). Se rechaza en vez de ignorar la clave; no se creo nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModoCrear"
+              },
+              "example": {
+                "nombre": "Manual",
+                "sensibilidad_puntero": 65,
+                "estabilizacion_puntero": 40,
+                "tolerancia_micro_pinza": 50
+              }
+            }
+          }
+        }
+      }
+    },
+    "/modos/{id}": {
+      "get": {
+        "summary": "Consultar modo",
+        "operationId": "Consultar_modo",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Modo"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Editar modo",
+        "operationId": "Editar_modo",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Modo"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos; DATOS_INVALIDOS o ACCION_NO_COMPATIBLE en gestos (no se aplica nada)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModoEditar"
+              },
+              "example": {
+                "sensibilidad_puntero": 70,
+                "version": 1
+              }
+            }
+          }
+        },
+        "description": "Con el campo opcional gestos reemplaza tambien todas las asignaciones del modo en la misma transaccion y con UNA sola subida de version (de v a v+1). Es todo o nada: una asignacion invalida (400) o una version obsoleta (409) no aplican ni los campos ni las asignaciones. Puede enviarse solo gestos y version. Responde el modo; las asignaciones se leen con GET /modos/{id}/gestos."
+      },
+      "delete": {
+        "summary": "Eliminar modo (condicional)",
+        "operationId": "Eliminar_modo",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sin cuerpo"
+          },
+          "400": {
+            "description": "Datos invalidos (incluye un If-Match que no sea un unico ETag fuerte)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "PRECONDICION_FALLIDA: el recurso (o, en un perfil, alguno de sus modos o asignaciones) cambio; no se borro nada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "PRECONDICION_REQUERIDA: falta If-Match",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "description": "Borra el modo y sus asignaciones solo si If-Match coincide con el ETag actual; comprobacion y borrado ocurren en una misma transaccion. Si algo cambio desde que el cliente lo consulto, responde 412 y no borra nada."
+      }
+    },
+    "/gestos": {
+      "get": {
+        "summary": "Consultar gestos",
+        "operationId": "Consultar_gestos",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Gesto"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/acciones": {
+      "get": {
+        "summary": "Consultar acciones",
+        "operationId": "Consultar_acciones",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Accion"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/capacidades": {
+      "get": {
+        "summary": "Consultar contrato de capacidades",
+        "operationId": "Consultar_contrato_de_capacidades",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Capacidades"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/modos/{id}/gestos": {
+      "get": {
+        "summary": "Consultar configuracion efectiva",
+        "operationId": "Consultar_configuracion_efectiva",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Configuracion"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ]
+      },
+      "put": {
+        "summary": "Reemplazar asignaciones del modo",
+        "operationId": "Reemplazar_asignaciones_del_modo",
+        "security": [
+          {
+            "sesion": []
+          },
+          {
+            "csrf": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsignacionesReemplazo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Configuracion"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ]
+      }
+    },
+    "/modos/{id}/gestos/{gesto}": {
+      "patch": {
+        "summary": "Editar una asignacion del modo",
+        "operationId": "Editar_una_asignacion_del_modo",
+        "security": [
+          {
+            "sesion": []
+          },
+          {
+            "csrf": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsignacionParche"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Configuracion"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          },
+          {
+            "name": "gesto",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]{1,60}$"
+            },
+            "description": "Codigo del gesto del catalogo (GET /gestos)."
+          }
+        ]
+      }
+    },
+    "/admin/usuarios": {
+      "get": {
+        "summary": "Listar usuarios como admin",
+        "operationId": "Listar_usuarios_como_admin",
+        "security": [
+          {
+            "sesion": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Usuario"
+                      }
+                    },
+                    "paginacion": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "limite": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "limite",
+                        "offset"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "paginacion"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limite",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ]
+      }
+    },
+    "/admin/usuarios/{id}/rol": {
+      "patch": {
+        "summary": "Cambiar rol",
+        "operationId": "Cambiar_rol",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Usuario"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "rol": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "admin"
+                    ]
+                  }
+                },
+                "required": [
+                  "rol"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/usuarios/{id}/estado": {
+      "patch": {
+        "summary": "Cambiar estado",
+        "operationId": "Cambiar_estado",
+        "security": [
+          {
+            "sesion": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Usuario"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origen, CSRF o rol denegados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente o ajeno",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicado, conflicto de versión o último administrador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Más de 16 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Formato no soportado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno sin detalles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SQLite ocupada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "UUID v4 del recurso o perfil padre."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "estado": {
+                    "type": "string",
+                    "enum": [
+                      "activo",
+                      "suspendido"
+                    ]
+                  }
+                },
+                "required": [
+                  "estado"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sesion": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "zt_session"
+      },
+      "csrf": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "mensaje": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "mensaje"
+        ]
+      },
+      "Registro": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre_usuario": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]{3,40}$"
+          },
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "description": "ASCII; se normaliza a minúsculas."
+          },
+          "contrasena": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "nombre_usuario",
+          "correo",
+          "contrasena"
+        ]
+      },
+      "VincularCorreo": {
+        "$ref": "#/components/schemas/Registro"
+      },
+      "CorreoSolicitud": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        },
+        "required": [
+          "correo"
+        ]
+      },
+      "Token": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "Restablecer": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "contrasena": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "token",
+          "contrasena"
+        ]
+      },
+      "VerificacionPendiente": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "estado_verificacion": {
+            "type": "string",
+            "enum": [
+              "pendiente"
+            ]
+          },
+          "mensaje": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "estado_verificacion",
+          "mensaje"
+        ]
+      },
+      "Aviso": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          },
+          "verificado": {
+            "type": "boolean"
+          },
+          "restablecida": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mensaje"
+        ]
+      },
+      "Credenciales": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre_usuario": {
+            "type": "string",
+            "maxLength": 254,
+            "description": "Nombre de usuario (3 a 40 letras ASCII, números o _) o correo de la cuenta."
+          },
+          "contrasena": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "format": "password"
+          }
+        },
+        "required": [
+          "nombre_usuario",
+          "contrasena"
+        ]
+      },
+      "Usuario": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre_usuario": {
+            "type": "string"
+          },
+          "rol": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ]
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "activo",
+              "suspendido"
+            ]
+          },
+          "correo_verificado": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "nombre_usuario",
+          "rol",
+          "estado",
+          "correo_verificado"
+        ]
+      },
+      "Sesion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "usuario": {
+            "$ref": "#/components/schemas/Usuario"
+          },
+          "csrf_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "usuario",
+          "csrf_token"
+        ]
+      },
+      "PerfilCrear": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "nombre"
+        ]
+      },
+      "PerfilEditar": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740990
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "minProperties": 2
+      },
+      "Perfil": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "usuario_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740990
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "usuario_id",
+          "nombre",
+          "descripcion",
+          "version",
+          "creado_en",
+          "actualizado_en"
+        ]
+      },
+      "ModoCrear": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "categoria": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "oficina",
+              "accesibilidad",
+              "personalizado"
+            ],
+            "default": "personalizado"
+          },
+          "plataforma": {
+            "type": "string",
+            "enum": [
+              "pc",
+              "movil"
+            ],
+            "default": "pc"
+          },
+          "sensibilidad_puntero": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 65
+          },
+          "estabilizacion_puntero": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 40
+          },
+          "tolerancia_micro_pinza": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 50
+          },
+          "desk_rest_habilitado": {
+            "type": "boolean",
+            "default": false
+          },
+          "asistencia_mirada_habilitada": {
+            "type": "boolean",
+            "default": false
+          },
+          "activacion_contextual_movil": {
+            "type": "boolean",
+            "default": false
+          },
+          "gestos": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/Asignacion"
+            },
+            "description": "Mutacion conjunta: lista completa de asignaciones del modo (semantica de PUT /modos/{id}/gestos). Se escribe en la misma transaccion que los demas campos y con la misma (unica) subida de version. Solo debe enviarse si GET /capacidades anuncia servidor.modo_con_asignaciones."
+          }
+        },
+        "required": [
+          "nombre"
+        ]
+      },
+      "ModoEditar": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "categoria": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "oficina",
+              "accesibilidad",
+              "personalizado"
+            ],
+            "default": "personalizado"
+          },
+          "plataforma": {
+            "type": "string",
+            "enum": [
+              "pc",
+              "movil"
+            ],
+            "default": "pc"
+          },
+          "sensibilidad_puntero": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 65
+          },
+          "estabilizacion_puntero": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 40
+          },
+          "tolerancia_micro_pinza": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 50
+          },
+          "desk_rest_habilitado": {
+            "type": "boolean",
+            "default": false
+          },
+          "asistencia_mirada_habilitada": {
+            "type": "boolean",
+            "default": false
+          },
+          "activacion_contextual_movil": {
+            "type": "boolean",
+            "default": false
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740990
+          },
+          "gestos": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/Asignacion"
+            },
+            "description": "Mutacion conjunta: lista completa de asignaciones del modo (semantica de PUT /modos/{id}/gestos). Se escribe en la misma transaccion que los demas campos y con la misma (unica) subida de version. Solo debe enviarse si GET /capacidades anuncia servidor.modo_con_asignaciones."
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "minProperties": 2
+      },
+      "Modo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "perfil_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "categoria": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "oficina",
+              "accesibilidad",
+              "personalizado"
+            ],
+            "default": "personalizado"
+          },
+          "plataforma": {
+            "type": "string",
+            "enum": [
+              "pc",
+              "movil"
+            ],
+            "default": "pc"
+          },
+          "sensibilidad_puntero": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 65
+          },
+          "estabilizacion_puntero": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 40
+          },
+          "tolerancia_micro_pinza": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 50
+          },
+          "desk_rest_habilitado": {
+            "type": "boolean",
+            "default": false
+          },
+          "asistencia_mirada_habilitada": {
+            "type": "boolean",
+            "default": false
+          },
+          "activacion_contextual_movil": {
+            "type": "boolean",
+            "default": false
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740990
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "perfil_id",
+          "nombre",
+          "categoria",
+          "plataforma",
+          "sensibilidad_puntero",
+          "estabilizacion_puntero",
+          "tolerancia_micro_pinza",
+          "desk_rest_habilitado",
+          "asistencia_mirada_habilitada",
+          "activacion_contextual_movil",
+          "version",
+          "creado_en",
+          "actualizado_en"
+        ]
+      },
+      "Gesto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "accion_predeterminada": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "nombre",
+          "accion_predeterminada"
+        ]
+      },
+      "Accion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "nombre"
+        ]
+      },
+      "GestoEfectivo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "gesto_codigo": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "accion_codigo": {
+            "type": "string"
+          },
+          "habilitado": {
+            "type": "boolean"
+          },
+          "asignacion_version": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "gesto_codigo",
+          "nombre",
+          "accion_codigo",
+          "habilitado",
+          "asignacion_version"
+        ]
+      },
+      "Configuracion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "formato_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "modo": {
+            "$ref": "#/components/schemas/Modo"
+          },
+          "gestos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GestoEfectivo"
+            }
+          }
+        },
+        "required": [
+          "formato_version",
+          "modo",
+          "gestos"
+        ]
+      },
+      "Salud": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "estado": {
+            "const": "ok"
+          },
+          "servicio": {
+            "const": "ZeroTouch API"
+          }
+        },
+        "required": [
+          "estado",
+          "servicio"
+        ]
+      },
+      "Asignacion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "gesto_codigo": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,60}$"
+          },
+          "accion_codigo": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,60}$"
+          },
+          "habilitado": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gesto_codigo",
+          "accion_codigo",
+          "habilitado"
+        ],
+        "description": "Habilitada, accion_codigo debe figurar en las acciones permitidas del gesto en el contrato de capacidades; sin_accion siempre se acepta. Deshabilitada se guarda y queda inactiva."
+      },
+      "AsignacionesReemplazo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Version actual del modo (modos_uso.version); se incrementa al aplicar."
+          },
+          "gestos": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/Asignacion"
+            },
+            "description": "Gestos sin fila vuelven a la accion predeterminada del catalogo. Sin repetidos."
+          }
+        },
+        "required": [
+          "version",
+          "gestos"
+        ]
+      },
+      "AsignacionParche": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "accion_codigo": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,60}$"
+          },
+          "habilitado": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "description": "Requiere accion_codigo o habilitado ademas de version."
+      },
+      "Capacidades": {
+        "type": "object",
+        "description": "Copia de contracts/capacidades.json: acciones (codigo -> nombre, tipo, efecto), gestos (codigo -> nombre, tipo, predeterminada, acciones permitidas, interruptor de interfaz), acciones_discretas, teclas_permitidas, eventos_interfaz, predeterminados_interfaz, ajustes_equipo y ajustes_sincronizados.",
+        "properties": {
+          "version": {
+            "type": "integer"
+          },
+          "acciones": {
+            "type": "object"
+          },
+          "gestos": {
+            "type": "object"
+          },
+          "acciones_discretas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "teclas_permitidas": {
+            "type": "object"
+          },
+          "eventos_interfaz": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "predeterminados_interfaz": {
+            "type": "object"
+          },
+          "servidor": {
+            "type": "object",
+            "description": "Funciones del backend que no forman parte del contrato gesto -> accion del motor.",
+            "properties": {
+              "borrado_condicional": {
+                "type": "boolean",
+                "description": "true: DELETE de perfiles y modos exige y comprueba If-Match. Sin este anuncio, un cliente no debe enviar DELETE."
+              },
+              "idempotencia": {
+                "description": "false: el servidor no tiene habilitada la idempotencia (base en esquema v2) y responde 501 a cualquier Idempotency-Key; un cliente no debe enviarla. Objeto: describe como usarla.",
+                "oneOf": [
+                  {
+                    "type": "boolean",
+                    "const": false
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "clave": {
+                        "type": "string",
+                        "enum": [
+                          "uuid-v7"
+                        ],
+                        "description": "Formato de la Idempotency-Key."
+                      },
+                      "retencion_dias": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Dias que una clave puede repetirse, contados desde la hora incrustada."
+                      }
+                    },
+                    "required": [
+                      "clave",
+                      "retencion_dias"
+                    ]
+                  }
+                ]
+              },
+              "modo_con_asignaciones": {
+                "type": "boolean",
+                "description": "true: POST /perfiles/{id}/modos y PATCH /modos/{id} aceptan gestos y lo aplican junto al modo en una sola transaccion y con una sola subida de version. Sin este anuncio, un cliente no debe enviar gestos en esas solicitudes."
+              }
+            }
+          }
+        },
+        "required": [
+          "version",
+          "acciones",
+          "gestos"
+        ]
+      }
+    },
+    "parameters": {
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "ETag fuerte del recurso tal como el cliente lo conocia (cabecera ETag de su GET, o calculado con el algoritmo compartido a partir de lo que ya tenia). Un unico valor entre comillas; no se aceptan * ni ETags debiles ni listas.",
+        "schema": {
+          "type": "string",
+          "pattern": "^\"[A-Za-z0-9_-]{16,64}\"$"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Clave de idempotencia de la creacion: un UUID v7 en minusculas generado por el cliente UNA vez por creacion y reutilizado en cada reintento. Repetirla con el mismo cuerpo devuelve la respuesta original (Idempotent-Replayed: true) sin crear otro recurso. Valida 30 dias desde la hora incrustada. Solo se anuncia con GET /capacidades servidor.idempotencia; un servidor que no la tiene habilitada responde 501.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "headers": {
+      "ETag": {
+        "description": "ETag vigente del recurso para usarlo como If-Match al borrar. Modo: identidad + version. Perfil: agregado de la version del perfil y de todos sus modos.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IdempotentReplayed": {
+        "description": "Presente (true) cuando la respuesta es la original de una creacion ya realizada con la misma Idempotency-Key; ausente en la primera ejecucion.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "true"
+          ]
+        }
+      }
+    }
+  }
+}

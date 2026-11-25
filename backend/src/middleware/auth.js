@@ -20,6 +20,7 @@ export function createAuthMiddleware({ db, config }) {
       // Backend enforcement of email verification: an unverified account never passes this point,
       // even with a session created before the v2 migration.
       if (!session || session.estado !== 'activo' || !session.correo_verificado_en || Date.parse(session.expira_en) <= Date.now()) {
+        if (session) sessions.remove(hash); // a dead session is removed now, not only at the owner's next login
         throw new AuthError(401, 'SESION_INVALIDA', 'Inicia sesión.');
       }
       checkCsrf(req, raw);

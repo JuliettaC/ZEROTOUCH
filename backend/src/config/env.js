@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { authConfig } from '../security/auth-config.js';
 import { readMailSettings } from '../security/mailer.js';
+import { validateDatabaseKey } from './database.js';
 
 export function readConfig(env = process.env) {
   const integer = (key, fallback, min, max) => {
@@ -14,8 +15,9 @@ export function readConfig(env = process.env) {
   const host = env.HOST ?? '127.0.0.1';
   if (!['127.0.0.1', '::1', 'localhost'].includes(host)) throw new Error('HOST debe ser loopback; despliegue remoto pendiente.');
   if (!env.DATABASE_PATH || !path.isAbsolute(env.DATABASE_PATH)) throw new Error('DATABASE_PATH debe ser absoluta.');
+  const databaseKey = validateDatabaseKey(env.DATABASE_KEY);
   const config = {
-    port, host, databasePath: env.DATABASE_PATH,
+    port, host, databasePath: env.DATABASE_PATH, databaseKey,
     nodeEnv: env.NODE_ENV ?? 'development',
     appOrigin: env.APP_ORIGIN ?? `http://${host === '::1' ? '[::1]' : host}:${port}`,
     sessionTtlSeconds: integer('SESSION_TTL_SECONDS', 28800, 60, 86400),

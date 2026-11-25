@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import { createApp } from '../../src/app.js';
 import { bootstrapAdmin } from '../../src/services/adminService.js';
 import { readConfig } from '../../src/config/env.js';
@@ -170,7 +170,7 @@ test('parser, errores JSON, sesión y CSRF se aplican en la app real', async t =
   assert.deepEqual(failure.body, { error: 'ERROR_INTERNO', mensaje: 'No se pudo completar la operación.' });
 });
 test('configuración valida entorno, ubicación, origen y puerto', () => {
-  const base = { DATABASE_PATH: path.join(tmpdir(), 'test.sqlite') };
+  const base = { DATABASE_PATH: path.join(tmpdir(), 'test.sqlite'), DATABASE_KEY: 'febe924ef52417ac6a2d90c343b09b9c8d6ea556cfe2183c0bc80a640132a55d' };
   assert.equal(readConfig(base).sessionTtlSeconds, 28800);
-  for (const change of [{ PORT: 'NaN' }, { PORT: '-1' }, { PORT: '65536' }, { HOST: '0.0.0.0' }, { NODE_ENV: 'otra' }, { SESSION_TTL_SECONDS: '0' }, { APP_ORIGIN: 'http://localhost/ruta' }, { DATABASE_PATH: 'relativa.sqlite' }, { NODE_ENV: 'production' }]) assert.throws(() => readConfig({ ...base, ...change }));
+  for (const change of [{ PORT: 'NaN' }, { PORT: '-1' }, { PORT: '65536' }, { HOST: '0.0.0.0' }, { NODE_ENV: 'otra' }, { SESSION_TTL_SECONDS: '0' }, { APP_ORIGIN: 'http://localhost/ruta' }, { DATABASE_PATH: 'relativa.sqlite' }, { NODE_ENV: 'production' }, { DATABASE_KEY: undefined }, { DATABASE_KEY: '' }, { DATABASE_KEY: 'corta' }, { DATABASE_KEY: 'g'.repeat(64) }, { DATABASE_KEY: '0'.repeat(64) }]) assert.throws(() => readConfig({ ...base, ...change }));
 });

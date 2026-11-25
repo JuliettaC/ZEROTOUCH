@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,14 +52,47 @@ export function validateDatabasePath(filename) {
   return validatePrivateLocalPath(filename, 'DATABASE_PATH');
 }
 
-export function openDatabase(filename, { initialize = false } = {}) {
+// Cifrado en reposo: SQLite3 Multiple Ciphers (ChaCha20-Poly1305) con una clave de 256 bits en hexadecimal
+// (DATABASE_KEY). La base, su WAL y los respaldos quedan cifrados; sin la clave el archivo no se puede leer.
+export const DATABASE_KEY_PATTERN = /^[0-9a-f]{64}$/i;
+
+export function validateDatabaseKey(key) {
+  if (typeof key !== 'string' || !DATABASE_KEY_PATTERN.test(key)) {
+    throw new Error('DATABASE_KEY debe tener 64 caracteres hexadecimales (256 bits). Genera una con `npm run db:clave --prefix backend`.');
+  }
+  if (new Set(key.toLowerCase()).size === 1) throw new Error('DATABASE_KEY no puede repetir un solo carácter.');
+  return key.toLowerCase();
+}
+
+// Abre el archivo y aplica la clave antes de cualquier otra lectura. Si la clave no corresponde (o la base sigue
+// sin cifrar) SQLite responde SQLITE_NOTADB; se traduce a un mensaje que no revela la clave.
+function openWithKey(resolved, key, options = {}) {
+  const hex = validateDatabaseKey(key);
+  const db = new Database(resolved, { fileMustExist: true, timeout: 3000, ...options });
+  try {
+    db.pragma(`hexkey='${hex}'`);
+    db.pragma('schema_version', { simple: true });
+    return db;
+  } catch (error) {
+    db.close();
+    if (error?.code === 'SQLITE_NOTADB') {
+      const wrapped = new Error('No se pudo abrir la base con DATABASE_KEY: la clave no corresponde o la base aún no está cifrada (ejecuta `npm run db:cifrar --prefix backend`).');
+      wrapped.code = 'CLAVE_BASE_INVALIDA';
+      throw wrapped;
+    }
+    throw error;
+  }
+}
+
+export function openDatabase(filename, { key, initialize = false, readonly = false } = {}) {
   const resolved = validateDatabasePath(filename);
+  validateDatabaseKey(key);
   if (initialize) {
     fs.mkdirSync(path.dirname(resolved), { recursive: true, mode: 0o700 });
     // Exclusive creation: never initialize, migrate or replace an existing file.
     fs.closeSync(fs.openSync(resolved, 'wx', 0o600));
   }
-  const db = new Database(resolved, { fileMustExist: true, timeout: 3000 });
+  const db = openWithKey(resolved, key, readonly ? { readonly: true } : {});
   try {
     db.pragma('foreign_keys = ON');
     if (initialize) db.exec(fs.readFileSync(schema, 'utf8'));
@@ -72,8 +105,10 @@ export function openDatabase(filename, { initialize = false } = {}) {
       throw new Error(`Esquema incompatible; se requiere la base ZeroTouch v${MIN_SCHEMA_VERSION} o v${SCHEMA_VERSION}.`);
     }
     if (db.pragma('foreign_key_check').length) throw new Error('Integridad referencial inválida.');
-    db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = FULL');
+    if (!readonly) {
+      db.pragma('journal_mode = WAL');
+      db.pragma('synchronous = FULL');
+    }
     return db;
   } catch (error) {
     if (db.inTransaction) db.exec('ROLLBACK');
@@ -83,13 +118,13 @@ export function openDatabase(filename, { initialize = false } = {}) {
 }
 
 // Explicit migration (v1 -> v2 -> v3 -> v4, only the steps still missing). Never runs on startup.
-// Before changing anything it writes a consistent copy with SQLite's online backup API next to the
-// database. v1->v2 and v2->v3 are additive; v3->v4 deletes only the catalog rows (and their per-mode
-// assignments) of the retired gestures. All steps run in ONE transaction, so a failure rolls
+// Before changing anything it writes a consistent copy next to the database with VACUUM INTO (the
+// copy is encrypted with the same key). v1->v2 and v2->v3 are additive; v3->v4 deletes only the
+// catalog rows (and their per-mode assignments) of the retired gestures. All steps run in ONE transaction, so a failure rolls
 // everything back and leaves the original file as it was.
-export async function migrateDatabase(filename, { now = new Date() } = {}) {
+export async function migrateDatabase(filename, { key, now = new Date() } = {}) {
   const resolved = validateDatabasePath(filename);
-  const db = new Database(resolved, { fileMustExist: true, timeout: 3000 });
+  const db = openWithKey(resolved, key);
   try {
     db.pragma('foreign_keys = ON');
     if (db.pragma('application_id', { simple: true }) !== APPLICATION_ID) throw new Error('No es una base ZeroTouch.');
@@ -101,7 +136,7 @@ export async function migrateDatabase(filename, { now = new Date() } = {}) {
     const stamp = now.toISOString().replace(/[:.]/g, '-');
     const backup = `${resolved}.v${version}-${stamp}.ztbackup`;
     if (fs.existsSync(backup)) throw new Error('El archivo de respaldo ya existe; no se sobrescribe.');
-    await db.backup(backup);
+    db.prepare('VACUUM INTO ?').run(backup);
     const steps = [[1, migrationV1toV2], [2, migrationV2toV3], [3, migrationV3toV4]].filter(([from]) => from >= version).map(([, file]) => fs.readFileSync(file, 'utf8'));
     db.transaction(() => {
       for (const sql of steps) db.exec(sql);
@@ -113,4 +148,68 @@ export async function migrateDatabase(filename, { now = new Date() } = {}) {
     if (db.inTransaction) db.exec('ROLLBACK');
     db.close();
   }
+}
+
+function tableCounts(db) {
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+  return Object.fromEntries(tables.map(name => [name, db.prepare(`SELECT count(*) FROM "${name.replaceAll('"', '""')}"`).pluck().get()]));
+}
+
+// Cifra una base ZeroTouch existente que todavía está en texto plano (bases creadas antes del cifrado). Nunca
+// borra datos: 1) copia consistente con VACUUM INTO a un archivo nuevo; 2) cifra esa copia con la clave y comprueba
+// que abre, supera quick_check y tiene las mismas filas por tabla; 3) renombra el original sin cifrar a
+// `<base>.sin-cifrar-<fecha>.ztbackup` y pone la copia cifrada en su lugar. El original sin cifrar lo borra la persona
+// operadora cuando haya comprobado que la aplicación funciona (contiene los datos en claro).
+export function encryptDatabase(filename, { key, now = new Date() } = {}) {
+  const resolved = validateDatabasePath(filename);
+  const hex = validateDatabaseKey(key);
+  if (!fs.existsSync(resolved)) throw new Error(`No existe la base ${resolved}.`);
+  try {
+    openWithKey(resolved, hex).close();
+    return { encrypted: false, alreadyEncrypted: true, plaintextBackup: null };
+  } catch (error) {
+    if (error.code !== 'CLAVE_BASE_INVALIDA') throw error;
+  }
+  const stamp = now.toISOString().replace(/[:.]/g, '-');
+  const temporary = `${resolved}.cifrando-${stamp}`;
+  const plaintextBackup = `${resolved}.sin-cifrar-${stamp}.ztbackup`;
+  for (const target of [temporary, plaintextBackup]) {
+    if (fs.existsSync(target)) throw new Error(`${target} ya existe; no se sobrescribe.`);
+  }
+  let expected;
+  try {
+    const plain = new Database(resolved, { fileMustExist: true, timeout: 3000 });
+    try {
+      try {
+        plain.pragma('schema_version', { simple: true });
+      } catch (error) {
+        if (error?.code === 'SQLITE_NOTADB') throw new Error('La base ya está cifrada con otra clave (o no es SQLite); no se modificó.', { cause: error });
+        throw error;
+      }
+      if (plain.pragma('application_id', { simple: true }) !== APPLICATION_ID) throw new Error('No es una base ZeroTouch; no se modificó.');
+      if (plain.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('La base no supera quick_check; no se modificó.');
+      expected = tableCounts(plain);
+      plain.prepare('VACUUM INTO ?').run(temporary);
+    } finally { plain.close(); }
+    const copy = new Database(temporary, { fileMustExist: true });
+    try {
+      copy.pragma('journal_mode = DELETE');
+      copy.pragma(`hexrekey='${hex}'`);
+    } finally { copy.close(); }
+    const check = openWithKey(temporary, hex, { readonly: true });
+    try {
+      if (check.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('La copia cifrada no supera quick_check; el original no se tocó.');
+      if (JSON.stringify(tableCounts(check)) !== JSON.stringify(expected)) throw new Error('La copia cifrada no tiene las mismas filas; el original no se tocó.');
+    } finally { check.close(); }
+  } catch (error) {
+    // La copia temporal es nuestra (nunca el original): se retira para no dejar otra copia de los datos.
+    fs.rmSync(temporary, { force: true });
+    throw error;
+  }
+  fs.renameSync(resolved, plaintextBackup);
+  for (const suffix of ['-wal', '-shm']) {
+    if (fs.existsSync(resolved + suffix)) fs.renameSync(resolved + suffix, plaintextBackup + suffix);
+  }
+  fs.renameSync(temporary, resolved);
+  return { encrypted: true, alreadyEncrypted: false, plaintextBackup };
 }

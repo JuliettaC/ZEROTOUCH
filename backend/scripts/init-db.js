@@ -1,10 +1,11 @@
 import { openDatabase } from '../src/config/database.js';
-import { databasePathFromEnv } from '../src/security/cli-config.js';
+import { databaseFromEnv } from '../src/security/cli-config.js';
 
 let db;
 try {
-  db = openDatabase(databasePathFromEnv(), { initialize: true });
-  console.log('Base nueva (esquema v4: nueve tablas) inicializada. No se crearon cuentas.');
+  const { filename, key } = databaseFromEnv();
+  db = openDatabase(filename, { key, initialize: true });
+  console.log('Base nueva (esquema v4: nueve tablas) inicializada y cifrada con DATABASE_KEY. No se crearon cuentas.');
 } catch (error) {
   console.error(error.code === 'EEXIST' ? 'La base ya existe; no se modificó.' : `Inicialización fallida: ${error.message}`);
   process.exitCode = 1;

@@ -1,6 +1,7 @@
 import { readSessionCookie } from '../middleware/auth.js';
+import { clientKey } from '../security/rate-limit.js';
 export function createAuthController(service, settings) {
-  const ip = req => req.socket.remoteAddress;
+  const ip = req => clientKey(req.socket.remoteAddress);
   return {
     // 202: the account (if any) is pending email verification; the body is identical in every case.
     register: async (req, res) => res.status(202).json({ data: await service.register(req.body, ip(req)) }),

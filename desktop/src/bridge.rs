@@ -859,6 +859,7 @@ mod tests {
         child: Child,
         base: String,
         db_path: PathBuf,
+        db_key: String,
         temp_dir: PathBuf,
     }
 
@@ -869,12 +870,19 @@ mod tests {
                 std::env::temp_dir().join(format!("zt-hito2-tauri-test-{}", uuid::Uuid::new_v4()));
             fs::create_dir_all(&temp_dir).unwrap();
             let db_path = temp_dir.join("test-hito2.sqlite");
+            // Clave de cifrado ficticia de la base temporal (DATABASE_KEY: 64 caracteres hexadecimales).
+            let db_key = format!(
+                "{}{}",
+                uuid::Uuid::new_v4().simple(),
+                uuid::Uuid::new_v4().simple()
+            );
 
             // Initialize the Hito 2 SQLite schema (v2) using backend/scripts/init-db.js
             let init_out = Command::new("node")
                 .arg(root.join("backend/scripts/init-db.js"))
                 .current_dir(&root)
                 .env("DATABASE_PATH", &db_path)
+                .env("DATABASE_KEY", &db_key)
                 .output()
                 .expect("No se pudo ejecutar init-db.js");
             assert!(
@@ -889,6 +897,7 @@ mod tests {
                 .arg(root.join("backend/src/server.js"))
                 .current_dir(&root)
                 .env("DATABASE_PATH", &db_path)
+                .env("DATABASE_KEY", &db_key)
                 .env("HOST", "127.0.0.1")
                 .env("PORT", "0")
                 .env("NODE_ENV", "test")
@@ -920,6 +929,7 @@ mod tests {
                 child,
                 base: format!("http://127.0.0.1:{port}"),
                 db_path,
+                db_key,
                 temp_dir,
             }
         }
@@ -957,10 +967,11 @@ mod tests {
                 .current_dir(root.join("backend"))
                 .args([
                     "-e",
-                    "const Database=require('better-sqlite3');const db=new Database(process.argv[1],{readonly:true});const row=db.prepare('SELECT count(*) AS n, rol, estado, contrasena_hash FROM usuarios WHERE nombre_usuario=?').get(process.argv[2]);console.log(JSON.stringify(row));db.close();",
+                    "const Database=require('better-sqlite3-multiple-ciphers');const db=new Database(process.argv[1],{readonly:true});db.pragma(`hexkey='${process.argv[3]}'`);const row=db.prepare('SELECT count(*) AS n, rol, estado, contrasena_hash FROM usuarios WHERE nombre_usuario=?').get(process.argv[2]);console.log(JSON.stringify(row));db.close();",
                 ])
                 .arg(&self.db_path)
                 .arg(username)
+                .arg(&self.db_key)
                 .output()
                 .unwrap();
             assert!(out.status.success());

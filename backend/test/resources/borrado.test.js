@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import { createApp } from '../../src/app.js';
 import { createMemoryMailer, lastToken } from '../helpers/correo.js';
 import { modeEtag, profileEtag } from '../../src/domain/etag.js';

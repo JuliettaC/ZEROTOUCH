@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import { readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { openDatabase, validateDatabasePath } from '../../src/config/database.js';
+import { TEST_KEY } from '../helpers/clave.js';
 
 const sql = readFileSync(new URL('../../../db/schema.sql', import.meta.url), 'utf8');
 // SQL fixture only: password validity is exercised with Argon2 in security tests.
@@ -79,21 +80,21 @@ test('conexión exclusiva, persistencia, cierre y rechazo de esquema ajeno', t =
   const directory = mkdtempSync(path.join(tmpdir(), 'zerotouch-i1-db-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const filename = path.join(directory, 'test.sqlite');
-  let db = openDatabase(filename, { initialize: true });
+  let db = openDatabase(filename, { key: TEST_KEY, initialize: true });
   const id = randomUUID();
   db.prepare('INSERT INTO usuarios(id,nombre_usuario,contrasena_hash) VALUES(?,?,?)').run(id, 'persistente', sqlHash);
   assert.equal(db.pragma('foreign_keys', { simple: true }), 1);
   assert.equal(db.pragma('journal_mode', { simple: true }), 'wal');
-  assert.throws(() => openDatabase(filename, { initialize: true }), { code: 'EEXIST' });
+  assert.throws(() => openDatabase(filename, { key: TEST_KEY, initialize: true }), { code: 'EEXIST' });
   db.close();
   assert.equal(db.open, false);
-  db = openDatabase(filename);
+  db = openDatabase(filename, { key: TEST_KEY });
   assert.equal(db.prepare('SELECT id FROM usuarios').get().id, id);
   db.close();
   const foreign = path.join(directory, 'foreign.sqlite');
   writeFileSync(foreign, '');
-  assert.throws(() => openDatabase(foreign), /incompatible/);
-  assert.throws(() => openDatabase(path.join(directory, 'missing.sqlite')));
+  assert.throws(() => openDatabase(foreign, { key: TEST_KEY }), /incompatible/);
+  assert.throws(() => openDatabase(path.join(directory, 'missing.sqlite'), { key: TEST_KEY }));
 });
 test('rutas relativas, del repositorio y OneDrive rechazadas', () => {
   assert.throws(() => validateDatabasePath('datos.sqlite'));
