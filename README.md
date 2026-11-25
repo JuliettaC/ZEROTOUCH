@@ -133,4 +133,6 @@ motor-local\.venv\Scripts\python.exe -m pytest motor-local\tests
 
 ## Documentos
 ### Hito 1
-[Informe](docs/Informe%20Hito%201.pdf)
+[Informe](docs/Informe%20Hito%201.pdf) 
+### Hito 1
+[Informe](docs/Informe%Hito%2.pdf) 
